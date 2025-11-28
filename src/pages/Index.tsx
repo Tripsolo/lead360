@@ -53,6 +53,7 @@ const Index = () => {
               ...lead,
               rating: analysis.rating,
               aiInsights: analysis.insights,
+              fullAnalysis: analysis.fullAnalysis,
             };
           }
           return lead;
@@ -67,7 +68,7 @@ const Index = () => {
       console.error('Analysis error:', error);
       toast({
         title: 'Analysis failed',
-        description: error instanceof Error ? error.message : 'Failed to analyze leads. Make sure your OpenRouter API key is configured in Supabase secrets.',
+        description: error instanceof Error ? error.message : 'Failed to analyze leads. Make sure your Google AI API key is configured.',
         variant: 'destructive',
       });
     } finally {
