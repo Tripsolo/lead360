@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { FileUpload } from '@/components/FileUpload';
 import { LeadsList } from '@/components/LeadsList';
 import { parseExcelFile } from '@/utils/excelParser';
-import { Lead } from '@/types/lead';
+import { Lead, AnalysisResult } from '@/types/lead';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Sparkles, Upload } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 const Index = () => {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -36,15 +37,37 @@ const Index = () => {
   const handleAnalyzeLeads = async () => {
     setIsAnalyzing(true);
     try {
-      // This will be implemented once Supabase is connected
-      toast({
-        title: 'AI Analysis',
-        description: 'Please connect to Supabase and add your OpenRouter API key to enable AI analysis.',
+      const { data, error } = await supabase.functions.invoke('analyze-leads', {
+        body: { leads },
       });
+
+      if (error) {
+        throw new Error(error.message || 'Failed to analyze leads');
+      }
+
+      if (data?.results) {
+        const updatedLeads = leads.map(lead => {
+          const analysis = data.results.find((r: AnalysisResult) => r.leadId === lead.id);
+          if (analysis) {
+            return {
+              ...lead,
+              rating: analysis.rating,
+              aiInsights: analysis.insights,
+            };
+          }
+          return lead;
+        });
+        setLeads(updatedLeads);
+        toast({
+          title: 'Analysis complete',
+          description: `Successfully analyzed ${data.results.length} leads with AI.`,
+        });
+      }
     } catch (error) {
+      console.error('Analysis error:', error);
       toast({
         title: 'Analysis failed',
-        description: error instanceof Error ? error.message : 'Failed to analyze leads.',
+        description: error instanceof Error ? error.message : 'Failed to analyze leads. Make sure your OpenRouter API key is configured.',
         variant: 'destructive',
       });
     } finally {
