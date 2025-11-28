@@ -5,8 +5,10 @@ import { parseExcelFile } from '@/utils/excelParser';
 import { Lead, AnalysisResult } from '@/types/lead';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Sparkles, Upload } from 'lucide-react';
+import { Sparkles, Upload, AlertCircle, Key } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Card } from '@/components/ui/card';
 
 const Index = () => {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -82,12 +84,40 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-12">
-        <div className="text-center mb-12">
+        <div className="text-center mb-8">
           <h1 className="text-4xl font-bold mb-4">CRM Lead Analyzer</h1>
           <p className="text-lg text-muted-foreground">
             Upload your Excel file to analyze and rate your real estate leads
           </p>
         </div>
+
+        <Card className="mb-8 p-6">
+          <div className="flex items-start gap-4">
+            <div className="rounded-full bg-primary/10 p-3">
+              <Key className="h-5 w-5 text-primary" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-semibold mb-2">API Key Configuration</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                To enable AI-powered lead analysis, you need to configure your OpenRouter API key. 
+                Click the button below to securely add your API key.
+              </p>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  toast({
+                    title: 'Ready to add API key',
+                    description: 'Please click "Add API Key" and enter your OpenRouter API key in the form that appears.',
+                  });
+                }}
+              >
+                <Key className="mr-2 h-4 w-4" />
+                Configure API Key
+              </Button>
+            </div>
+          </div>
+        </Card>
 
         {leads.length === 0 ? (
           <FileUpload onFileSelect={handleFileSelect} isLoading={isLoading} />
