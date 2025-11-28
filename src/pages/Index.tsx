@@ -6,7 +6,7 @@ import { Lead, AnalysisResult } from '@/types/lead';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Sparkles, Upload } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, isSupabaseConfigured } from '@/integrations/supabase/client';
 
 const Index = () => {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -35,6 +35,15 @@ const Index = () => {
   };
 
   const handleAnalyzeLeads = async () => {
+    if (!isSupabaseConfigured || !supabase) {
+      toast({
+        title: 'Supabase not connected',
+        description: 'Please connect your Supabase project in Settings → Integrations to enable AI analysis.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsAnalyzing(true);
     try {
       const { data, error } = await supabase.functions.invoke('analyze-leads', {
@@ -67,7 +76,7 @@ const Index = () => {
       console.error('Analysis error:', error);
       toast({
         title: 'Analysis failed',
-        description: error instanceof Error ? error.message : 'Failed to analyze leads. Make sure your OpenRouter API key is configured.',
+        description: error instanceof Error ? error.message : 'Failed to analyze leads. Make sure your OpenRouter API key is configured in Supabase secrets.',
         variant: 'destructive',
       });
     } finally {
