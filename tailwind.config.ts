@@ -57,6 +57,14 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        status: {
+          hot: "hsl(var(--status-hot))",
+          "hot-foreground": "hsl(var(--status-hot-foreground))",
+          warm: "hsl(var(--status-warm))",
+          "warm-foreground": "hsl(var(--status-warm-foreground))",
+          cold: "hsl(var(--status-cold))",
+          "cold-foreground": "hsl(var(--status-cold-foreground))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
