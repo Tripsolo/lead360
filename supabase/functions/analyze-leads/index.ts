@@ -54,7 +54,7 @@ Source: ${lead.source || 'Unknown'}
 `;
 
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${googleApiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.0-pro-exp:generateContent?key=${googleApiKey}`,
         {
           method: 'POST',
           headers: {
