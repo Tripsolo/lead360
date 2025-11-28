@@ -12,12 +12,12 @@ serve(async (req) => {
 
   try {
     const { leads } = await req.json();
-    const openRouterKey = Deno.env.get('OPENROUTER_API_KEY');
+    const googleApiKey = Deno.env.get('GOOGLE_AI_API_KEY');
 
-    if (!openRouterKey) {
+    if (!googleApiKey) {
       return new Response(
         JSON.stringify({ 
-          error: 'OpenRouter API key not configured. Please add OPENROUTER_API_KEY to your Supabase secrets.' 
+          error: 'Google AI API key not configured. Please add GOOGLE_AI_API_KEY to your Supabase secrets.' 
         }),
         { 
           status: 500, 
@@ -53,29 +53,38 @@ Notes: ${lead.notes || 'None'}
 Source: ${lead.source || 'Unknown'}
 `;
 
-      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${openRouterKey}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://lovable.dev',
-        },
-        body: JSON.stringify({
-          model: 'anthropic/claude-3.5-sonnet',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: `Analyze this lead:\n${leadContext}` }
-          ],
-        }),
-      });
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${googleApiKey}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: [{
+              parts: [{
+                text: `${systemPrompt}\n\nAnalyze this lead:\n${leadContext}`
+              }]
+            }],
+            tools: [{
+              googleSearchRetrieval: {
+                dynamicRetrievalConfig: {
+                  mode: "MODE_DYNAMIC",
+                  dynamicThreshold: 0.3
+                }
+              }
+            }]
+          }),
+        }
+      );
 
       if (!response.ok) {
-        console.error('OpenRouter API error:', await response.text());
+        console.error('Google AI API error:', await response.text());
         throw new Error('Failed to analyze lead');
       }
 
       const data = await response.json();
-      const analysisText = data.choices[0].message.content;
+      const analysisText = data.candidates[0].content.parts[0].text;
       
       // Extract rating from response
       let rating = 'Warm';
