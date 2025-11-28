@@ -5,9 +5,8 @@ import { parseExcelFile } from '@/utils/excelParser';
 import { Lead, AnalysisResult } from '@/types/lead';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Sparkles, Upload, AlertCircle, ExternalLink } from 'lucide-react';
-import { supabase, isSupabaseConfigured } from '@/integrations/supabase/client';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Sparkles, Upload } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 const Index = () => {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -36,15 +35,6 @@ const Index = () => {
   };
 
   const handleAnalyzeLeads = async () => {
-    if (!isSupabaseConfigured || !supabase) {
-      toast({
-        title: 'Supabase not connected',
-        description: 'Please connect your Supabase project in Settings → Integrations to enable AI analysis.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
     setIsAnalyzing(true);
     try {
       const { data, error } = await supabase.functions.invoke('analyze-leads', {
@@ -98,29 +88,6 @@ const Index = () => {
             Upload your Excel file to analyze and rate your real estate leads
           </p>
         </div>
-
-        {isSupabaseConfigured && (
-          <Alert className="mb-8">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>AI Analysis Setup Required</AlertTitle>
-            <AlertDescription className="mt-2">
-              To enable AI-powered lead analysis, add your OpenRouter API key to Supabase:
-              <ol className="list-decimal list-inside mt-2 space-y-1">
-                <li>Go to your Supabase Dashboard</li>
-                <li>Navigate to <strong>Project Settings → Edge Functions → Secrets</strong></li>
-                <li>Add secret: <code className="bg-muted px-2 py-1 rounded">OPENROUTER_API_KEY</code></li>
-              </ol>
-              <a 
-                href="https://supabase.com/dashboard/project/_/settings/functions" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 mt-3 text-sm text-primary hover:underline"
-              >
-                Open Supabase Dashboard <ExternalLink className="h-3 w-3" />
-              </a>
-            </AlertDescription>
-          </Alert>
-        )}
 
         {leads.length === 0 ? (
           <FileUpload onFileSelect={handleFileSelect} isLoading={isLoading} />
