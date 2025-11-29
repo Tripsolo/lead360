@@ -46,17 +46,17 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Ratings Section - 3 Column Grid */}
-          <div className="grid md:grid-cols-3 gap-4">
+          {/* Ratings Section - Compact 3 Column Grid */}
+          <div className="grid grid-cols-[auto_auto_1fr] gap-3 items-start">
             {/* AI Rating */}
             {lead.rating && (
-              <div className="p-4 bg-muted/30 rounded-lg">
-                <p className="text-sm text-muted-foreground mb-2">AI Rating</p>
+              <div className="p-2.5 bg-muted/30 rounded-lg min-w-[140px]">
+                <p className="text-sm text-muted-foreground mb-1.5">AI Rating</p>
                 <Badge className={getRatingColor(lead.rating)}>
                   {lead.rating}
                 </Badge>
                 {analysis?.rating_confidence && (
-                  <p className="text-xs text-muted-foreground mt-2">
+                  <p className="text-xs text-muted-foreground mt-1.5">
                     {analysis.rating_confidence} confidence
                   </p>
                 )}
@@ -65,18 +65,18 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
             
             {/* Manager Rating */}
             {lead.managerRating && (
-              <div className="p-4 bg-muted/30 rounded-lg">
-                <p className="text-sm text-muted-foreground mb-2">Manager Rating</p>
+              <div className="p-2.5 bg-muted/30 rounded-lg min-w-[140px]">
+                <p className="text-sm text-muted-foreground mb-1.5">Manager Rating</p>
                 <Badge className={getRatingColor(lead.managerRating)}>
                   {lead.managerRating}
                 </Badge>
               </div>
             )}
 
-            {/* Rating Rationale */}
+            {/* Rating Rationale - Takes remaining space */}
             {analysis?.rating_rationale && (
-              <div className="p-4 bg-muted/30 rounded-lg">
-                <p className="text-sm text-muted-foreground mb-2">Rating Rationale</p>
+              <div className="p-2.5 bg-muted/30 rounded-lg">
+                <p className="text-sm text-muted-foreground mb-1.5">Rating Rationale</p>
                 <p className="text-sm">{analysis.rating_rationale}</p>
               </div>
             )}
@@ -86,9 +86,9 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
 
           {/* Basic Details & Persona */}
           <div className="grid md:grid-cols-2 gap-6">
-            {/* Contact & Professional Info */}
+            {/* Contact & Professional Info + Property Preferences */}
             <div className="space-y-4">
-              <h3 className="font-semibold text-lg">Contact & Professional Details</h3>
+              <h3 className="font-semibold text-sm">Lead Details</h3>
               
               {lead.phone && (
                 <div className="flex items-center gap-2 text-sm">
@@ -124,9 +124,21 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
                   <span>Work: {lead.workLocation}</span>
                 </div>
               )}
+
+              {/* Property Preferences - Moved to middle column */}
+              {(lead.carpetArea || lead.floorPreference || lead.facing) && (
+                <div className="mt-6">
+                  <h4 className="font-semibold text-sm mb-2">Property Preferences</h4>
+                  <div className="space-y-1 text-sm">
+                    {lead.carpetArea && <p>Area: {lead.carpetArea}</p>}
+                    {lead.floorPreference && <p>Floor: {lead.floorPreference}</p>}
+                    {lead.facing && <p>Facing: {lead.facing}</p>}
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Persona & Property Interest */}
+            {/* Buyer Persona */}
             <div className="space-y-4">
               {(analysis?.persona || analysis?.persona_description) && (
                 <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
@@ -140,17 +152,6 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
                   {analysis.persona_description && (
                     <p className="text-sm text-muted-foreground">{analysis.persona_description}</p>
                   )}
-                </div>
-              )}
-
-              {(lead.carpetArea || lead.floorPreference || lead.facing) && (
-                <div>
-                  <h4 className="font-semibold text-sm mb-2">Property Preferences</h4>
-                  <div className="space-y-1 text-sm">
-                    {lead.carpetArea && <p>Area: {lead.carpetArea}</p>}
-                    {lead.floorPreference && <p>Floor: {lead.floorPreference}</p>}
-                    {lead.facing && <p>Facing: {lead.facing}</p>}
-                  </div>
                 </div>
               )}
             </div>
