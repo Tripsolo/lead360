@@ -3,6 +3,51 @@ import { Lead } from '@/types/lead';
 import { ExcelSchema } from '@/config/projects';
 import { validateExcelSchema } from './schemaValidator';
 
+// Helper to convert Excel date serial number to ISO string
+const parseExcelDate = (value: any): string | null => {
+  if (!value) return null;
+  
+  // If it's already a valid date string, return it
+  if (typeof value === 'string') {
+    const parsed = new Date(value);
+    if (!isNaN(parsed.getTime())) {
+      return parsed.toISOString();
+    }
+  }
+  
+  // If it's a Date object
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    return value.toISOString();
+  }
+  
+  // If it's an Excel serial number
+  if (typeof value === 'number') {
+    // Excel serial date (days since 1900-01-01, but Excel incorrectly treats 1900 as leap year)
+    const excelEpoch = new Date(1899, 11, 30); // Dec 30, 1899
+    const date = new Date(excelEpoch.getTime() + value * 24 * 60 * 60 * 1000);
+    if (!isNaN(date.getTime())) {
+      return date.toISOString();
+    }
+  }
+  
+  return null;
+};
+
+// Helper to get the most recent date from multiple date values
+const getMostRecentDate = (...dates: any[]): string => {
+  const parsedDates = dates
+    .map(parseExcelDate)
+    .filter((d): d is string => d !== null)
+    .map(d => new Date(d));
+  
+  if (parsedDates.length === 0) {
+    return new Date().toISOString();
+  }
+  
+  const mostRecent = new Date(Math.max(...parsedDates.map(d => d.getTime())));
+  return mostRecent.toISOString();
+};
+
 export const parseExcelFile = async (
   file: File,
   schema?: ExcelSchema
@@ -42,6 +87,11 @@ export const parseExcelFile = async (
             return '';
           };
 
+          // Get the most recent date from Walkin Date and Latest Revisit Date
+          const walkinDate = row['Walkin Date'] || row.Date || row.date || row.DATE;
+          const revisitDate = row['Latest Revisit Date'] || row['Last Revisit Date'] || row['Last Visit'];
+          const lastVisitDate = getMostRecentDate(walkinDate, revisitDate);
+
           return {
           id: row['Opportunity ID'] || row.LeadID || row['Lead ID'] || row.lead_id || `lead-${Date.now()}-${index}`,
           name: row['Opportunity Name'] || row.Name || row.name || row.CLIENT_NAME || row['Client Name'] || 'Unknown',
@@ -52,7 +102,7 @@ export const parseExcelFile = async (
           timeline: row['Expected Date of Closure'] || row.Timeline || row.timeline || row.TIMELINE || row['Finalization Timeline'] || '',
           notes: row['Last Follow Up Comments'] || row.Notes || row.notes || row.NOTES || row.Comments || row.comments || '',
           source: row.Source || row.source || row.SOURCE || '',
-          date: row['Walkin Date'] || row.Date || row.date || row.DATE || row['Last Visit'] || new Date().toISOString(),
+          date: lastVisitDate,
           
           // Additional fields from PRD
           leadOwner: row['Name of Closing Manager'] || row.LeadOwner || row['Lead Owner'] || row.lead_owner || '',
