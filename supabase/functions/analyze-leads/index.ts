@@ -231,7 +231,7 @@ ${leadDataJson}
 4. Identify negative signals (budget gap, exploration mode, not decision maker)
 5. Consider competition mentioned and visit status
 6. Match against scoring criteria to determine Hot/Warm/Cold
-7. Generate a professional 2-line persona that captures the lead's profile, lifestyle, and core motivation
+7. Generate both a persona label and a professional 2-line persona description
 8. Create actionable next steps and talking points
 
 Return a JSON object with this EXACT structure:
@@ -239,7 +239,8 @@ Return a JSON object with this EXACT structure:
   "ai_rating": "Hot" | "Warm" | "Cold",
   "rating_confidence": "High" | "Medium" | "Low",
   "rating_rationale": "Brief 1-2 sentence explanation",
-  "persona": "A professional 2-line description that captures the lead's occupation, lifestyle, family situation, and key buying motivation. Make it concise and insightful.",
+  "persona": "Upgrade Seeker" | "First-Time Buyer" | "Investor" | "NRI Buyer" | "Retirement Planner" | "Business Owner" | "Growing Family" | "Professional Couple",
+  "persona_description": "A professional 2-line description that captures the lead's occupation, lifestyle, family situation, and key buying motivation. Make it concise and insightful.",
   "summary": "2-3 sentence overview of lead situation and intent",
   "key_concerns": ["concern1", "concern2", "concern3"],
   "next_best_action": "Specific actionable recommendation with timing",
