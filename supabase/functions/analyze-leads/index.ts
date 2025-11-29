@@ -234,6 +234,12 @@ ${leadDataJson}
 7. Generate both a persona label and a professional 2-line persona description
 8. Create actionable next steps and talking points
 
+# OUTPUT CONSTRAINTS (CRITICAL - STRICTLY ENFORCE):
+- Summary: Maximum 35 words. Be concise and focused.
+- Next Best Action: Maximum 20 words. Keep it actionable and specific.
+- Each Talking Point: Maximum 15 words per point. Make each one punchy and relevant.
+- Key Concerns: These must be the CUSTOMER'S concerns about the project or specific unit they are considering. Focus on: price/budget gap, location/connectivity issues, possession date/timeline, unit configuration/size, amenities/facilities. DO NOT include generic sales concerns.
+
 Return a JSON object with this EXACT structure:
 {
   "ai_rating": "Hot" | "Warm" | "Cold",
