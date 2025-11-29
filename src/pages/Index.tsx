@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Sparkles, Upload, Download } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { getProjectById, getBrandByProjectId } from '@/config/projects';
+import { ExcelSchema } from '@/config/projects';
 
 const Index = () => {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -25,9 +25,24 @@ const Index = () => {
   const handleFileSelect = async (file: File, projectId: string) => {
     setIsLoading(true);
     try {
-      // Get brand schema for validation
-      const brand = getBrandByProjectId(projectId);
-      const schema = brand?.excelSchema;
+      // Fetch project with brand schema for validation
+      const { data: project, error } = await supabase
+        .from('projects')
+        .select('*, brands(*)')
+        .eq('id', projectId)
+        .single();
+
+      if (error || !project) {
+        toast({
+          title: 'Error',
+          description: 'Failed to fetch project details',
+          variant: 'destructive',
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      const schema = project.brands.excel_schema as unknown as ExcelSchema;
       
       const parsedLeads = await parseExcelFile(file, schema);
       
@@ -62,13 +77,10 @@ const Index = () => {
   const handleAnalyzeLeads = async () => {
     setIsAnalyzing(true);
     try {
-      // Get project metadata for context
-      const project = getProjectById(selectedProjectId);
-      
       const { data, error } = await supabase.functions.invoke('analyze-leads', {
         body: { 
           leads,
-          projectMetadata: project?.metadata 
+          projectId: selectedProjectId
         },
       });
 
