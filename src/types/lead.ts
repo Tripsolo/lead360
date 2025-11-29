@@ -46,6 +46,7 @@ export interface AnalysisResult {
     rating_confidence: 'High' | 'Medium' | 'Low';
     rating_rationale: string;
     persona?: string;
+    persona_description?: string;
     summary?: string;
     key_concerns?: string[];
     next_best_action?: string;
