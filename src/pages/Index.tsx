@@ -141,20 +141,14 @@ const Index = () => {
         ) : (
           <div className="space-y-8">
             {/* Action Buttons */}
-            <div className="flex flex-wrap justify-between items-center gap-4">
-              <div className="flex gap-3">
-                <Button onClick={handleAnalyzeLeads} disabled={isAnalyzing} size="lg">
-                  <Sparkles className="mr-2 h-5 w-5" />
-                  {isAnalyzing ? 'Analyzing...' : 'Analyze with AI'}
-                </Button>
-                <Button variant="outline" onClick={handleReset} size="lg">
-                  <Upload className="mr-2 h-5 w-5" />
-                  Upload New File
-                </Button>
-              </div>
-              <Button variant="outline" onClick={handleExport} size="lg">
-                <Download className="mr-2 h-5 w-5" />
-                Export to Excel
+            <div className="flex gap-3">
+              <Button onClick={handleAnalyzeLeads} disabled={isAnalyzing} size="lg">
+                <Sparkles className="mr-2 h-5 w-5" />
+                {isAnalyzing ? 'Analyzing...' : 'Analyze with AI'}
+              </Button>
+              <Button variant="outline" onClick={handleReset} size="lg">
+                <Upload className="mr-2 h-5 w-5" />
+                Upload New File
               </Button>
             </div>
 
@@ -165,8 +159,15 @@ const Index = () => {
               activeFilter={ratingFilter}
             />
 
+            {/* Export Button */}
+            <div className="flex justify-end">
+              <Button variant="outline" onClick={handleExport} size="sm">
+                <Download className="h-4 w-4" />
+              </Button>
+            </div>
+
             {/* Leads Table */}
-            <LeadsTable 
+            <LeadsTable
               leads={leads}
               onLeadClick={handleLeadClick}
               ratingFilter={ratingFilter}
