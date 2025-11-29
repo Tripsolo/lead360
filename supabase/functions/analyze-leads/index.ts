@@ -123,7 +123,10 @@ const leadScoringModel = `# LEAD SCORING MODEL
 - Investment-only with budget below 1BHK options
 - No engagement with presentation`;
 
-    const analysisPromises = leads.map(async (lead: any) => {
+    const analysisPromises = leads.map(async (lead: any, index: number) => {
+      // Add small delay between requests to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, index * 100));
+      
       const leadDataJson = JSON.stringify(lead, null, 2);
 
       const fullPrompt = `${systemPrompt}
@@ -189,7 +192,7 @@ Return a JSON object with this EXACT structure:
               temperature: 0.2,
               topK: 40,
               topP: 0.95,
-              maxOutputTokens: 2500,
+              maxOutputTokens: 8192,
               responseMimeType: "application/json"
             }
           }),
@@ -211,40 +214,106 @@ Return a JSON object with this EXACT structure:
       
       // Parse JSON response
       let analysisResult;
+      let parseSuccess = true;
+      
       try {
         analysisResult = JSON.parse(analysisText);
       } catch (parseError) {
-        console.error('Failed to parse AI response as JSON:', analysisText);
-        // Fallback to simple extraction if JSON parsing fails
-        const lower = analysisText.toLowerCase();
-        let rating: 'Hot' | 'Warm' | 'Cold' = 'Warm';
-        if (lower.includes('"ai_rating"') && (lower.includes('hot') || lower.includes('"Hot"'))) {
-          rating = 'Hot';
-        } else if (lower.includes('cold') || lower.includes('"Cold"')) {
-          rating = 'Cold';
+        parseSuccess = false;
+        console.error('Failed to parse AI response as JSON for lead:', lead.id);
+        console.error('Response preview:', analysisText.substring(0, 500));
+        
+        // Attempt retry with simplified prompt if response was truncated
+        try {
+          const simplifiedPrompt = `Analyze this lead and return ONLY this JSON structure (no additional text):
+{
+  "ai_rating": "Hot/Warm/Cold",
+  "rating_confidence": "High/Medium/Low",
+  "rating_rationale": "Brief explanation",
+  "summary": "2-3 sentence overview"
+}
+
+Lead data:
+${leadDataJson}`;
+
+          const retryResponse = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${googleApiKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: simplifiedPrompt }] }],
+                generationConfig: {
+                  temperature: 0.2,
+                  maxOutputTokens: 1024,
+                  responseMimeType: "application/json"
+                }
+              }),
+            }
+          );
+
+          if (retryResponse.ok) {
+            const retryData = await retryResponse.json();
+            const retryText = retryData?.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (retryText) {
+              analysisResult = JSON.parse(retryText);
+              parseSuccess = true;
+              console.log('Retry successful for lead:', lead.id);
+            }
+          }
+        } catch (retryError) {
+          console.error('Retry failed for lead:', lead.id, retryError);
         }
         
-        analysisResult = {
-          ai_rating: rating,
-          rating_confidence: 'Low',
-          rating_rationale: 'Analysis completed with limited structure',
-          summary: analysisText.substring(0, 200),
-          insights: analysisText
-        };
+        // Final fallback if retry also failed
+        if (!parseSuccess) {
+          const lower = analysisText.toLowerCase();
+          let rating: 'Hot' | 'Warm' | 'Cold' = 'Warm';
+          if (lower.includes('"ai_rating"') && (lower.includes('hot') || lower.includes('"hot"'))) {
+            rating = 'Hot';
+          } else if (lower.includes('cold') || lower.includes('"cold"')) {
+            rating = 'Cold';
+          }
+          
+          analysisResult = {
+            ai_rating: rating,
+            rating_confidence: 'Low',
+            rating_rationale: 'Analysis completed with limited structure due to response truncation',
+            summary: analysisText.substring(0, 200) + '...',
+            insights: 'Partial analysis - retry recommended'
+          };
+        }
       }
 
       return {
         leadId: lead.id,
         rating: analysisResult.ai_rating,
         insights: analysisResult.summary || analysisResult.rating_rationale,
-        fullAnalysis: analysisResult
+        fullAnalysis: analysisResult,
+        parseSuccess
       };
     });
 
     const results = await Promise.all(analysisPromises);
+    
+    const successCount = results.filter(r => r.parseSuccess).length;
+    const failedLeads = results.filter(r => !r.parseSuccess).map(r => r.leadId);
+    
+    console.log(`Analysis complete: ${successCount}/${results.length} successful`);
+    if (failedLeads.length > 0) {
+      console.log('Failed leads:', failedLeads);
+    }
 
     return new Response(
-      JSON.stringify({ results }),
+      JSON.stringify({ 
+        results,
+        meta: {
+          total: results.length,
+          successful: successCount,
+          failed: failedLeads.length,
+          failedLeadIds: failedLeads
+        }
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
