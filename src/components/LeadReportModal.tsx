@@ -35,33 +35,49 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-2xl">{lead.name}</DialogTitle>
+          {analysis?.persona && (
+            <Badge variant="outline" className="w-fit mt-2">
+              {analysis.persona}
+            </Badge>
+          )}
           <DialogDescription>
             Complete lead analysis and details
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Ratings Section */}
-          <div className="flex gap-4 items-center">
+          {/* Ratings Section - 3 Column Grid */}
+          <div className="grid md:grid-cols-3 gap-4">
+            {/* AI Rating */}
             {lead.rating && (
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">AI Rating</p>
+              <div className="p-4 bg-muted/30 rounded-lg">
+                <p className="text-sm text-muted-foreground mb-2">AI Rating</p>
                 <Badge className={getRatingColor(lead.rating)}>
                   {lead.rating}
                 </Badge>
                 {analysis?.rating_confidence && (
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="text-xs text-muted-foreground mt-2">
                     {analysis.rating_confidence} confidence
                   </p>
                 )}
               </div>
             )}
+            
+            {/* Manager Rating */}
             {lead.managerRating && (
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Manager Rating</p>
+              <div className="p-4 bg-muted/30 rounded-lg">
+                <p className="text-sm text-muted-foreground mb-2">Manager Rating</p>
                 <Badge className={getRatingColor(lead.managerRating)}>
                   {lead.managerRating}
                 </Badge>
+              </div>
+            )}
+
+            {/* Rating Rationale */}
+            {analysis?.rating_rationale && (
+              <div className="p-4 bg-muted/30 rounded-lg">
+                <p className="text-sm text-muted-foreground mb-2">Rating Rationale</p>
+                <p className="text-sm">{analysis.rating_rationale}</p>
               </div>
             )}
           </div>
@@ -112,13 +128,18 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
 
             {/* Persona & Property Interest */}
             <div className="space-y-4">
-              {analysis?.persona && (
+              {(analysis?.persona || analysis?.persona_description) && (
                 <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
                   <div className="flex items-center gap-2 mb-2">
                     <Users className="h-4 w-4 text-primary" />
                     <h4 className="font-semibold text-sm">Buyer Persona</h4>
                   </div>
-                  <p className="text-sm">{analysis.persona}</p>
+                  {analysis.persona && (
+                    <p className="text-sm font-semibold mb-2">{analysis.persona}</p>
+                  )}
+                  {analysis.persona_description && (
+                    <p className="text-sm text-muted-foreground">{analysis.persona_description}</p>
+                  )}
                 </div>
               )}
 
@@ -185,14 +206,6 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
                     <h4 className="font-semibold text-sm">Summary</h4>
                   </div>
                   <p className="text-sm">{analysis.summary}</p>
-                </div>
-              )}
-
-              {/* Rating Rationale */}
-              {analysis.rating_rationale && (
-                <div className="p-4 bg-muted/30 rounded-lg">
-                  <h4 className="font-semibold text-sm mb-2">Rating Rationale</h4>
-                  <p className="text-sm text-muted-foreground">{analysis.rating_rationale}</p>
                 </div>
               )}
 
