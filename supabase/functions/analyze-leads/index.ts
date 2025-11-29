@@ -191,15 +191,7 @@ Return a JSON object with this EXACT structure:
               topP: 0.95,
               maxOutputTokens: 2500,
               responseMimeType: "application/json"
-            },
-            tools: [{
-              googleSearchRetrieval: {
-                dynamicRetrievalConfig: {
-                  mode: "MODE_DYNAMIC",
-                  dynamicThreshold: 0.3
-                }
-              }
-            }]
+            }
           }),
         }
       );
