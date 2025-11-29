@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Sparkles, Upload, Download } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { getProjectById } from '@/config/projects';
+import { getProjectById, getBrandByProjectId } from '@/config/projects';
 
 const Index = () => {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -25,7 +25,11 @@ const Index = () => {
   const handleFileSelect = async (file: File, projectId: string) => {
     setIsLoading(true);
     try {
-      const parsedLeads = await parseExcelFile(file);
+      // Get brand schema for validation
+      const brand = getBrandByProjectId(projectId);
+      const schema = brand?.excelSchema;
+      
+      const parsedLeads = await parseExcelFile(file, schema);
       
       // Validate max 50 leads
       if (parsedLeads.length > 50) {

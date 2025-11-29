@@ -1,3 +1,9 @@
+export interface ExcelSchema {
+  requiredColumns: string[];
+  optionalColumns: string[];
+  columnMappings: Record<string, string>; // Excel column name -> Lead field name
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -15,12 +21,109 @@ export interface Brand {
   id: string;
   name: string;
   projects: Project[];
+  excelSchema: ExcelSchema;
 }
+
+// Kalpataru Brand Excel Schema - All 62 columns
+const KALPATARU_SCHEMA: ExcelSchema = {
+  requiredColumns: [
+    'Opportunity Name',
+    'Mobile',
+    'Walkin Date',
+    'Name of Closing Manager'
+  ],
+  optionalColumns: [
+    'Duplicate check',
+    'Segment',
+    'Project',
+    'Occupation',
+    'Designation',
+    'Profession',
+    'Other Profession',
+    'Department / Function',
+    'Other Department / Function',
+    'Industry / Sector',
+    'Other Industry / Sector',
+    'Nature of Business',
+    'Place of Work (Company Name)',
+    'Office PIN Code',
+    'Location of Work',
+    'Location of Residence',
+    'Building Name',
+    'Correspondence Street 1',
+    'Correspondence Country',
+    'Correspondence State',
+    'Correspondence City',
+    'Other City',
+    'Correspondence Pin Code',
+    'Nearest Railway/Metro Station',
+    'Desired Floor Band',
+    'Desired Facing',
+    'Desired Carpet Area (Post-Walkin)',
+    'Stage of Construction (Post-Walkin)',
+    'Searching Property since (in months)',
+    'Expected Date of Closure',
+    'Source of Funding',
+    'Competitor Name 1',
+    'Competition Project Name 1',
+    'Competition Visit Status 1',
+    'Competitor Name 2',
+    'Competition Project Name 2',
+    'Competition Visit Status 2',
+    'Interested Unit 1',
+    'Interested Unit 2',
+    'Owned/Stay in Kalpataru Property',
+    'Existing Flat Details',
+    'Cooling Date',
+    'Converted',
+    'Opportunity Converted by Revisit',
+    'Opportunity ID',
+    'Latest Revisit Date',
+    'No. of Site Re-Visits',
+    'Interested Tower 1',
+    'Interested Floor 1',
+    'Interested Unit 1',
+    'Interested Unit 2',
+    'Walkin Auto Rating',
+    'Walkin Manual Rating',
+    'Reason for Lead Lost',
+    'Reason for Opportunity Lost',
+    'Last Follow Up Comments',
+    'Site Re-Visit Comment',
+    'Visit Comments (Not for Reports)'
+  ],
+  columnMappings: {
+    'Opportunity Name': 'name',
+    'Mobile': 'phone',
+    'Walkin Date': 'date',
+    'Name of Closing Manager': 'leadOwner',
+    'Opportunity ID': 'id',
+    'Walkin Manual Rating': 'managerRating',
+    'Walkin Auto Rating': 'rating',
+    'Desired Floor Band': 'floorPreference',
+    'Desired Facing': 'facing',
+    'Desired Carpet Area (Post-Walkin)': 'carpetArea',
+    'Stage of Construction (Post-Walkin)': 'constructionStage',
+    'Expected Date of Closure': 'timeline',
+    'Source of Funding': 'fundingSource',
+    'Interested Tower 1': 'towerInterested',
+    'Interested Unit 1': 'unitInterested',
+    'Occupation': 'occupation',
+    'Designation': 'designation',
+    'Place of Work (Company Name)': 'company',
+    'Location of Residence': 'currentResidence',
+    'Location of Work': 'workLocation',
+    'Nearest Railway/Metro Station': 'preferredStation',
+    'Project': 'projectInterest',
+    'Last Follow Up Comments': 'notes'
+  }
+};
 
 export const BRANDS: Brand[] = [
   {
     id: 'kalpataru',
     name: 'Kalpataru',
+    excelSchema: KALPATARU_SCHEMA,
     projects: [
       {
         id: 'kalpataru-vista',
@@ -61,6 +164,7 @@ export const BRANDS: Brand[] = [
   {
     id: 'lodha',
     name: 'Lodha',
+    excelSchema: KALPATARU_SCHEMA, // Using Kalpataru schema for now, can be customized later
     projects: [
       {
         id: 'lodha-world-towers',
@@ -101,6 +205,7 @@ export const BRANDS: Brand[] = [
   {
     id: 'oberoi',
     name: 'Oberoi Realty',
+    excelSchema: KALPATARU_SCHEMA, // Using Kalpataru schema for now, can be customized later
     projects: [
       {
         id: 'oberoi-sky-city',
@@ -131,6 +236,14 @@ export const getProjectById = (projectId: string): Project | undefined => {
   for (const brand of BRANDS) {
     const project = brand.projects.find(p => p.id === projectId);
     if (project) return project;
+  }
+  return undefined;
+};
+
+export const getBrandByProjectId = (projectId: string): Brand | undefined => {
+  for (const brand of BRANDS) {
+    const project = brand.projects.find(p => p.id === projectId);
+    if (project) return brand;
   }
   return undefined;
 };
