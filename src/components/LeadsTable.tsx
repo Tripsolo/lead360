@@ -35,9 +35,9 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter }: LeadsTableProps
   // Filter leads
   let filteredLeads = leads.filter(lead => {
     const matchesSearch = 
-      lead.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      lead.phone?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      lead.name.toLowerCase().includes(searchTerm.toLowerCase());
+      String(lead.id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      String(lead.phone || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      String(lead.name || '').toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesRating = !ratingFilter || lead.rating === ratingFilter;
     const matchesOwner = ownerFilter === 'all' || lead.leadOwner === ownerFilter;
