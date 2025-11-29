@@ -84,9 +84,9 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
 
           <Separator />
 
-          {/* Basic Details & Persona */}
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* Contact & Professional Info + Property Preferences */}
+          {/* Basic Details, Property Preferences & Persona - 3 Column Grid */}
+          <div className="grid md:grid-cols-3 gap-6">
+            {/* Lead Details */}
             <div className="space-y-4">
               <h3 className="font-semibold text-sm">Lead Details</h3>
               
@@ -124,26 +124,30 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
                   <span>Work: {lead.workLocation}</span>
                 </div>
               )}
+            </div>
 
-              {/* Property Preferences - Integrated inline */}
+            {/* Property Preferences */}
+            <div className="space-y-4">
+              <h3 className="font-semibold text-sm">Property Preferences</h3>
+              
               {lead.carpetArea && (
-                <div className="flex items-center gap-2 text-sm">
-                  <Home className="h-4 w-4 text-muted-foreground" />
-                  <span>Area: {lead.carpetArea}</span>
+                <div className="text-sm">
+                  <span className="text-muted-foreground">Area: </span>
+                  <span>{lead.carpetArea}</span>
                 </div>
               )}
 
               {lead.floorPreference && (
-                <div className="flex items-center gap-2 text-sm">
-                  <Home className="h-4 w-4 text-muted-foreground" />
-                  <span>Floor: {lead.floorPreference}</span>
+                <div className="text-sm">
+                  <span className="text-muted-foreground">Floor: </span>
+                  <span>{lead.floorPreference}</span>
                 </div>
               )}
 
               {lead.facing && (
-                <div className="flex items-center gap-2 text-sm">
-                  <Home className="h-4 w-4 text-muted-foreground" />
-                  <span>Facing: {lead.facing}</span>
+                <div className="text-sm">
+                  <span className="text-muted-foreground">Facing: </span>
+                  <span>{lead.facing}</span>
                 </div>
               )}
             </div>
