@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,8 +12,10 @@ serve(async (req) => {
   }
 
   try {
-    const { leads } = await req.json();
+    const { leads, projectId } = await req.json();
     const googleApiKey = Deno.env.get('GOOGLE_AI_API_KEY');
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
     if (!googleApiKey) {
       return new Response(
@@ -25,6 +28,27 @@ serve(async (req) => {
         }
       );
     }
+
+    // Initialize Supabase client
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Fetch project and brand metadata
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('*, brands(*)')
+      .eq('id', projectId)
+      .single();
+
+    if (projectError || !project) {
+      console.error('Error fetching project:', projectError);
+      return new Response(
+        JSON.stringify({ error: 'Project not found' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const brandMetadata = project.brands.metadata;
+    const projectMetadata = project.metadata;
 
 const systemPrompt = `You are an expert real estate sales analyst specializing in lead qualification and conversion optimization for premium residential projects in India.
 
@@ -129,7 +153,69 @@ const leadScoringModel = `# LEAD SCORING MODEL
       
       const leadDataJson = JSON.stringify(lead, null, 2);
 
+      // Build brand context section
+      const brandContext = `# BRAND CONTEXT
+Developer: ${brandMetadata?.developer?.name || 'Unknown'}
+Legacy: ${brandMetadata?.developer?.legacy || 'N/A'}
+Reputation: ${brandMetadata?.developer?.reputation || 'N/A'}
+Trust Signals: ${brandMetadata?.developer?.trust_signals?.join(', ') || 'N/A'}`;
+
+      // Build project context section
+      const projectContext = `# PROJECT CONTEXT: ${projectMetadata?.project_name || project.name}
+
+## Location
+${projectMetadata?.location?.address || 'N/A'}
+Micro-market: ${projectMetadata?.location?.micro_market || 'N/A'}
+Positioning: ${projectMetadata?.location?.positioning || 'N/A'}
+Walk-to-Work Employers: ${projectMetadata?.location?.walk_to_work_employers?.join(', ') || 'N/A'}
+Medical Hub: ${projectMetadata?.location?.medical_hub?.join(', ') || 'N/A'}
+
+## Township Features
+${projectMetadata?.township ? `
+Name: ${projectMetadata.township.name}
+Total Area: ${projectMetadata.township.total_area_acres} acres
+Grand Central Park: ${projectMetadata.township.grand_central_park?.area_acres} acres with ${projectMetadata.township.grand_central_park?.trees} trees
+Open Space: ${projectMetadata.township.open_space_percent}%
+Vehicle-Free Podium: ${projectMetadata.township.podium_acres} acres
+` : 'N/A'}
+
+## USPs
+Primary: ${projectMetadata?.usps?.primary?.map((usp: string) => `\n- ${usp}`).join('') || 'N/A'}
+Construction Quality: ${projectMetadata?.usps?.construction_quality?.map((qual: string) => `\n- ${qual}`).join('') || 'N/A'}
+
+## Inventory Configurations
+${projectMetadata?.inventory?.configurations?.map((config: any) => `
+- ${config.type}: ${config.carpet_sqft_range[0]}-${config.carpet_sqft_range[1]} sqft, ₹${config.price_range_cr[0]}-${config.price_range_cr[1]} Cr
+  Target: ${config.target_persona}
+  Notes: ${config.notes}`).join('\n') || 'N/A'}
+
+## Common Objections & Rebuttals
+${projectMetadata?.common_objections ? Object.entries(projectMetadata.common_objections).map(([key, obj]: [string, any]) => `
+- ${key}: ${obj.objection}
+  Rebuttal: ${obj.rebuttal}`).join('\n') : 'N/A'}
+
+## Competitors
+${projectMetadata?.competitors ? Object.entries(projectMetadata.competitors).map(([key, comp]: [string, any]) => `
+- ${key}: ${comp.projects?.join(', ')}
+  Strength: ${comp.perceived_strength}
+  Positioning: ${comp.positioning}`).join('\n') : 'N/A'}
+
+## Buyer Personas
+${projectMetadata?.buyer_personas ? Object.entries(projectMetadata.buyer_personas).map(([key, persona]: [string, any]) => `
+- ${key}: ${persona.profile}
+  Drivers: ${persona.drivers}
+  Talking Points: ${persona.talking_points}`).join('\n') : 'N/A'}
+
+## Payment Plans
+${projectMetadata?.payment_plans ? Object.entries(projectMetadata.payment_plans).map(([key, plan]: [string, any]) => `
+- ${key}: ${plan.description}
+  Target: ${plan.target}`).join('\n') : 'N/A'}`;
+
       const fullPrompt = `${systemPrompt}
+
+${brandContext}
+
+${projectContext}
 
 ${crmFieldExplainer}
 

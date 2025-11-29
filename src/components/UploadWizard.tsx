@@ -1,10 +1,24 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Upload, Building2, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { BRANDS, Brand, Project } from '@/config/projects';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { supabase } from '@/integrations/supabase/client';
+
+interface Brand {
+  id: string;
+  name: string;
+  metadata: any;
+  excel_schema: any;
+}
+
+interface Project {
+  id: string;
+  brand_id: string;
+  name: string;
+  metadata: any;
+}
 
 interface UploadWizardProps {
   onFileSelect: (file: File, projectId: string) => void;
@@ -15,20 +29,69 @@ export const UploadWizard = ({ onFileSelect, isLoading }: UploadWizardProps) => 
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [selectedBrand, setSelectedBrand] = useState<Brand | null>(null);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [error, setError] = useState<string>('');
+  const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Fetch brands on mount
+  useEffect(() => {
+    fetchBrands();
+  }, []);
+
+  // Fetch projects when brand is selected
+  useEffect(() => {
+    if (selectedBrand) {
+      fetchProjects(selectedBrand.id);
+    }
+  }, [selectedBrand]);
+
+  const fetchBrands = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('brands')
+      .select('*')
+      .order('name');
+    
+    if (error) {
+      console.error('Error fetching brands:', error);
+      setError('Failed to load brands');
+    } else {
+      setBrands(data || []);
+    }
+    setLoading(false);
+  };
+
+  const fetchProjects = async (brandId: string) => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('projects')
+      .select('*')
+      .eq('brand_id', brandId)
+      .order('name');
+    
+    if (error) {
+      console.error('Error fetching projects:', error);
+      setError('Failed to load projects');
+    } else {
+      setProjects(data || []);
+    }
+    setLoading(false);
+  };
+
   const handleBrandSelect = (brandId: string) => {
-    const brand = BRANDS.find(b => b.id === brandId);
+    const brand = brands.find(b => b.id === brandId);
     if (brand) {
       setSelectedBrand(brand);
       setSelectedProject(null);
+      setProjects([]);
       setStep(2);
     }
   };
 
   const handleProjectSelect = (projectId: string) => {
-    const project = selectedBrand?.projects.find(p => p.id === projectId);
+    const project = projects.find(p => p.id === projectId);
     if (project) {
       setSelectedProject(project);
       setStep(3);
@@ -88,12 +151,12 @@ export const UploadWizard = ({ onFileSelect, isLoading }: UploadWizardProps) => 
                 <Building2 className="h-4 w-4" />
                 <span>Select Brand</span>
               </div>
-              <Select onValueChange={handleBrandSelect}>
+              <Select onValueChange={handleBrandSelect} disabled={loading}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Choose a brand..." />
+                  <SelectValue placeholder={loading ? "Loading brands..." : "Choose a brand..."} />
                 </SelectTrigger>
                 <SelectContent>
-                  {BRANDS.map(brand => (
+                  {brands.map(brand => (
                     <SelectItem key={brand.id} value={brand.id}>
                       {brand.name}
                     </SelectItem>
@@ -110,12 +173,12 @@ export const UploadWizard = ({ onFileSelect, isLoading }: UploadWizardProps) => 
                 <Home className="h-4 w-4" />
                 <span>Select Project under {selectedBrand.name}</span>
               </div>
-              <Select onValueChange={handleProjectSelect}>
+              <Select onValueChange={handleProjectSelect} disabled={loading}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Choose a project..." />
+                  <SelectValue placeholder={loading ? "Loading projects..." : "Choose a project..."} />
                 </SelectTrigger>
                 <SelectContent>
-                  {selectedBrand.projects.map(project => (
+                  {projects.map(project => (
                     <SelectItem key={project.id} value={project.id}>
                       {project.name}
                     </SelectItem>
@@ -134,7 +197,9 @@ export const UploadWizard = ({ onFileSelect, isLoading }: UploadWizardProps) => 
               <div className="p-4 bg-muted rounded-lg space-y-2">
                 <p className="text-sm font-medium">Selected Project:</p>
                 <p className="text-lg font-semibold">{selectedProject.name}</p>
-                <p className="text-sm text-muted-foreground">{selectedProject.metadata.location}</p>
+                <p className="text-sm text-muted-foreground">
+                  {selectedProject.metadata?.location?.address || selectedProject.metadata?.location || 'No location data'}
+                </p>
               </div>
 
               <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary/50 transition-colors">
