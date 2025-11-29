@@ -125,15 +125,25 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
                 </div>
               )}
 
-              {/* Property Preferences - Moved to middle column */}
-              {(lead.carpetArea || lead.floorPreference || lead.facing) && (
-                <div className="mt-6">
-                  <h4 className="font-semibold text-sm mb-2">Property Preferences</h4>
-                  <div className="space-y-1 text-sm">
-                    {lead.carpetArea && <p>Area: {lead.carpetArea}</p>}
-                    {lead.floorPreference && <p>Floor: {lead.floorPreference}</p>}
-                    {lead.facing && <p>Facing: {lead.facing}</p>}
-                  </div>
+              {/* Property Preferences - Integrated inline */}
+              {lead.carpetArea && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Home className="h-4 w-4 text-muted-foreground" />
+                  <span>Area: {lead.carpetArea}</span>
+                </div>
+              )}
+
+              {lead.floorPreference && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Home className="h-4 w-4 text-muted-foreground" />
+                  <span>Floor: {lead.floorPreference}</span>
+                </div>
+              )}
+
+              {lead.facing && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Home className="h-4 w-4 text-muted-foreground" />
+                  <span>Facing: {lead.facing}</span>
                 </div>
               )}
             </div>
