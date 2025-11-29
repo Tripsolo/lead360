@@ -1,24 +1,45 @@
 import { useState } from 'react';
-import { FileUpload } from '@/components/FileUpload';
-import { LeadsList } from '@/components/LeadsList';
+import { UploadWizard } from '@/components/UploadWizard';
+import { SummaryCards } from '@/components/SummaryCards';
+import { LeadsTable } from '@/components/LeadsTable';
+import { LeadReportModal } from '@/components/LeadReportModal';
 import { parseExcelFile } from '@/utils/excelParser';
+import { exportLeadsToExcel } from '@/utils/excelExport';
 import { Lead, AnalysisResult } from '@/types/lead';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Sparkles, Upload } from 'lucide-react';
+import { Sparkles, Upload, Download } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { getProjectById } from '@/config/projects';
 
 const Index = () => {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+  const [ratingFilter, setRatingFilter] = useState<string | null>(null);
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
   const { toast } = useToast();
 
-  const handleFileSelect = async (file: File) => {
+  const handleFileSelect = async (file: File, projectId: string) => {
     setIsLoading(true);
     try {
       const parsedLeads = await parseExcelFile(file);
+      
+      // Validate max 50 leads
+      if (parsedLeads.length > 50) {
+        toast({
+          title: 'Too many leads',
+          description: 'Maximum 50 leads allowed per file. Please reduce the number of leads.',
+          variant: 'destructive',
+        });
+        setIsLoading(false);
+        return;
+      }
+
       setLeads(parsedLeads);
+      setSelectedProjectId(projectId);
       toast({
         title: 'File parsed successfully',
         description: `Loaded ${parsedLeads.length} leads from the Excel file.`,
@@ -37,8 +58,14 @@ const Index = () => {
   const handleAnalyzeLeads = async () => {
     setIsAnalyzing(true);
     try {
+      // Get project metadata for context
+      const project = getProjectById(selectedProjectId);
+      
       const { data, error } = await supabase.functions.invoke('analyze-leads', {
-        body: { leads },
+        body: { 
+          leads,
+          projectMetadata: project?.metadata 
+        },
       });
 
       if (error) {
@@ -78,6 +105,21 @@ const Index = () => {
 
   const handleReset = () => {
     setLeads([]);
+    setSelectedProjectId('');
+    setRatingFilter(null);
+  };
+
+  const handleExport = () => {
+    exportLeadsToExcel(leads);
+    toast({
+      title: 'Export successful',
+      description: 'Leads data has been exported to Excel.',
+    });
+  };
+
+  const handleLeadClick = (lead: Lead) => {
+    setSelectedLead(lead);
+    setModalOpen(true);
   };
 
   return (
@@ -91,23 +133,47 @@ const Index = () => {
         </div>
 
         {leads.length === 0 ? (
-          <FileUpload onFileSelect={handleFileSelect} isLoading={isLoading} />
+          <UploadWizard onFileSelect={handleFileSelect} isLoading={isLoading} />
         ) : (
           <div className="space-y-8">
-            <div className="flex justify-between items-center">
-              <div className="flex gap-4">
-                <Button onClick={handleAnalyzeLeads} disabled={isAnalyzing}>
-                  <Sparkles className="mr-2 h-4 w-4" />
+            {/* Action Buttons */}
+            <div className="flex flex-wrap justify-between items-center gap-4">
+              <div className="flex gap-3">
+                <Button onClick={handleAnalyzeLeads} disabled={isAnalyzing} size="lg">
+                  <Sparkles className="mr-2 h-5 w-5" />
                   {isAnalyzing ? 'Analyzing...' : 'Analyze with AI'}
                 </Button>
-                <Button variant="outline" onClick={handleReset}>
-                  <Upload className="mr-2 h-4 w-4" />
+                <Button variant="outline" onClick={handleReset} size="lg">
+                  <Upload className="mr-2 h-5 w-5" />
                   Upload New File
                 </Button>
               </div>
+              <Button variant="outline" onClick={handleExport} size="lg">
+                <Download className="mr-2 h-5 w-5" />
+                Export to Excel
+              </Button>
             </div>
 
-            <LeadsList leads={leads} />
+            {/* Summary Cards */}
+            <SummaryCards 
+              leads={leads} 
+              onFilterChange={setRatingFilter}
+              activeFilter={ratingFilter}
+            />
+
+            {/* Leads Table */}
+            <LeadsTable 
+              leads={leads}
+              onLeadClick={handleLeadClick}
+              ratingFilter={ratingFilter}
+            />
+
+            {/* Lead Report Modal */}
+            <LeadReportModal
+              lead={selectedLead}
+              open={modalOpen}
+              onOpenChange={setModalOpen}
+            />
           </div>
         )}
       </div>

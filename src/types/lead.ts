@@ -15,6 +15,26 @@ export interface Lead {
   aiInsights?: string;
   fullAnalysis?: AnalysisResult['fullAnalysis'];
   rawData: Record<string, any>;
+  
+  // Additional PRD fields
+  leadOwner?: string;
+  managerRating?: LeadRating;
+  unitInterested?: string;
+  towerInterested?: string;
+  
+  // Lead details from PRD
+  occupation?: string;
+  designation?: string;
+  company?: string;
+  currentResidence?: string;
+  workLocation?: string;
+  preferredStation?: string;
+  carpetArea?: string;
+  floorPreference?: string;
+  facing?: string;
+  constructionStage?: string;
+  fundingSource?: string;
+  inHandFunds?: string;
 }
 
 export interface AnalysisResult {
