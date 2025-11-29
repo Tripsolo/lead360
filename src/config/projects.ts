@@ -126,25 +126,8 @@ export const BRANDS: Brand[] = [
     excelSchema: KALPATARU_SCHEMA,
     projects: [
       {
-        id: 'kalpataru-vista',
-        name: 'Kalpataru Vista',
-        brandId: 'kalpataru',
-        metadata: {
-          location: 'Bandra East, Mumbai',
-          pricing: '₹4.5-7.2 Cr for 2-3 BHK',
-          usps: [
-            'Premium sea-facing apartments',
-            'World-class amenities',
-            'Close to BKC business district',
-            'RERA approved'
-          ],
-          competition: ['Lodha Belmondo', 'Oberoi Sky City'],
-          targetAudience: 'High-net-worth individuals and corporate executives'
-        }
-      },
-      {
-        id: 'kalpataru-paramount',
-        name: 'Kalpataru Paramount',
+        id: 'kalpataru-estella',
+        name: 'Estella',
         brandId: 'kalpataru',
         metadata: {
           location: 'Thane West',
@@ -157,6 +140,40 @@ export const BRANDS: Brand[] = [
           ],
           competition: ['Lodha Amara', 'Hiranandani Fortune City'],
           targetAudience: 'Upper-middle-class families'
+        }
+      },
+      {
+        id: 'kalpataru-eternia',
+        name: 'Eternia',
+        brandId: 'kalpataru',
+        metadata: {
+          location: 'Thane West',
+          pricing: '₹2.2-3.8 Cr for 2-3 BHK',
+          usps: [
+            'Modern architecture',
+            'Premium lifestyle amenities',
+            'Strategic location',
+            'Well-connected to Mumbai'
+          ],
+          competition: ['Lodha Amara', 'Oberoi Sky City'],
+          targetAudience: 'Young professionals and families'
+        }
+      },
+      {
+        id: 'kalpataru-primera',
+        name: 'Primera',
+        brandId: 'kalpataru',
+        metadata: {
+          location: 'Thane West',
+          pricing: '₹2.5-4.5 Cr for 2-3 BHK',
+          usps: [
+            'Premium residences',
+            'World-class amenities',
+            'Excellent connectivity',
+            'Scenic views'
+          ],
+          competition: ['Lodha Crown', 'Oberoi Sky City'],
+          targetAudience: 'Affluent families and professionals'
         }
       }
     ]
