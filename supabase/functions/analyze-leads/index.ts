@@ -203,7 +203,11 @@ Return a JSON object with this EXACT structure:
       }
 
       const data = await response.json();
-      const analysisText = data.candidates[0].content.parts[0].text;
+
+      // Safely extract the model response text
+      const candidate = data?.candidates?.[0];
+      const part = candidate?.content?.parts?.[0];
+      const analysisText = typeof part?.text === 'string' ? part.text : JSON.stringify(candidate ?? data);
       
       // Parse JSON response
       let analysisResult;
@@ -212,9 +216,13 @@ Return a JSON object with this EXACT structure:
       } catch (parseError) {
         console.error('Failed to parse AI response as JSON:', analysisText);
         // Fallback to simple extraction if JSON parsing fails
-        let rating = 'Warm';
-        if (analysisText.toLowerCase().includes('hot')) rating = 'Hot';
-        else if (analysisText.toLowerCase().includes('cold')) rating = 'Cold';
+        const lower = analysisText.toLowerCase();
+        let rating: 'Hot' | 'Warm' | 'Cold' = 'Warm';
+        if (lower.includes('"ai_rating"') && (lower.includes('hot') || lower.includes('"Hot"'))) {
+          rating = 'Hot';
+        } else if (lower.includes('cold') || lower.includes('"Cold"')) {
+          rating = 'Cold';
+        }
         
         analysisResult = {
           ai_rating: rating,
