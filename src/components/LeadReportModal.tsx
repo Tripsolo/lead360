@@ -213,45 +213,48 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
             <div className="space-y-4">
               <h3 className="font-semibold text-lg">AI Analysis</h3>
 
-              {/* Summary */}
-              {analysis.summary && (
-                <div className="p-4 bg-muted/50 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <MessageSquare className="h-4 w-4" />
-                    <h4 className="font-semibold text-sm">Summary</h4>
+              {/* Summary, Concerns & Next Best Action - 3 Column Grid */}
+              <div className="grid md:grid-cols-3 gap-6">
+                {/* Summary */}
+                {analysis.summary && (
+                  <div className="p-4 bg-muted/50 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <MessageSquare className="h-4 w-4" />
+                      <h4 className="font-semibold text-sm">Summary</h4>
+                    </div>
+                    <p className="text-sm">{analysis.summary}</p>
                   </div>
-                  <p className="text-sm">{analysis.summary}</p>
-                </div>
-              )}
+                )}
 
-              {/* Next Best Action */}
-              {analysis.next_best_action && (
-                <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Target className="h-4 w-4 text-primary" />
-                    <h4 className="font-semibold text-sm text-primary">Next Best Action</h4>
+                {/* Key Concerns */}
+                {analysis.key_concerns && analysis.key_concerns.length > 0 && (
+                  <div className="p-4 bg-muted/30 rounded-lg">
+                    <div className="flex items-center gap-2 mb-3">
+                      <AlertCircle className="h-4 w-4" />
+                      <h4 className="font-semibold text-sm">Key Concerns</h4>
+                    </div>
+                    <ul className="space-y-2">
+                      {analysis.key_concerns.map((concern, idx) => (
+                        <li key={idx} className="text-sm flex items-start gap-2">
+                          <span className="text-muted-foreground mt-1">•</span>
+                          <span>{concern}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-                  <p className="text-sm">{analysis.next_best_action}</p>
-                </div>
-              )}
+                )}
 
-              {/* Key Concerns */}
-              {analysis.key_concerns && analysis.key_concerns.length > 0 && (
-                <div className="p-4 bg-muted/30 rounded-lg">
-                  <div className="flex items-center gap-2 mb-3">
-                    <AlertCircle className="h-4 w-4" />
-                    <h4 className="font-semibold text-sm">Key Concerns</h4>
+                {/* Next Best Action */}
+                {analysis.next_best_action && (
+                  <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Target className="h-4 w-4 text-primary" />
+                      <h4 className="font-semibold text-sm text-primary">Next Best Action</h4>
+                    </div>
+                    <p className="text-sm">{analysis.next_best_action}</p>
                   </div>
-                  <ul className="space-y-2">
-                    {analysis.key_concerns.map((concern, idx) => (
-                      <li key={idx} className="text-sm flex items-start gap-2">
-                        <span className="text-muted-foreground mt-1">•</span>
-                        <span>{concern}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+                )}
+              </div>
 
               {/* Talking Points */}
               {analysis.talking_points && analysis.talking_points.length > 0 && (
