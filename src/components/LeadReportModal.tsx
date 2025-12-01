@@ -168,135 +168,128 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
 
             {/* Buyer Persona */}
             <div className="space-y-4">
-              {(analysis?.persona || analysis?.persona_description) && (
-                <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Users className="h-4 w-4 text-primary" />
-                    <h4 className="font-semibold text-sm">Buyer Persona</h4>
-                  </div>
-                  {analysis.persona && (
-                    <p className="text-sm font-semibold mb-2">{analysis.persona}</p>
-                  )}
-                  {analysis.persona_description && (
-                    <p className="text-sm text-muted-foreground">{analysis.persona_description}</p>
-                  )}
+              <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <Users className="h-4 w-4 text-primary" />
+                  <h4 className="font-semibold text-sm">Buyer Persona</h4>
                 </div>
-              )}
+                {analysis?.persona ? (
+                  <p className="text-sm font-semibold mb-2">{analysis.persona}</p>
+                ) : (
+                  <p className="text-sm text-muted-foreground mb-2">N/A</p>
+                )}
+                {analysis?.persona_description && (
+                  <p className="text-sm text-muted-foreground">{analysis.persona_description}</p>
+                )}
+              </div>
             </div>
           </div>
 
           <Separator />
 
           {/* Financial Profile */}
-          {(lead.budget || analysis?.extracted_signals?.budget_stated || analysis?.extracted_signals?.in_hand_funds) && (
-            <>
-              <div>
-                <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-                  <DollarSign className="h-5 w-5" />
-                  Financial Profile
-                </h3>
-                <div className="grid md:grid-cols-3 gap-4">
-                  {lead.budget && (
-                    <div className="p-3 bg-muted rounded-lg">
-                      <p className="text-xs text-muted-foreground mb-1">Budget</p>
-                      <p className="font-semibold">{lead.budget}</p>
-                    </div>
-                  )}
-                  {analysis?.extracted_signals?.in_hand_funds && (
-                    <div className="p-3 bg-muted rounded-lg">
-                      <p className="text-xs text-muted-foreground mb-1">In-Hand Funds</p>
-                      <p className="font-semibold">
-                        ₹{(analysis.extracted_signals.in_hand_funds / 100000).toFixed(2)}L
-                      </p>
-                    </div>
-                  )}
-                  {lead.fundingSource && (
-                    <div className="p-3 bg-muted rounded-lg">
-                      <p className="text-xs text-muted-foreground mb-1">Funding Source</p>
-                      <p className="font-semibold">{lead.fundingSource}</p>
-                    </div>
-                  )}
+          <>
+            <div>
+              <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
+                <DollarSign className="h-5 w-5" />
+                Financial Profile
+              </h3>
+              <div className="grid md:grid-cols-3 gap-4">
+                <div className="p-3 bg-muted rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">Budget</p>
+                  <p className="font-semibold">{lead.budget || 'N/A'}</p>
+                </div>
+                <div className="p-3 bg-muted rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">In-Hand Funds</p>
+                  <p className="font-semibold">
+                    {analysis?.extracted_signals?.in_hand_funds 
+                      ? `₹${(analysis.extracted_signals.in_hand_funds / 100000).toFixed(2)}L`
+                      : 'N/A'
+                    }
+                  </p>
+                </div>
+                <div className="p-3 bg-muted rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">Funding Source</p>
+                  <p className="font-semibold">{lead.fundingSource || 'N/A'}</p>
                 </div>
               </div>
-              <Separator />
-            </>
-          )}
+            </div>
+            <Separator />
+          </>
 
           {/* AI Analysis */}
-          {analysis && (
-            <div className="space-y-4">
-              <h3 className="font-semibold text-lg">AI Analysis</h3>
+          <div className="space-y-4">
+            <h3 className="font-semibold text-lg">AI Analysis</h3>
 
-              {/* Summary, Concerns & Next Best Action - 3 Column Grid */}
-              <div className="grid md:grid-cols-3 gap-6">
-                {/* Summary */}
-                {analysis.summary && (
-                  <div className="p-4 bg-muted/50 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <MessageSquare className="h-4 w-4" />
-                      <h4 className="font-semibold text-sm">Summary</h4>
-                    </div>
-                    <p className="text-sm">{analysis.summary}</p>
-                  </div>
-                )}
-
-                {/* Key Concerns */}
-                {analysis.key_concerns && analysis.key_concerns.length > 0 && (
-                  <div className="p-4 bg-muted/30 rounded-lg">
-                    <div className="flex items-center gap-2 mb-3">
-                      <AlertCircle className="h-4 w-4" />
-                      <h4 className="font-semibold text-sm">Key Concerns</h4>
-                    </div>
-                    <ul className="space-y-2">
-                      {analysis.key_concerns.map((concern, idx) => (
-                        <li key={idx} className="text-sm flex items-start gap-2">
-                          <span className="text-muted-foreground mt-1">•</span>
-                          <span>{concern}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {/* Next Best Action */}
-                {analysis.next_best_action && (
-                  <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Target className="h-4 w-4 text-primary" />
-                      <h4 className="font-semibold text-sm text-primary">Next Best Action</h4>
-                    </div>
-                    <p className="text-sm">{analysis.next_best_action}</p>
-                  </div>
-                )}
+            {/* Summary, Concerns & Next Best Action - 3 Column Grid */}
+            <div className="grid md:grid-cols-3 gap-6">
+              {/* Summary */}
+              <div className="p-4 bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <MessageSquare className="h-4 w-4" />
+                  <h4 className="font-semibold text-sm">Summary</h4>
+                </div>
+                <p className="text-sm">{analysis?.summary || 'N/A'}</p>
               </div>
 
-              {/* Talking Points with Topic Types */}
-              {analysis.talking_points && analysis.talking_points.length > 0 && (
-                <div className="p-4 bg-muted/50 rounded-lg">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Lightbulb className="h-4 w-4" />
-                    <h4 className="font-semibold text-sm">Talking Points</h4>
-                  </div>
-                  <ul className="space-y-3">
-                    {analysis.talking_points.map((item, idx) => (
-                      <li key={idx} className="text-sm flex flex-col gap-1.5">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium w-fit ${
-                          item.type === 'Competitor handling' 
-                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'
-                            : item.type === 'Objection handling'
-                            ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400'
-                            : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400'
-                        }`}>
-                          {item.type}
-                        </span>
-                        <span className="leading-relaxed">{item.point}</span>
+              {/* Key Concerns */}
+              <div className="p-4 bg-muted/30 rounded-lg">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertCircle className="h-4 w-4" />
+                  <h4 className="font-semibold text-sm">Key Concerns</h4>
+                </div>
+                {analysis?.key_concerns && analysis.key_concerns.length > 0 ? (
+                  <ul className="space-y-2">
+                    {analysis.key_concerns.map((concern, idx) => (
+                      <li key={idx} className="text-sm flex items-start gap-2">
+                        <span className="text-muted-foreground mt-1">•</span>
+                        <span>{concern}</span>
                       </li>
                     ))}
                   </ul>
+                ) : (
+                  <p className="text-sm text-muted-foreground">N/A</p>
+                )}
+              </div>
+
+              {/* Next Best Action */}
+              <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <Target className="h-4 w-4 text-primary" />
+                  <h4 className="font-semibold text-sm text-primary">Next Best Action</h4>
                 </div>
+                <p className="text-sm">{analysis?.next_best_action || 'N/A'}</p>
+              </div>
+            </div>
+
+            {/* Talking Points with Topic Types */}
+            <div className="p-4 bg-muted/50 rounded-lg">
+              <div className="flex items-center gap-2 mb-3">
+                <Lightbulb className="h-4 w-4" />
+                <h4 className="font-semibold text-sm">Talking Points</h4>
+              </div>
+              {analysis?.talking_points && analysis.talking_points.length > 0 ? (
+                <ul className="space-y-3">
+                  {analysis.talking_points.map((item, idx) => (
+                    <li key={idx} className="text-sm flex flex-col gap-1.5">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium w-fit ${
+                        item.type === 'Competitor handling' 
+                          ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'
+                          : item.type === 'Objection handling'
+                          ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400'
+                          : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400'
+                      }`}>
+                        {item.type}
+                      </span>
+                      <span className="leading-relaxed">{item.point}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted-foreground">N/A</p>
               )}
             </div>
-          )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>
