@@ -165,35 +165,22 @@ export const LeadCard = ({ lead }: LeadCardProps) => {
                     <CheckCircle2 className="h-4 w-4" />
                     Talking Points
                   </p>
-                  <ul className="list-disc list-inside space-y-1">
-                    {analysis.talking_points.map((point, idx) => (
-                      <li key={idx} className="text-sm text-muted-foreground">{point}</li>
+                  <ul className="space-y-2">
+                    {analysis.talking_points.map((item, idx) => (
+                      <li key={idx} className="text-sm flex flex-col gap-1">
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium w-fit ${
+                          item.type === 'Competitor handling' 
+                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'
+                            : item.type === 'Objection handling'
+                            ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400'
+                            : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400'
+                        }`}>
+                          {item.type}
+                        </span>
+                        <span className="text-muted-foreground">{item.point}</span>
+                      </li>
                     ))}
                   </ul>
-                </div>
-              )}
-
-              {analysis.competitor_handling && Object.keys(analysis.competitor_handling).length > 0 && (
-                <div className="p-3 bg-muted/30 rounded-md">
-                  <p className="text-sm font-semibold mb-2">Competitor Handling</p>
-                  {Object.entries(analysis.competitor_handling).map(([competitor, strategy]) => (
-                    <div key={competitor} className="mb-2 last:mb-0">
-                      <p className="text-sm font-medium">{competitor}:</p>
-                      <p className="text-sm text-muted-foreground ml-4">{strategy}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {analysis.objection_rebuttals && Object.keys(analysis.objection_rebuttals).length > 0 && (
-                <div className="p-3 bg-muted/30 rounded-md">
-                  <p className="text-sm font-semibold mb-2">Objection Rebuttals</p>
-                  {Object.entries(analysis.objection_rebuttals).map(([objection, rebuttal]) => (
-                    <div key={objection} className="mb-2 last:mb-0">
-                      <p className="text-sm font-medium">{objection}:</p>
-                      <p className="text-sm text-muted-foreground ml-4">{rebuttal}</p>
-                    </div>
-                  ))}
                 </div>
               )}
 
