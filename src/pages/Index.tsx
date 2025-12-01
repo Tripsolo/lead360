@@ -102,9 +102,22 @@ const Index = () => {
           return lead;
         });
         setLeads(updatedLeads);
+        
+        // Show detailed success message with cache info
+        const meta = data.meta || {};
+        const cachedCount = meta.cached || 0;
+        const freshCount = meta.fresh || 0;
+        
+        let description = `Successfully analyzed ${data.results.length} leads.`;
+        if (cachedCount > 0 && freshCount > 0) {
+          description = `Analyzed ${data.results.length} leads (${cachedCount} from cache, ${freshCount} fresh analysis).`;
+        } else if (cachedCount > 0 && freshCount === 0) {
+          description = `Retrieved ${cachedCount} leads from cache (no fresh analysis needed).`;
+        }
+        
         toast({
           title: 'Analysis complete',
-          description: `Successfully analyzed ${data.results.length} leads with AI.`,
+          description,
         });
       }
     } catch (error) {

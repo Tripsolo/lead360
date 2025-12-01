@@ -41,6 +41,85 @@ export type Database = {
         }
         Relationships: []
       }
+      lead_analyses: {
+        Row: {
+          analyzed_at: string
+          full_analysis: Json | null
+          id: string
+          insights: string | null
+          lead_id: string
+          project_id: string | null
+          rating: string
+          revisit_date_at_analysis: string | null
+        }
+        Insert: {
+          analyzed_at?: string
+          full_analysis?: Json | null
+          id?: string
+          insights?: string | null
+          lead_id: string
+          project_id?: string | null
+          rating: string
+          revisit_date_at_analysis?: string | null
+        }
+        Update: {
+          analyzed_at?: string
+          full_analysis?: Json | null
+          id?: string
+          insights?: string | null
+          lead_id?: string
+          project_id?: string | null
+          rating?: string
+          revisit_date_at_analysis?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_analyses_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leads: {
+        Row: {
+          created_at: string
+          crm_data: Json
+          id: string
+          latest_revisit_date: string | null
+          lead_id: string
+          project_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          crm_data: Json
+          id?: string
+          latest_revisit_date?: string | null
+          lead_id: string
+          project_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          crm_data?: Json
+          id?: string
+          latest_revisit_date?: string | null
+          lead_id?: string
+          project_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leads_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           brand_id: string | null

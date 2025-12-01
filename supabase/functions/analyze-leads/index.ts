@@ -50,6 +50,59 @@ serve(async (req) => {
     const brandMetadata = project.brands.metadata;
     const projectMetadata = project.metadata;
 
+    console.log(`Processing ${leads.length} leads for project ${projectId}`);
+
+    // Step 1: Check for existing analyses in the database
+    const leadIds = leads.map((l: any) => l.id);
+    const { data: existingAnalyses } = await supabase
+      .from('lead_analyses')
+      .select('*')
+      .in('lead_id', leadIds)
+      .eq('project_id', projectId);
+
+    console.log(`Found ${existingAnalyses?.length || 0} existing analyses in cache`);
+
+    // Step 2: Categorize leads (cached, re-analyze, or new)
+    const leadsToAnalyze: any[] = [];
+    const cachedResults: any[] = [];
+
+    for (const lead of leads) {
+      const existingAnalysis = existingAnalyses?.find(a => a.lead_id === lead.id);
+      
+      if (!existingAnalysis) {
+        // New lead - needs analysis
+        leadsToAnalyze.push(lead);
+        continue;
+      }
+
+      // Check if revisit date has changed
+      const newRevisitDate = lead.rawData?.['Latest Revisit Date'] || null;
+      const storedRevisitDate = existingAnalysis.revisit_date_at_analysis;
+
+      // Parse dates for comparison
+      const newRevisitTime = newRevisitDate ? new Date(newRevisitDate).getTime() : null;
+      const storedRevisitTime = storedRevisitDate ? new Date(storedRevisitDate).getTime() : null;
+
+      if (newRevisitTime !== storedRevisitTime) {
+        // Revisit date changed - re-analyze
+        console.log(`Lead ${lead.id} has new revisit date - re-analyzing`);
+        leadsToAnalyze.push(lead);
+      } else {
+        // Use cached result
+        console.log(`Lead ${lead.id} using cached analysis`);
+        cachedResults.push({
+          leadId: lead.id,
+          rating: existingAnalysis.rating,
+          insights: existingAnalysis.insights,
+          fullAnalysis: existingAnalysis.full_analysis,
+          parseSuccess: true,
+          fromCache: true
+        });
+      }
+    }
+
+    console.log(`${leadsToAnalyze.length} leads need fresh analysis, ${cachedResults.length} from cache`);
+
 const systemPrompt = `You are an expert real estate sales analyst specializing in lead qualification and conversion optimization for premium residential projects in India.
 
 Your expertise includes:
@@ -147,7 +200,8 @@ const leadScoringModel = `# LEAD SCORING MODEL
 - Investment-only with budget below 1BHK options
 - No engagement with presentation`;
 
-    const analysisPromises = leads.map(async (lead: any, index: number) => {
+    // Step 3: Only analyze leads that need it
+    const analysisPromises = leadsToAnalyze.map(async (lead: any, index: number) => {
       // Add small delay between requests to avoid rate limiting
       await new Promise(resolve => setTimeout(resolve, index * 100));
       
@@ -409,27 +463,72 @@ ${leadDataJson}`;
         rating: analysisResult.ai_rating,
         insights: analysisResult.summary || analysisResult.rating_rationale,
         fullAnalysis: analysisResult,
-        parseSuccess
+        parseSuccess,
+        fromCache: false,
+        revisitDate: lead.rawData?.['Latest Revisit Date'] || null
       };
     });
 
-    const results = await Promise.all(analysisPromises);
+    const freshResults = await Promise.all(analysisPromises);
+
+    // Step 4: Store/update results in the database
+    for (const result of freshResults) {
+      if (result.parseSuccess) {
+        const lead = leadsToAnalyze.find(l => l.id === result.leadId);
+        if (!lead) continue;
+
+        // Upsert lead data
+        await supabase
+          .from('leads')
+          .upsert({
+            lead_id: lead.id,
+            project_id: projectId,
+            crm_data: lead.rawData,
+            latest_revisit_date: result.revisitDate || null
+          }, {
+            onConflict: 'lead_id,project_id'
+          });
+
+        // Upsert analysis
+        await supabase
+          .from('lead_analyses')
+          .upsert({
+            lead_id: lead.id,
+            project_id: projectId,
+            rating: result.rating,
+            insights: result.insights,
+            full_analysis: result.fullAnalysis,
+            revisit_date_at_analysis: result.revisitDate || null
+          }, {
+            onConflict: 'lead_id,project_id'
+          });
+
+        console.log(`Stored analysis for lead ${lead.id}`);
+      }
+    }
     
-    const successCount = results.filter(r => r.parseSuccess).length;
-    const failedLeads = results.filter(r => !r.parseSuccess).map(r => r.leadId);
+    // Step 5: Combine cached and fresh results
+    const allResults = [...cachedResults, ...freshResults];
     
-    console.log(`Analysis complete: ${successCount}/${results.length} successful`);
+    const successCount = allResults.filter(r => r.parseSuccess).length;
+    const failedLeads = allResults.filter(r => !r.parseSuccess).map(r => r.leadId);
+    const cachedCount = cachedResults.length;
+    const freshCount = freshResults.filter(r => r.parseSuccess).length;
+    
+    console.log(`Analysis complete: ${successCount}/${allResults.length} successful (${cachedCount} cached, ${freshCount} fresh)`);
     if (failedLeads.length > 0) {
       console.log('Failed leads:', failedLeads);
     }
 
     return new Response(
       JSON.stringify({ 
-        results,
+        results: allResults,
         meta: {
-          total: results.length,
+          total: allResults.length,
           successful: successCount,
           failed: failedLeads.length,
+          cached: cachedCount,
+          fresh: freshCount,
           failedLeadIds: failedLeads
         }
       }),
