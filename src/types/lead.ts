@@ -27,6 +27,7 @@ export interface Lead {
   designation?: string;
   company?: string;
   currentResidence?: string;
+  buildingName?: string;
   workLocation?: string;
   preferredStation?: string;
   carpetArea?: string;
