@@ -34,15 +34,15 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-2xl">{lead.name}</DialogTitle>
-          {analysis?.persona && (
-            <Badge variant="outline" className="w-fit mt-2">
-              {analysis.persona}
-            </Badge>
-          )}
-          <DialogDescription>
-            Complete lead analysis and details
-          </DialogDescription>
+          <DialogTitle className="text-2xl">Customer 360</DialogTitle>
+          <div className="flex items-center gap-2">
+            <p className="text-xl font-semibold">{lead.name}</p>
+            {analysis?.persona && (
+              <Badge variant="outline" className="w-fit">
+                {analysis.persona}
+              </Badge>
+            )}
+          </div>
         </DialogHeader>
 
         <div className="space-y-6">
@@ -111,10 +111,10 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
                 </div>
               )}
 
-              {lead.currentResidence && (
+              {lead.company && (
                 <div className="flex items-center gap-2 text-sm">
-                  <Home className="h-4 w-4 text-muted-foreground" />
-                  <span>{lead.currentResidence}</span>
+                  <Briefcase className="h-4 w-4 text-muted-foreground" />
+                  <span>{lead.company}</span>
                 </div>
               )}
 
@@ -122,6 +122,20 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
                 <div className="flex items-center gap-2 text-sm">
                   <MapPin className="h-4 w-4 text-muted-foreground" />
                   <span>Work: {lead.workLocation}</span>
+                </div>
+              )}
+
+              {lead.buildingName && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Home className="h-4 w-4 text-muted-foreground" />
+                  <span>{lead.buildingName}</span>
+                </div>
+              )}
+
+              {lead.currentResidence && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Home className="h-4 w-4 text-muted-foreground" />
+                  <span>{lead.currentResidence}</span>
                 </div>
               )}
             </div>
