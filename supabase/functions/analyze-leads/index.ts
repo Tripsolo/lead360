@@ -292,6 +292,15 @@ ${leadDataJson}
 - Summary: Maximum 35 words. Be concise and focused.
 - Next Best Action: Maximum 20 words. Keep it actionable and specific.
 - Key Concerns: These must be the CUSTOMER'S concerns about the project or specific unit they are considering. Focus on: price/budget gap, location/connectivity issues, possession date/timeline, unit configuration/size, amenities/facilities. DO NOT include generic sales concerns.
+- Concern Categories: For EACH key_concern, classify it into ONE of these categories (same order as key_concerns array):
+  1. "Price" - Budget gaps, pricing issues, financing concerns, EMI issues
+  2. "Location" - Connectivity, infrastructure, surroundings, pollution, traffic, facilities nearby
+  3. "Possession" - Delivery timeline, construction delays, handover dates
+  4. "Config" - Unit configuration, layout issues, view concerns, floor preference, carpet area
+  5. "Amenities" - Amenities in home or complex, facilities
+  6. "Trust" - Builder reputation, track record concerns
+  7. "Others" - Anything else
+- Primary Concern Category: The SINGLE most important concern category. If multiple concerns exist, pick the one that appears FIRST in the priority order above (Price > Location > Possession > Config > Amenities > Trust > Others)
 
 # TALKING POINTS GENERATION (CRITICAL - FOLLOW PRIORITY RULES):
 Generate 2-3 talking points TOTAL following these strict priority rules:
@@ -330,6 +339,8 @@ Return a JSON object with this EXACT structure:
   "persona_description": "A professional 2-line description that captures the lead's occupation, lifestyle, family situation, and key buying motivation. Make it concise and insightful.",
   "summary": "2-3 sentence overview of lead situation and intent",
   "key_concerns": ["concern1", "concern2", "concern3"],
+  "concern_categories": ["Price", "Location", "Config"],
+  "primary_concern_category": "Price",
   "next_best_action": "Specific actionable recommendation with timing",
   "talking_points": [
     {

@@ -51,6 +51,8 @@ export interface AnalysisResult {
     persona_description?: string;
     summary?: string;
     key_concerns?: string[];
+    concern_categories?: Array<'Price' | 'Location' | 'Possession' | 'Config' | 'Amenities' | 'Trust' | 'Others'>;
+    primary_concern_category?: 'Price' | 'Location' | 'Possession' | 'Config' | 'Amenities' | 'Trust' | 'Others';
     next_best_action?: string;
     talking_points?: Array<{
       type: 'What to highlight' | 'Competitor handling' | 'Objection handling';
