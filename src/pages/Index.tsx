@@ -166,8 +166,13 @@ const Index = () => {
         ) : (
           <div className="space-y-8">
             {/* Action Buttons */}
-            <div className="flex gap-3">
-              <Button onClick={handleAnalyzeLeads} disabled={isAnalyzing} size="lg">
+            <div className="flex justify-between items-center">
+              <Button 
+                onClick={handleAnalyzeLeads} 
+                disabled={isAnalyzing} 
+                size="lg"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+              >
                 <Sparkles className="mr-2 h-5 w-5" />
                 {isAnalyzing ? 'Analyzing...' : 'Analyze with AI'}
               </Button>
@@ -184,18 +189,12 @@ const Index = () => {
               activeFilter={ratingFilter}
             />
 
-            {/* Export Button */}
-            <div className="flex justify-end">
-              <Button variant="outline" onClick={handleExport} size="sm">
-                <Download className="h-4 w-4" />
-              </Button>
-            </div>
-
             {/* Leads Table */}
             <LeadsTable
               leads={leads}
               onLeadClick={handleLeadClick}
               ratingFilter={ratingFilter}
+              onExport={handleExport}
             />
 
             {/* Lead Report Modal */}
