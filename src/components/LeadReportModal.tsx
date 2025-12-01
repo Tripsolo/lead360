@@ -241,8 +241,12 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
                 {analysis?.key_concerns && analysis.key_concerns.length > 0 ? (
                   <ul className="space-y-2">
                     {analysis.key_concerns.map((concern, idx) => (
-                      <li key={idx} className="text-sm flex items-start gap-2">
-                        <span className="text-muted-foreground mt-1">•</span>
+                      <li key={idx} className="text-sm flex flex-col gap-1">
+                        {analysis.concern_categories?.[idx] && (
+                          <Badge variant="outline" className="w-fit text-xs">
+                            {analysis.concern_categories[idx]}
+                          </Badge>
+                        )}
                         <span>{concern}</span>
                       </li>
                     ))}

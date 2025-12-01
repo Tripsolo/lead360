@@ -226,8 +226,8 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: Leads
                       <span className="text-muted-foreground text-sm">-</span>
                     )}
                   </TableCell>
-                  <TableCell className="max-w-xs truncate">
-                    {lead.fullAnalysis?.key_concerns?.[0] || '-'}
+                  <TableCell className="max-w-xs">
+                    {lead.fullAnalysis?.primary_concern_category || '-'}
                   </TableCell>
                 </TableRow>
               ))
