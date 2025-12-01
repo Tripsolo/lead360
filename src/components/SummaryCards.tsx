@@ -9,9 +9,10 @@ interface SummaryCardsProps {
 }
 
 export const SummaryCards = ({ leads, onFilterChange, activeFilter }: SummaryCardsProps) => {
-  const hotCount = leads.filter(l => l.rating === 'Hot').length;
-  const warmCount = leads.filter(l => l.rating === 'Warm').length;
-  const coldCount = leads.filter(l => l.rating === 'Cold').length;
+  // Use AI rating if available (from cache), otherwise use manager rating
+  const hotCount = leads.filter(l => (l.rating || l.managerRating) === 'Hot').length;
+  const warmCount = leads.filter(l => (l.rating || l.managerRating) === 'Warm').length;
+  const coldCount = leads.filter(l => (l.rating || l.managerRating) === 'Cold').length;
   const total = leads.length;
 
   const hotPercentage = total > 0 ? ((hotCount / total) * 100).toFixed(1) : '0';
@@ -56,9 +57,9 @@ export const SummaryCards = ({ leads, onFilterChange, activeFilter }: SummaryCar
           className={`cursor-pointer transition-all ${borderColor} ${hoverColor}`}
           onClick={() => onFilterChange(activeFilter === rating ? null : rating)}
         >
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className={`p-3 rounded-lg ${color} text-white`}>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className={`p-2 rounded-lg ${color} text-white`}>
                 <Icon className="h-6 w-6" />
               </div>
               <div className="text-right">
@@ -67,9 +68,6 @@ export const SummaryCards = ({ leads, onFilterChange, activeFilter }: SummaryCar
               </div>
             </div>
             <h3 className="text-lg font-semibold">{rating} Leads</h3>
-            <p className="text-sm text-muted-foreground mt-1">
-              Click to {activeFilter === rating ? 'show all' : 'filter'}
-            </p>
           </CardContent>
         </Card>
       ))}

@@ -12,25 +12,28 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Search, ArrowUpDown, ArrowUp, ArrowDown, Download } from 'lucide-react';
 
 interface LeadsTableProps {
   leads: Lead[];
   onLeadClick: (lead: Lead) => void;
   ratingFilter: string | null;
+  onExport: () => void;
 }
 
 type SortField = 'name' | 'date' | 'rating' | 'phone';
 type SortDirection = 'asc' | 'desc' | null;
 
-export const LeadsTable = ({ leads, onLeadClick, ratingFilter }: LeadsTableProps) => {
+export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: LeadsTableProps) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [ownerFilter, setOwnerFilter] = useState<string>('all');
+  const [projectFilter, setProjectFilter] = useState<string>('all');
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
 
-  // Get unique lead owners
+  // Get unique lead owners and projects
   const leadOwners = Array.from(new Set(leads.map(l => l.leadOwner).filter(Boolean)));
+  const projects = Array.from(new Set(leads.map(l => l.projectInterest).filter(Boolean)));
 
   // Filter leads
   let filteredLeads = leads.filter(lead => {
@@ -41,8 +44,9 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter }: LeadsTableProps
     
     const matchesRating = !ratingFilter || lead.rating === ratingFilter;
     const matchesOwner = ownerFilter === 'all' || lead.leadOwner === ownerFilter;
+    const matchesProject = projectFilter === 'all' || lead.projectInterest === projectFilter;
 
-    return matchesSearch && matchesRating && matchesOwner;
+    return matchesSearch && matchesRating && matchesOwner && matchesProject;
   });
 
   // Sort leads
@@ -105,8 +109,8 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter }: LeadsTableProps
   return (
     <div className="space-y-4">
       {/* Filters */}
-      <div className="flex flex-col md:flex-row gap-4">
-        <div className="relative flex-1">
+      <div className="flex flex-col md:flex-row gap-4 items-center">
+        <div className="relative w-full md:w-[35%]">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search by Lead ID, Phone, or Name..."
@@ -115,8 +119,21 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter }: LeadsTableProps
             className="pl-10"
           />
         </div>
+        <Select value={projectFilter} onValueChange={setProjectFilter}>
+          <SelectTrigger className="w-full md:w-[180px]">
+            <SelectValue placeholder="Project" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Projects</SelectItem>
+            {projects.map(project => (
+              <SelectItem key={project} value={project!}>
+                {project}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Select value={ownerFilter} onValueChange={setOwnerFilter}>
-          <SelectTrigger className="w-full md:w-[200px]">
+          <SelectTrigger className="w-full md:w-[180px]">
             <SelectValue placeholder="Lead Owner" />
           </SelectTrigger>
           <SelectContent>
@@ -128,6 +145,9 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter }: LeadsTableProps
             ))}
           </SelectContent>
         </Select>
+        <Button variant="outline" onClick={onExport} size="sm">
+          <Download className="h-4 w-4" />
+        </Button>
       </div>
 
       {/* Table */}
@@ -141,6 +161,7 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter }: LeadsTableProps
                   <SortIcon field="name" />
                 </Button>
               </TableHead>
+              <TableHead>Project</TableHead>
               <TableHead>Lead ID</TableHead>
               <TableHead>
                 <Button variant="ghost" onClick={() => handleSort('phone')} className="h-8 px-2">
@@ -180,6 +201,7 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter }: LeadsTableProps
                   onClick={() => onLeadClick(lead)}
                 >
                   <TableCell className="font-medium">{lead.name}</TableCell>
+                  <TableCell>{lead.projectInterest || '-'}</TableCell>
                   <TableCell className="text-muted-foreground text-sm">{lead.id}</TableCell>
                   <TableCell>{lead.phone || '-'}</TableCell>
                   <TableCell>{lead.leadOwner || '-'}</TableCell>
