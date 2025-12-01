@@ -42,6 +42,7 @@ export interface AnalysisResult {
   leadId: string;
   rating: LeadRating;
   insights: string;
+  fromCache?: boolean;
   fullAnalysis?: {
     ai_rating: LeadRating;
     rating_confidence: 'High' | 'Medium' | 'Low';
