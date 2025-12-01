@@ -109,8 +109,8 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: Leads
   return (
     <div className="space-y-4">
       {/* Filters */}
-      <div className="flex flex-col md:flex-row gap-4 items-center">
-        <div className="relative w-full md:w-[35%]">
+      <div className="flex flex-col md:flex-row gap-4 items-stretch w-full">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search by Lead ID, Phone, or Name..."
@@ -120,7 +120,7 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: Leads
           />
         </div>
         <Select value={projectFilter} onValueChange={setProjectFilter}>
-          <SelectTrigger className="w-full md:w-[180px]">
+          <SelectTrigger className="w-full md:flex-1">
             <SelectValue placeholder="Project" />
           </SelectTrigger>
           <SelectContent>
@@ -133,7 +133,7 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: Leads
           </SelectContent>
         </Select>
         <Select value={ownerFilter} onValueChange={setOwnerFilter}>
-          <SelectTrigger className="w-full md:w-[180px]">
+          <SelectTrigger className="w-full md:flex-1">
             <SelectValue placeholder="Lead Owner" />
           </SelectTrigger>
           <SelectContent>
@@ -145,7 +145,7 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: Leads
             ))}
           </SelectContent>
         </Select>
-        <Button variant="outline" onClick={onExport} size="sm">
+        <Button variant="outline" onClick={onExport} size="sm" className="md:w-auto">
           <Download className="h-4 w-4" />
         </Button>
       </div>
