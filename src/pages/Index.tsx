@@ -91,11 +91,41 @@ const Index = () => {
         return;
       }
 
-      setLeads(parsedLeads);
+      // Fetch cached analyses for these leads
+      const leadIds = parsedLeads.map(lead => lead.id);
+      const { data: cachedAnalyses } = await supabase
+        .from('lead_analyses')
+        .select('lead_id, rating, insights, full_analysis')
+        .in('lead_id', leadIds)
+        .eq('project_id', projectId);
+      
+      // Merge cached data into parsed leads
+      const enrichedLeads = parsedLeads.map(lead => {
+        const cached = cachedAnalyses?.find(a => a.lead_id === lead.id);
+        if (cached) {
+          return {
+            ...lead,
+            rating: cached.rating as Lead['rating'],
+            aiInsights: cached.insights || undefined,
+            fullAnalysis: cached.full_analysis as Lead['fullAnalysis'],
+          };
+        }
+        return lead;
+      });
+
+      setLeads(enrichedLeads);
       setSelectedProjectId(projectId);
+      
+      // Update toast message to indicate cache usage
+      const cachedCount = cachedAnalyses?.length || 0;
+      let description = `Loaded ${parsedLeads.length} leads from the Excel file.`;
+      if (cachedCount > 0) {
+        description += ` (${cachedCount} with cached analysis)`;
+      }
+      
       toast({
         title: 'File parsed successfully',
-        description: `Loaded ${parsedLeads.length} leads from the Excel file.`,
+        description,
       });
     } catch (error) {
       toast({
