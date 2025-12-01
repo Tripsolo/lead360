@@ -237,8 +237,35 @@ ${leadDataJson}
 # OUTPUT CONSTRAINTS (CRITICAL - STRICTLY ENFORCE):
 - Summary: Maximum 35 words. Be concise and focused.
 - Next Best Action: Maximum 20 words. Keep it actionable and specific.
-- Each Talking Point: Maximum 15 words per point. Make each one punchy and relevant.
 - Key Concerns: These must be the CUSTOMER'S concerns about the project or specific unit they are considering. Focus on: price/budget gap, location/connectivity issues, possession date/timeline, unit configuration/size, amenities/facilities. DO NOT include generic sales concerns.
+
+# TALKING POINTS GENERATION (CRITICAL - FOLLOW PRIORITY RULES):
+Generate 2-3 talking points TOTAL following these strict priority rules:
+
+PRIORITY 1: Competitor Handling (Max 2 points)
+- Only include if any competitor is mentioned in CRM data (competitor name, competition project, or visit comments)
+- Maximum 2 talking points for competitor handling
+- Each point max 15 words
+- Topic type: "Competitor handling"
+
+PRIORITY 2: Objection Handling (Max 1 point)
+- Only include if customer has specific concerns or objections from notes or CRM fields
+- Maximum 1 talking point for objection handling
+- Max 15 words
+- Topic type: "Objection handling"
+
+PRIORITY 3: What to Highlight (Max 2 points)
+- Pick the project USPs/value propositions most relevant to the customer's persona and profile
+- Maximum 2 talking points for highlighting features
+- Each point max 15 words
+- Topic type: "What to highlight"
+
+DISTRIBUTION RULES:
+- Minimum 2 talking points, maximum 3 talking points total
+- If competitor mentioned: Include 1-2 competitor handling points first
+- If customer has concerns/objections: Include 1 objection handling point second
+- Fill remaining slots (up to 3 total) with "What to highlight" points
+- Each talking point must be max 15 words
 
 Return a JSON object with this EXACT structure:
 {
@@ -250,13 +277,12 @@ Return a JSON object with this EXACT structure:
   "summary": "2-3 sentence overview of lead situation and intent",
   "key_concerns": ["concern1", "concern2", "concern3"],
   "next_best_action": "Specific actionable recommendation with timing",
-  "talking_points": ["USP1 relevant to this lead", "USP2", "USP3"],
-  "competitor_handling": {
-    "CompetitorName": "How to position against them"
-  },
-  "objection_rebuttals": {
-    "ObjectionType": "Suggested rebuttal"
-  },
+  "talking_points": [
+    {
+      "type": "Competitor handling" | "Objection handling" | "What to highlight",
+      "point": "The talking point text (max 15 words)"
+    }
+  ],
   "extracted_signals": {
     "budget_stated": number | null,
     "in_hand_funds": number | null,

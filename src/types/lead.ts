@@ -50,9 +50,10 @@ export interface AnalysisResult {
     summary?: string;
     key_concerns?: string[];
     next_best_action?: string;
-    talking_points?: string[];
-    competitor_handling?: Record<string, string>;
-    objection_rebuttals?: Record<string, string>;
+    talking_points?: Array<{
+      type: 'What to highlight' | 'Competitor handling' | 'Objection handling';
+      point: string;
+    }>;
     extracted_signals?: {
       budget_stated?: number | null;
       in_hand_funds?: number | null;

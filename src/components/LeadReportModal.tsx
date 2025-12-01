@@ -8,7 +8,7 @@ import {
 import { Lead } from '@/types/lead';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Mail, Phone, Briefcase, MapPin, Home, DollarSign, Calendar, Target, AlertCircle, MessageSquare, Users, CheckCircle2 } from 'lucide-react';
+import { Mail, Phone, Briefcase, MapPin, Home, DollarSign, Calendar, Target, AlertCircle, MessageSquare, Users, CheckCircle2, Lightbulb } from 'lucide-react';
 
 interface LeadReportModalProps {
   lead: Lead | null;
@@ -256,51 +256,29 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
                 )}
               </div>
 
-              {/* Talking Points */}
+              {/* Talking Points with Topic Types */}
               {analysis.talking_points && analysis.talking_points.length > 0 && (
-                <div className="p-4 bg-muted/30 rounded-lg">
+                <div className="p-4 bg-muted/50 rounded-lg">
                   <div className="flex items-center gap-2 mb-3">
-                    <CheckCircle2 className="h-4 w-4" />
+                    <Lightbulb className="h-4 w-4" />
                     <h4 className="font-semibold text-sm">Talking Points</h4>
                   </div>
-                  <ul className="space-y-2">
-                    {analysis.talking_points.map((point, idx) => (
-                      <li key={idx} className="text-sm flex items-start gap-2">
-                        <span className="text-primary mt-1">✓</span>
-                        <span>{point}</span>
+                  <ul className="space-y-3">
+                    {analysis.talking_points.map((item, idx) => (
+                      <li key={idx} className="text-sm flex flex-col gap-1.5">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium w-fit ${
+                          item.type === 'Competitor handling' 
+                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'
+                            : item.type === 'Objection handling'
+                            ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400'
+                            : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400'
+                        }`}>
+                          {item.type}
+                        </span>
+                        <span className="leading-relaxed">{item.point}</span>
                       </li>
                     ))}
                   </ul>
-                </div>
-              )}
-
-              {/* Competitor Handling */}
-              {analysis.competitor_handling && Object.keys(analysis.competitor_handling).length > 0 && (
-                <div className="p-4 bg-muted/30 rounded-lg">
-                  <h4 className="font-semibold text-sm mb-3">Competitor Handling</h4>
-                  <div className="space-y-3">
-                    {Object.entries(analysis.competitor_handling).map(([competitor, strategy]) => (
-                      <div key={competitor}>
-                        <p className="text-sm font-medium">{competitor}:</p>
-                        <p className="text-sm text-muted-foreground ml-4">{strategy}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Objection Rebuttals */}
-              {analysis.objection_rebuttals && Object.keys(analysis.objection_rebuttals).length > 0 && (
-                <div className="p-4 bg-muted/30 rounded-lg">
-                  <h4 className="font-semibold text-sm mb-3">Objection Rebuttals</h4>
-                  <div className="space-y-3">
-                    {Object.entries(analysis.objection_rebuttals).map(([objection, rebuttal]) => (
-                      <div key={objection}>
-                        <p className="text-sm font-medium">{objection}:</p>
-                        <p className="text-sm text-muted-foreground ml-4">{rebuttal}</p>
-                      </div>
-                    ))}
-                  </div>
                 </div>
               )}
             </div>
