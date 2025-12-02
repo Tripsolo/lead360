@@ -273,7 +273,73 @@ Calculate gap = (Unit Price - Stated Budget) / Unit Price * 100
 2. Sum each dimension (FC max 30, IE max 25, UT max 20, PMF max 15, ADD max 10)
 3. Apply special multipliers if applicable
 4. Total PPS Score = FC + IE + UT + PMF + ADD (cap at 100)
-5. Derive rating from PPS: >=80 Hot, >=60 Warm, <60 Cold`;
+5. Derive rating from PPS: >=75 HOT, >=45 WARM, <45 COLD`;
+
+    const personaDefinitions = `# PERSONA IDENTIFICATION GUIDE
+
+## Detection Rules (Check in Priority Order)
+
+### 1. NRI Buyer (Highest Priority)
+Detection: Correspondence Country = NOT India OR Country field indicates overseas location
+Characteristics:
+- Higher budget capability due to forex advantage
+- Prefers video calls, digital documentation
+- Needs extra trust signals (brand reputation, delivery track record)
+- May need assistance with India-specific regulations
+
+### 2. Retirement Planner
+Detection: Occupation = "Retired" OR Designation mentions "Retired"
+Characteristics:
+- Often selling existing property (SOP funding)
+- Values greenery, open spaces, healthcare proximity
+- Prefers ground/lower floors for accessibility
+- Budget typically from accumulated savings + SOP
+
+### 3. Business Owner
+Detection: Occupation = "Business" OR "Self-Employed" OR Designation contains "Owner"/"Proprietor"/"Director" (non-corporate)
+Characteristics:
+- Self-funding capability (cash-rich)
+- Prefers premium/exclusive units
+- May want multiple units (investment angle)
+- Flexible on timing, decisive when interested
+
+### 4. Investor
+Detection: Comments mention "investment"/"rental income"/"tax saving"/"appreciation" OR Purpose = Investment
+Characteristics:
+- Prefers smaller units (1-2 BHK) for rental yield
+- Focuses on ROI, rental potential, appreciation
+- May not visit site personally
+- Price-sensitive, compares multiple options
+
+### 5. Upgrade Seeker
+Detection: Building Name is populated (currently owns/rents) AND shows indicators of wanting larger/better home
+Characteristics:
+- Currently owns/rents smaller home
+- Family growing or lifestyle upgrade needed
+- Budget typically 1.5-2x current home value
+- Compares amenities and space improvements
+
+### 6. First-Time Buyer
+Detection: Building Name is empty/unclear AND Source of Funding = Loan AND no prior property ownership indicated
+Characteristics:
+- Currently renting (no owned property)
+- First property purchase - needs process guidance
+- Loan-dependent, may need pre-approval assistance
+- Longer decision cycle, involves family in decisions
+
+### 7. Fallback: Custom Persona (Use if none of the above match clearly)
+If the lead doesn't clearly fit any of the above personas, generate a custom 2-word persona label based on:
+- Their primary occupation/profession (e.g., "IT Professional", "Healthcare Worker", "Teacher")
+- Life stage indicators (e.g., "Young Couple", "Growing Family", "Mid-Career Executive")
+- Core motivation (e.g., "Proximity Seeker" for someone prioritizing work location)
+
+Examples of fallback personas: "IT Professional", "Healthcare Worker", "Young Couple", "Mid-Career Executive", "Family Migrant", "Corporate Professional"
+
+## PERSONA SELECTION INSTRUCTIONS:
+1. Check detection rules in PRIORITY ORDER (NRI > Retirement > Business Owner > Investor > Upgrade Seeker > First-Time Buyer)
+2. Select the FIRST persona whose detection criteria are met
+3. If NO predefined persona matches clearly, use the Fallback to generate a custom 2-word label
+4. Generate a 2-line persona_description that aligns with the selected persona type`;
 
     // Step 3: Only analyze leads that need it
     const analysisPromises = leadsToAnalyze.map(async (lead: any, index: number) => {
@@ -392,6 +458,8 @@ ${crmFieldExplainer}
 
 ${leadScoringModel}
 
+${personaDefinitions}
+
 # LEAD DATA TO ANALYZE
 ${leadDataJson}
 
@@ -407,8 +475,9 @@ ${leadDataJson}
    - Apply special multipliers if applicable
    - Sum all dimensions for total PPS (0-100)
 4. Derive rating from PPS: >=75 HOT, >=45 WARM, <45 COLD
-5. Generate persona label and 2-line persona description
-6. Create actionable next steps and talking points
+5. Identify persona using the Persona Identification Guide - check detection rules in priority order (NRI > Retirement > Business Owner > Investor > Upgrade Seeker > First-Time Buyer > Fallback Custom)
+6. Generate a 2-line persona_description that captures occupation, lifestyle, family situation, and buying motivation - must align with selected persona
+7. Create actionable next steps and talking points
 
 # OUTPUT CONSTRAINTS (CRITICAL - STRICTLY ENFORCE):
 - Rating rationale should only focus on the overall score and reasoning. Do not specify individual dimension scores. When using dimension names, use full names instead of acronyms
@@ -466,8 +535,8 @@ Return a JSON object with this EXACT structure:
     "authority_dynamics": 0-10
   },
   "rating_rationale": "PPS Score: X/100 (Rating). 2-3 line description and highlight the dimensions where the lead had top and bottom scores",
-  "persona": "Upgrade Seeker" | "First-Time Buyer" | "Investor" | "NRI Buyer" | "Retirement Planner" | "Business Owner" | "Growing Family" | "Professional Couple",
-  "persona_description": "A professional 2-line description that captures the lead's occupation, lifestyle, and family situation. Make it concise and insightful.",
+  "persona": "NRI Buyer" | "Retirement Planner" | "Business Owner" | "Investor" | "Upgrade Seeker" | "First-Time Buyer" | OR custom 2-word label if none match (e.g. "IT Professional", "Healthcare Worker", "Young Couple"),
+  "persona_description": "A professional 2-line description that captures the lead's occupation, lifestyle, family situation, and buying motivation. Must align with the identified persona type.",
   "summary": "2-3 sentence overview of key buying motivation, visit experience and intent",
   "key_concerns": ["concern1", "concern2", "concern3"],
   "concern_categories": ["Price", "Location", "Config"],
