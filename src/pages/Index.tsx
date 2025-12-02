@@ -239,9 +239,10 @@ const Index = () => {
           </Button>
         </div>
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold mb-4">CRM Lead Analyzer</h1>
+          <h1 className="text-4xl font-bold mb-2">Customer360</h1>
+          <p className="text-sm text-muted-foreground mb-4">Powered by Raisn.ai</p>
           <p className="text-lg text-muted-foreground">
-            Upload your Excel file to analyze and rate your real estate leads
+            Upload your CRM file to analyze and rate your customer visits
           </p>
         </div>
 
