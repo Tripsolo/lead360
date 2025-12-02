@@ -410,12 +410,12 @@ ${
 ## Competitors
 ${
   projectMetadata?.competitors
-    ? Object.entries(projectMetadata.competitors)
+    ? projectMetadata.competitors
         .map(
-          ([key, comp]: [string, any]) => `
-- ${key}: ${comp.projects?.join(", ")}
-  Strength: ${comp.perceived_strength}
-  Positioning: ${comp.positioning}`,
+          (comp: any) => `
+- ${comp.developer}: ${comp.projects ? Object.keys(comp.projects).join(", ") : "N/A"}
+  Strength: ${comp.perceived_strength || "N/A"}
+  Positioning: ${comp.positioning || "N/A"}`,
         )
         .join("\n")
     : "N/A"
