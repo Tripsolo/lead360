@@ -166,9 +166,9 @@ Analyze each lead independently and objectively. Focus on extracting conversion 
 You MUST calculate a numerical PPS Score (0-100) based on 5 weighted dimensions. The final rating is derived from the PPS score.
 
 ## RATING THRESHOLDS (CRITICAL):
-- PPS >= 75: HOT
-- PPS >= 45 and < 75: WARM  
-- PPS < 45: COLD
+- PPS >= 85: HOT
+- PPS >= 65 and < 85: WARM  
+- PPS < 65: COLD
 
 ## DIMENSION A: FINANCIAL CAPABILITY (FC) - 30 Points Max
 
