@@ -33,15 +33,21 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-2xl">Customer 360</DialogTitle>
-          <div className="flex items-center gap-2">
-            <p className="text-xl font-semibold">{lead.name}</p>
-            {analysis?.persona && (
-              <Badge variant="outline" className="w-fit">
-                {analysis.persona}
-              </Badge>
-            )}
+        <DialogHeader className="flex flex-row items-start justify-between gap-4">
+          <div className="flex-1">
+            <DialogTitle className="sr-only">Lead Profile</DialogTitle>
+            <div className="flex items-center gap-2">
+              <p className="text-xl font-semibold">{lead.name}</p>
+              {analysis?.persona && (
+                <Badge variant="outline" className="w-fit">
+                  {analysis.persona}
+                </Badge>
+              )}
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <h2 className="text-2xl font-bold">Customer360</h2>
+            <p className="text-xs text-muted-foreground">Powered by Raisn.ai</p>
           </div>
         </DialogHeader>
 
