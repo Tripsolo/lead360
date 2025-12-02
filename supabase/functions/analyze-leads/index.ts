@@ -161,44 +161,119 @@ const crmFieldExplainer = `# CRM FIELD DEFINITIONS
 - Visit Comments: CRITICAL - Contains structured feedback with Budget, In-hand funds, Finalization time, Core motivator, Competition comparison, Spot closure response, Pricing gap, Detailed remarks.
 - Site Re-Visit Comment: Feedback after revisit - compare with first visit for intent change.`;
 
-const leadScoringModel = `# LEAD SCORING MODEL
+const leadScoringModel = `# LEAD SCORING MODEL: PPS (Predictive Probability Score) FRAMEWORK
 
-## HOT Lead (High Conversion Probability) - Must meet 4+ criteria:
-- Budget stated and aligns with available inventory (within 10%)
-- Token/booking discussion occurred during visit
-- Multiple site revisits (No. of Site Re-Visits >= 2)
-- Decision maker present (not 'came on behalf of someone')
-- Clear funding: Self-Funding OR Loan with good eligibility
-- Specific unit and tower shortlisted
-- Finalization timeline within 30 days
-- Positive feedback on sample flat and/or presentation
-- Existing Kalpataru resident (brand loyalty)
-- Duplicate entry (returning lead = strong intent)
+You MUST calculate a numerical PPS Score (0-100) based on 5 weighted dimensions. The final rating is derived from the PPS score.
 
-## WARM Lead (Medium Conversion Probability) - Must meet 3+ criteria:
-- Budget within 10-25% of unit price (stretchable with negotiation)
-- Liked project but needs family consultation
-- Comparing with 1-2 competitors, but seriously considering
-- Finalization timeline 1-3 months
-- Funding: Sale of Asset (but process has started)
-- Spot closure was asked but didn't commit yet
-- Planning to revisit with family members
-- Searching property for 2+ months (active, not casual)
-- Positive sentiment but specific blockers exist (possession, price)
-- Stage of Construction preference matches available inventory
+## RATING THRESHOLDS (CRITICAL):
+- PPS >= 75: HOT
+- PPS >= 45 and < 75: WARM  
+- PPS < 45: COLD
 
-## COLD Lead (Low Conversion Probability) - Any 2+ of these:
-- Budget significantly below inventory (25%+ gap)
-- Comments mention 'just enquiry', 'general exploration', 'randomly visited'
-- Not the decision maker (came to take details for someone else)
-- Funding unclear, undisclosed, or not planned
-- Wants RTMI but project has 1+ year possession timeline
-- Strong stated preference for competitor
-- Vastu/facing concerns with no suitable inventory
-- Location objections expressed
-- Left site quickly (filled form and left in 4-5 mins)
-- Investment-only with budget below 1BHK options
-- No engagement with presentation`;
+## DIMENSION A: FINANCIAL CAPABILITY (FC) - 30 Points Max
+
+### A1. Occupational Wealth Mapping (10 pts):
+- Elite Corporate (VP, Director, CHRO, CXO at major firms): 10 pts
+- High-Skill Professional (Specialist Doctors, CA Partners, Pilots, Merchant Navy Officers): 9 pts
+- Business Owner (SME/Traders) - Cash rich: 8 pts
+- Mid-Senior Corporate (Sr. Manager, Project Manager at IT/Banking/MNCs): 7 pts
+- Retired/Homemaker (with visible asset base): 5 pts
+- Entry/Mid-Level Salaried (Sales Manager, Executive, Jr. Engineer): 4 pts
+- Unknown/Unclear occupation: 2 pts
+
+### A2. Budget Gap Ratio (10 pts):
+Calculate gap = (Unit Price - Stated Budget) / Unit Price * 100
+- Negative gap (Budget > Price): 10 pts
+- Gap 0-10%: 8 pts
+- Gap 10-20%: 5 pts
+- Gap 20-30%: 3 pts
+- Gap > 30% or Budget not stated: 1 pt
+
+### A3. Source of Funds Liquidity (10 pts):
+- Self-Funding / Ready Funds / Cash available: 10 pts
+- Pre-approved Loan / High eligibility mentioned: 9 pts
+- Loan (eligibility unchecked but salaried stable): 7 pts
+- Sale of Property (SOP) - process started: 5 pts
+- Sale of Property - not yet started: 3 pts
+- Unclear / Undisclosed / Not planned: 2 pts
+
+## DIMENSION B: INTENT & ENGAGEMENT (IE) - 25 Points Max
+
+### B1. Visit Behavior (10 pts):
+- 3+ Revisits OR brought full family: 10 pts
+- 2nd Revisit: 8 pts
+- First Visit but duplicate lead (returned): 7 pts
+- First Visit only: 5 pts
+
+### B2. Product Engagement (10 pts):
+- Sample flat/Roots visited + Positive feedback: 10 pts
+- Sample flat toured + Neutral feedback: 7 pts
+- Discussion/Presentation only (skipped tour): 4 pts
+- Quick walkthrough / Left early (4-5 mins): 2 pts
+- Negative feedback on quality/design: 0 pts
+
+### B3. Competitor Awareness Signal (5 pts):
+- Visited premium competitors (Oberoi, Godrej, Hiranandani): 5 pts (indicates budget capacity)
+- Visited similar segment (Runwal, Dosti, Rustomjee): 4 pts
+- Visited lower segment (Lodha affordable, Puraniks): 3 pts
+- No competitors mentioned: 2 pts (early funnel but unknown budget)
+
+## DIMENSION C: URGENCY & TIMELINE (UT) - 20 Points Max
+
+### C1. Possession Timeline Fit (10 pts):
+- Stage preference matches project delivery: 10 pts
+- Flexible / "Willing to wait": 7 pts
+- Needs slightly earlier (6 months gap): 4 pts
+- Needs RTMI but project is 1+ year: 2 pts
+
+### C2. Life Trigger Urgency (10 pts):
+- Currently on rent (double outflow pain): 10 pts
+- Marriage / Relocation / Job transfer trigger: 10 pts
+- Tenant in competitor building: 10 pts (highest urgency)
+- Upgrade from owned property (lifestyle): 6 pts
+- Investment purpose: 5 pts
+- "Just exploring" / Casual / General enquiry: 2 pts
+
+## DIMENSION D: PRODUCT-MARKET FIT (PMF) - 15 Points Max
+
+### D1. Configuration Match (10 pts):
+- Exact match (BHK, area, specific features like balcony, Vastu): 10 pts
+- Minor compromise required (floor/view flexibility): 7 pts
+- Major compromise (budget vs size mismatch): 4 pts
+- No suitable inventory available: 0 pts
+
+### D2. Location Fit (5 pts):
+- Works in nearby hub (Powai, Vikhroli, Thane corridor, LBS): 5 pts
+- Lives/works in micro-market (Bhiwandi business): 5 pts
+- Migration from premium area (Mulund) - price arbitrage: 4 pts
+- Remote location with no work/family ties: 2 pts
+
+## DIMENSION E: AUTHORITY & DECISION DYNAMICS (ADD) - 10 Points Max
+
+- All decision makers present during visit: 10 pts
+- Partial DM (needs spouse/parent/child consultation): 5 pts
+- Representative/proxy visit (came for someone else): 2 pts
+- Vastu/Pandit consultation pending: 3 pts (score capped until resolved)
+
+## SPECIAL SIGNALS & MULTIPLIERS (Apply after base calculation):
+
+### Positive Multipliers:
+- "Biophilic Buyer" - Mentions greenery/park/open space appreciation: +3 to PMF
+- Bhiwandi Business Owner - Local + cash-rich profile: +5 to FC
+- Existing brand customer (Kalpataru resident): +5 to IE
+- Spot closure discussion initiated by customer: +5 to UT
+
+### Negative Signals:
+- Investment-only with budget below 1BHK: Cap total score at 40
+- "Came on behalf of someone else": Cap ADD at 2
+- Strong stated preference for competitor with booking: -10 from total
+
+## CALCULATION INSTRUCTIONS:
+1. Score each sub-dimension based on CRM data
+2. Sum each dimension (FC max 30, IE max 25, UT max 20, PMF max 15, ADD max 10)
+3. Apply special multipliers if applicable
+4. Total PPS Score = FC + IE + UT + PMF + ADD (cap at 100)
+5. Derive rating from PPS: >=75 Hot, >=45 Warm, <45 Cold`;
 
     // Step 3: Only analyze leads that need it
     const analysisPromises = leadsToAnalyze.map(async (lead: any, index: number) => {
@@ -281,12 +356,17 @@ ${leadDataJson}
 # ANALYSIS INSTRUCTIONS
 1. Read all fields carefully - especially visit comments which contain the richest data.
 2. Extract structured information (Budget, In-hand funds, Finalization time, etc.)
-3. Identify positive signals (liked something, asked for spot closure, revisit)
-4. Identify negative signals (budget gap, exploration mode, not decision maker)
-5. Consider competition mentioned and visit status
-6. Match against scoring criteria to determine Hot/Warm/Cold
-7. Generate both a persona label and a professional 2-line persona description
-8. Create actionable next steps and talking points
+3. Calculate the PPS Score using the 5-dimension framework:
+   - Score Financial Capability (A1 + A2 + A3, max 30)
+   - Score Intent & Engagement (B1 + B2 + B3, max 25)
+   - Score Urgency & Timeline (C1 + C2, max 20)
+   - Score Product-Market Fit (D1 + D2, max 15)
+   - Score Authority & Decision Dynamics (max 10)
+   - Apply special multipliers if applicable
+   - Sum all dimensions for total PPS (0-100)
+4. Derive rating from PPS: >=75 HOT, >=45 WARM, <45 COLD
+5. Generate persona label and 2-line persona description
+6. Create actionable next steps and talking points
 
 # OUTPUT CONSTRAINTS (CRITICAL - STRICTLY ENFORCE):
 - Summary: Maximum 35 words. Be concise and focused.
@@ -334,7 +414,15 @@ Return a JSON object with this EXACT structure:
 {
   "ai_rating": "Hot" | "Warm" | "Cold",
   "rating_confidence": "High" | "Medium" | "Low",
-  "rating_rationale": "Brief 1-2 sentence explanation",
+  "pps_score": 0-100,
+  "pps_breakdown": {
+    "financial_capability": 0-30,
+    "intent_engagement": 0-25,
+    "urgency_timeline": 0-20,
+    "product_market_fit": 0-15,
+    "authority_dynamics": 0-10
+  },
+  "rating_rationale": "PPS Score: X/100 (Rating). FC (X/30): [reason]. IE (X/25): [reason]. UT (X/20): [reason]. PMF (X/15): [reason]. ADD (X/10): [reason]. [Any multipliers applied].",
   "persona": "Upgrade Seeker" | "First-Time Buyer" | "Investor" | "NRI Buyer" | "Retirement Planner" | "Business Owner" | "Growing Family" | "Professional Couple",
   "persona_description": "A professional 2-line description that captures the lead's occupation, lifestyle, family situation, and key buying motivation. Make it concise and insightful.",
   "summary": "2-3 sentence overview of lead situation and intent",

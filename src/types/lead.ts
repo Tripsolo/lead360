@@ -47,6 +47,14 @@ export interface AnalysisResult {
     ai_rating: LeadRating;
     rating_confidence: 'High' | 'Medium' | 'Low';
     rating_rationale: string;
+    pps_score?: number;  // 0-100 composite score
+    pps_breakdown?: {
+      financial_capability: number;  // 0-30
+      intent_engagement: number;     // 0-25
+      urgency_timeline: number;      // 0-20
+      product_market_fit: number;    // 0-15
+      authority_dynamics: number;    // 0-10
+    };
     persona?: string;
     persona_description?: string;
     summary?: string;
