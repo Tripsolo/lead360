@@ -474,7 +474,7 @@ ${leadDataJson}
    - Score Authority & Decision Dynamics (max 10)
    - Apply special multipliers if applicable
    - Sum all dimensions for total PPS (0-100)
-4. Derive rating from PPS: >=75 HOT, >=45 WARM, <45 COLD
+4. Derive rating from PPS: >=85 HOT, >=65 WARM, <65 COLD
 5. Identify persona using the Persona Identification Guide - check detection rules in priority order (NRI > Retirement > Business Owner > Investor > Upgrade Seeker > First-Time Buyer > Fallback Custom)
 6. Generate a 2-line persona_description that captures occupation, lifestyle, family situation, and buying motivation - must align with selected persona
 7. Create actionable next steps and talking points
