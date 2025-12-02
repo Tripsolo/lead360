@@ -273,7 +273,7 @@ Calculate gap = (Unit Price - Stated Budget) / Unit Price * 100
 2. Sum each dimension (FC max 30, IE max 25, UT max 20, PMF max 15, ADD max 10)
 3. Apply special multipliers if applicable
 4. Total PPS Score = FC + IE + UT + PMF + ADD (cap at 100)
-5. Derive rating from PPS: >=75 HOT, >=45 WARM, <45 COLD`;
+5. Derive rating from PPS: >=85 HOT, >=65 WARM, <65 COLD`;
 
     const personaDefinitions = `# PERSONA IDENTIFICATION GUIDE
 
