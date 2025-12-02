@@ -26,7 +26,7 @@ interface UploadWizardProps {
 }
 
 export const UploadWizard = ({ onFileSelect, isLoading }: UploadWizardProps) => {
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2>(1);
   const [selectedBrand, setSelectedBrand] = useState<Brand | null>(null);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -44,6 +44,8 @@ export const UploadWizard = ({ onFileSelect, isLoading }: UploadWizardProps) => 
   useEffect(() => {
     if (selectedBrand) {
       fetchProjects(selectedBrand.id);
+    } else {
+      setProjects([]);
     }
   }, [selectedBrand]);
 
@@ -85,8 +87,6 @@ export const UploadWizard = ({ onFileSelect, isLoading }: UploadWizardProps) => 
     if (brand) {
       setSelectedBrand(brand);
       setSelectedProject(null);
-      setProjects([]);
-      setStep(2);
     }
   };
 
@@ -94,7 +94,12 @@ export const UploadWizard = ({ onFileSelect, isLoading }: UploadWizardProps) => 
     const project = projects.find(p => p.id === projectId);
     if (project) {
       setSelectedProject(project);
-      setStep(3);
+    }
+  };
+
+  const handleContinue = () => {
+    if (selectedBrand && selectedProject) {
+      setStep(2);
     }
   };
 
@@ -122,14 +127,10 @@ export const UploadWizard = ({ onFileSelect, isLoading }: UploadWizardProps) => 
   };
 
   const handleBack = () => {
-    if (step === 2) {
-      setStep(1);
-      setSelectedBrand(null);
-    } else if (step === 3) {
-      setStep(2);
-      setSelectedProject(null);
-    }
+    setStep(1);
   };
+
+  const canContinue = selectedBrand && selectedProject;
 
   return (
     <div className="w-full max-w-3xl mx-auto">
@@ -140,66 +141,105 @@ export const UploadWizard = ({ onFileSelect, isLoading }: UploadWizardProps) => 
             Upload CRM Data
           </CardTitle>
           <CardDescription>
-            Step {step} of 3: {step === 1 ? 'Select Brand' : step === 2 ? 'Select Project' : 'Upload File'}
+            Step {step} of 2: {step === 1 ? 'Select Brand & Project' : 'Upload File'}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Step 1: Brand Selection */}
+          {/* Step 1: Brand & Project Selection */}
           {step === 1 && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-sm font-medium mb-3">
-                <Building2 className="h-4 w-4" />
-                <span>Select Brand</span>
+            <div className="space-y-6">
+              {/* Brand Selection */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Building2 className="h-4 w-4" />
+                  <span>Select Brand</span>
+                </div>
+                <Select 
+                  value={selectedBrand?.id || ''} 
+                  onValueChange={handleBrandSelect} 
+                  disabled={loading}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder={loading ? "Loading brands..." : "Choose a brand..."} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {brands.map(brand => (
+                      <SelectItem key={brand.id} value={brand.id}>
+                        {brand.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <Select onValueChange={handleBrandSelect} disabled={loading}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={loading ? "Loading brands..." : "Choose a brand..."} />
-                </SelectTrigger>
-                <SelectContent>
-                  {brands.map(brand => (
-                    <SelectItem key={brand.id} value={brand.id}>
-                      {brand.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
 
-          {/* Step 2: Project Selection */}
-          {step === 2 && selectedBrand && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-sm font-medium mb-3">
-                <Home className="h-4 w-4" />
-                <span>Select Project under {selectedBrand.name}</span>
+              {/* Project Selection */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Home className="h-4 w-4" />
+                  <span>Select Project</span>
+                </div>
+                <Select 
+                  value={selectedProject?.id || ''} 
+                  onValueChange={handleProjectSelect} 
+                  disabled={!selectedBrand || loading}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue 
+                      placeholder={
+                        !selectedBrand 
+                          ? "Select a brand first..." 
+                          : loading 
+                            ? "Loading projects..." 
+                            : projects.length === 0 
+                              ? "No projects available" 
+                              : "Choose a project..."
+                      } 
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projects.map(project => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <Select onValueChange={handleProjectSelect} disabled={loading}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={loading ? "Loading projects..." : "Choose a project..."} />
-                </SelectTrigger>
-                <SelectContent>
-                  {projects.map(project => (
-                    <SelectItem key={project.id} value={project.id}>
-                      {project.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button variant="outline" onClick={handleBack} size="sm">
-                Back
+
+              {/* Selected Project Info */}
+              {selectedProject && (
+                <div className="p-4 bg-muted rounded-lg space-y-1">
+                  <p className="text-sm font-medium">Selected:</p>
+                  <p className="text-base font-semibold">{selectedBrand?.name} - {selectedProject.name}</p>
+                  {selectedProject.metadata?.location && (
+                    <p className="text-sm text-muted-foreground">
+                      {selectedProject.metadata?.location?.address || selectedProject.metadata?.location}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <Button 
+                onClick={handleContinue} 
+                disabled={!canContinue}
+                className="w-full"
+              >
+                Continue to Upload
               </Button>
             </div>
           )}
 
-          {/* Step 3: File Upload */}
-          {step === 3 && selectedProject && (
+          {/* Step 2: File Upload */}
+          {step === 2 && selectedProject && (
             <div className="space-y-4">
-              <div className="p-4 bg-muted rounded-lg space-y-2">
+              <div className="p-4 bg-muted rounded-lg space-y-1">
                 <p className="text-sm font-medium">Selected Project:</p>
-                <p className="text-lg font-semibold">{selectedProject.name}</p>
-                <p className="text-sm text-muted-foreground">
-                  {selectedProject.metadata?.location?.address || selectedProject.metadata?.location || 'No location data'}
-                </p>
+                <p className="text-lg font-semibold">{selectedBrand?.name} - {selectedProject.name}</p>
+                {selectedProject.metadata?.location && (
+                  <p className="text-sm text-muted-foreground">
+                    {selectedProject.metadata?.location?.address || selectedProject.metadata?.location}
+                  </p>
+                )}
               </div>
 
               <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary/50 transition-colors">
