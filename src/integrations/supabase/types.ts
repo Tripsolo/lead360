@@ -14,6 +14,24 @@ export type Database = {
   }
   public: {
     Tables: {
+      approved_domains: {
+        Row: {
+          created_at: string
+          domain: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          domain: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          domain?: string
+          id?: string
+        }
+        Relationships: []
+      }
       brands: {
         Row: {
           created_at: string | null
@@ -160,7 +178,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_approved_domain_user: { Args: never; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
