@@ -225,11 +225,19 @@ Use MQL final_income_lacs if available for income-based adjustments.
 - Unknown/Unclear occupation: 2 pts
 
 ### A2. Budget Gap Ratio (10 pts):
-Factor in MQL capability rating if available:
+Calculate gap = (Unit Price - Stated Budget) / Unit Price * 100
+
+WITHOUT MQL DATA (Standard Gap Calculation):
+- Negative gap (Budget > Price): 10 pts
+- Gap 0-10%: 8 pts
+- Gap 10-20%: 5 pts
+- Gap 20-30%: 3 pts
+- Gap > 30% or Budget not stated: 1 pt
+
+WITH MQL DATA (Enhanced Scoring):
 - MQL capability "high" + Budget matches: 10 pts
 - MQL capability "medium" + Budget matches: 8 pts
 - MQL capability "low": Cap at 5 pts regardless of stated budget
-- No MQL data: Use standard gap calculation
 
 ### A3. Source of Funds Liquidity (10 pts):
 Factor in MQL credit_rating and active_loans:
@@ -428,18 +436,41 @@ Trust Signals: ${brandMetadata?.developer?.trust_signals?.join(", ") || "N/A"}`;
 ${projectMetadata?.location?.address || "N/A"}
 Micro-market: ${projectMetadata?.location?.micro_market || "N/A"}
 Positioning: ${projectMetadata?.location?.positioning || "N/A"}
+Walk-to-Work Employers: ${projectMetadata?.location?.walk_to_work_employers?.join(", ") || "N/A"}
+Medical Hub: ${projectMetadata?.location?.medical_hub?.join(", ") || "N/A"}
+
+## Township Features
+${
+  projectMetadata?.township
+    ? `Name: ${projectMetadata.township.name || "N/A"}
+Total Area: ${projectMetadata.township.total_area_acres || "N/A"} acres
+Grand Central Park: ${projectMetadata.township.grand_central_park?.area_acres || "N/A"} acres with ${projectMetadata.township.grand_central_park?.trees || "N/A"} trees
+Open Space: ${projectMetadata.township.open_space_percent || "N/A"}%
+Vehicle-Free Podium: ${projectMetadata.township.podium_acres || "N/A"} acres`
+    : "N/A"
+}
 
 ## USPs
 Primary: ${projectMetadata?.usps?.primary?.map((usp: string) => `\n- ${usp}`).join("") || "N/A"}
+Construction Quality: ${projectMetadata?.usps?.construction_quality?.map((qual: string) => `\n- ${qual}`).join("") || "N/A"}
 
 ## Inventory Configurations
-${projectMetadata?.inventory?.configurations?.map((config: any) => `- ${config.type}: ₹${config.price_range_cr?.[0]}-${config.price_range_cr?.[1]} Cr`).join("\n") || "N/A"}
+${
+  projectMetadata?.inventory?.configurations
+    ?.map(
+      (config: any) =>
+        `- ${config.type}: ${config.carpet_sqft_range?.[0] || "N/A"}-${config.carpet_sqft_range?.[1] || "N/A"} sqft, ₹${config.price_range_cr?.[0]}-${config.price_range_cr?.[1]} Cr
+  Target: ${config.target_persona || "N/A"}
+  Notes: ${config.notes || "N/A"}`,
+    )
+    .join("\n") || "N/A"
+}
 
 ## Common Objections & Rebuttals
 ${
   projectMetadata?.common_objections
     ? Object.entries(projectMetadata.common_objections)
-        .map(([key, obj]: [string, any]) => `- ${key}: ${obj.rebuttal}`)
+        .map(([key, obj]: [string, any]) => `- ${key}: ${obj.objection || "N/A"}\n  Rebuttal: ${obj.rebuttal}`)
         .join("\n")
     : "N/A"
 }`;
@@ -560,13 +591,23 @@ ${talkingpointsGeneration}
 ${leadDataJson}
 
 # ANALYSIS INSTRUCTIONS
-1. Read all CRM fields carefully - especially visit comments
-2. If MQL data available, use it to enhance scoring per the field precedence rules
-3. Calculate PPS Score using the 5-dimension framework with MQL enhancements
-4. Derive credit_rating from credit_score if available: 750+ = High, 650-749 = Medium, <650 = Low
-5. If CRM location differs from MQL locality_grade context, add "locality_grade" to overridden_fields
-6. Generate persona using both CRM and MQL data (lifestyle, age)
-7. Concerns, talking points, competitor handling: Use CRM data ONLY
+1. Read all fields carefully - especially visit comments which contain the richest data.
+2. Extract structured information (Budget, In-hand funds, Finalization time, etc.)
+3. Calculate the PPS Score using the 5-dimension framework:
+   - Score Financial Capability (A1 + A2 + A3, max 30)
+   - Score Intent & Engagement (B1 + B2 + B3, max 25)
+   - Score Urgency & Timeline (C1 + C2, max 20)
+   - Score Product-Market Fit (D1 + D2, max 15)
+   - Score Authority & Decision Dynamics (max 10)
+   - Apply special multipliers if applicable
+   - Sum all dimensions for total PPS (0-100)
+4. If MQL data available, use it to enhance scoring per the field precedence rules
+5. Derive credit_rating from credit_score if available: 750+ = High, 650-749 = Medium, <650 = Low
+6. If CRM location differs from MQL locality_grade context, add "locality_grade" to overridden_fields
+7. Identify persona using the Persona Identification Guide - check detection rules in priority order (NRI > Retirement > Business Owner > Investor > Upgrade Seeker > First-Time Buyer > Fallback Custom)
+8. Generate a 2-line persona_description that captures occupation, lifestyle, family situation, and buying motivation - must align with selected persona
+9. Concerns, talking points, competitor handling: Use CRM data ONLY
+10. Create actionable next steps and talking points
 
 ${outputStructure}`;
 
