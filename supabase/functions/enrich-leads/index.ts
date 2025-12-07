@@ -50,6 +50,7 @@ interface MqlApiResponse {
 async function processEnrichmentBatch(
   leadsToEnrich: LeadToEnrich[],
   projectId: string,
+  projectName: string,
   mqlSchema: string,
   mqlApiKey: string,
   supabaseUrl: string,
@@ -58,7 +59,7 @@ async function processEnrichmentBatch(
   const supabase = createClient(supabaseUrl, supabaseKey);
   
   console.log(`[Background] Starting enrichment batch for ${leadsToEnrich.length} leads`);
-  console.log(`[Background] MQL Schema: "${mqlSchema}"`);
+  console.log(`[Background] MQL Schema: "${mqlSchema}", Project Name for API: "${projectName}"`);
 
   for (const lead of leadsToEnrich) {
     try {
@@ -68,7 +69,7 @@ async function processEnrichmentBatch(
       const payload = [{
         name: lead.name || "",
         phone: lead.phone || "",
-        project_id: projectId,
+        project_id: projectName,  // Use project name, not internal ID
       }];
 
       console.log(`[MQL Request] Lead ID: ${lead.id}`);
@@ -233,7 +234,7 @@ serve(async (req) => {
     
     const { data: projectData, error: projectError } = await supabase
       .from("projects")
-      .select("brand_id")
+      .select("brand_id, name")
       .eq("id", projectId)
       .single();
 
@@ -245,7 +246,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[enrich-leads] Project brand_id: ${projectData.brand_id}`);
+    console.log(`[enrich-leads] Project brand_id: ${projectData.brand_id}, name: ${projectData.name}`);
 
     const { data: brandData, error: brandError } = await supabase
       .from("brands")
@@ -307,6 +308,7 @@ serve(async (req) => {
     const backgroundPromise = processEnrichmentBatch(
       leadsToEnrich,
       projectId,
+      projectData.name,  // Pass project name for MQL API
       mqlSchema,
       mqlApiKey,
       supabaseUrl,
