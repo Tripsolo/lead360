@@ -14,6 +14,7 @@ interface LeadToEnrich {
 
 interface MqlApiResponse {
   id: string;
+  status: string;
   mql_rating: string;
   mql_capability: string;
   mql_lifestyle: string;
@@ -22,16 +23,22 @@ interface MqlApiResponse {
     age: number;
     gender: string;
     location: string;
+    locality_grade: string;
+    lifestyle: string;
   };
   employment_details: {
     employer_name: string;
     designation: string;
+  };
+  income: {
+    final_income_lacs: number;
   };
   banking_loans: {
     total_loans: number;
     active_loans: number;
     home_loans: number;
     auto_loans: number;
+    sanction_date?: string;
   };
   banking_cards: {
     highest_usage_percent: number;
@@ -107,11 +114,40 @@ serve(async (req) => {
           const errorText = await mqlResponse.text();
           console.error(`MQL API error for lead ${lead.id}:`, errorText);
           failedLeads.push(lead.id);
+          
+          // Store failed enrichment with N/A rating
+          await supabase.from("lead_enrichments").upsert({
+            lead_id: lead.id,
+            project_id: projectId,
+            enriched_at: new Date().toISOString(),
+            mql_rating: "N/A",
+            raw_response: { status: "FAILED", error: errorText },
+          }, { onConflict: "lead_id,project_id" });
+          
           continue;
         }
 
         const mqlData = await mqlResponse.json();
         console.log(`MQL response for lead ${lead.id}:`, JSON.stringify(mqlData).substring(0, 500));
+
+        // Check if enrichment failed or returned N/A
+        const status = mqlData.status || "SUCCESS";
+        const rating = mqlData.mql_rating || mqlData.rating || null;
+        
+        if (status === "FAILED" || rating === "N/A") {
+          console.log(`Lead ${lead.id} enrichment returned N/A or FAILED`);
+          failedLeads.push(lead.id);
+          
+          await supabase.from("lead_enrichments").upsert({
+            lead_id: lead.id,
+            project_id: projectId,
+            enriched_at: new Date().toISOString(),
+            mql_rating: "N/A",
+            raw_response: mqlData,
+          }, { onConflict: "lead_id,project_id" });
+          
+          continue;
+        }
 
         // Extract data from response - handle various response structures
         const enrichmentData = {
@@ -120,13 +156,16 @@ serve(async (req) => {
           enriched_at: new Date().toISOString(),
           mql_rating: mqlData.mql_rating || mqlData.rating || null,
           mql_capability: mqlData.mql_capability || mqlData.capability || null,
-          mql_lifestyle: mqlData.mql_lifestyle || mqlData.lifestyle || null,
+          mql_lifestyle: mqlData.mql_lifestyle || mqlData.person_info?.lifestyle || mqlData.lifestyle || null,
           credit_score: mqlData.person_info?.credit_score || mqlData.credit_score || null,
           age: mqlData.person_info?.age || mqlData.demography?.age || null,
           gender: mqlData.person_info?.gender || mqlData.demography?.gender || null,
           location: mqlData.person_info?.location || mqlData.demography?.location || null,
+          locality_grade: mqlData.person_info?.locality_grade || mqlData.locality_grade || null,
+          lifestyle: mqlData.person_info?.lifestyle || mqlData.lifestyle || null,
           employer_name: mqlData.employment_details?.employer_name || mqlData.employer_name || null,
           designation: mqlData.employment_details?.designation || mqlData.designation || null,
+          final_income_lacs: mqlData.income?.final_income_lacs || mqlData.final_income_lacs || null,
           total_loans: mqlData.banking_loans?.total_loans || mqlData.total_loans || null,
           active_loans: mqlData.banking_loans?.active_loans || mqlData.active_loans || null,
           home_loans: mqlData.banking_loans?.home_loans || mqlData.home_loans || null,

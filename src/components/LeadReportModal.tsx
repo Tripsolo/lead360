@@ -1,14 +1,13 @@
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Lead } from '@/types/lead';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Mail, Phone, Briefcase, MapPin, Home, DollarSign, Calendar, Target, AlertCircle, MessageSquare, Users, CheckCircle2, Lightbulb, CreditCard, Building2, TrendingUp } from 'lucide-react';
+import { Mail, Phone, Briefcase, MapPin, Home, DollarSign, Target, AlertCircle, MessageSquare, Users, Lightbulb, User, Calendar } from 'lucide-react';
 
 interface LeadReportModalProps {
   lead: Lead | null;
@@ -21,6 +20,12 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
 
   const analysis = lead.fullAnalysis;
   const mql = lead.mqlEnrichment;
+
+  // Determine if MQL data is available and valid
+  const mqlDataAvailable = mql?.mqlRating && mql.mqlRating !== 'N/A';
+
+  // Get designation - prefer MQL if available
+  const displayDesignation = (mqlDataAvailable && mql?.designation) ? mql.designation : lead.designation;
 
   const getRatingColor = (rating?: string) => {
     switch (rating) {
@@ -38,6 +43,34 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
       case 'P3': return 'bg-amber-500 text-white';
       case 'P4': return 'bg-orange-500 text-white';
       case 'P5': return 'bg-gray-400 text-white';
+      case 'N/A': return 'bg-muted text-muted-foreground';
+      default: return 'bg-muted text-muted-foreground';
+    }
+  };
+
+  const getLocalityGradeColor = (grade?: string) => {
+    switch (grade?.toLowerCase()) {
+      case 'premium': return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400';
+      case 'popular': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400';
+      case 'affordable': return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400';
+      default: return 'bg-muted text-muted-foreground';
+    }
+  };
+
+  const getCreditRatingColor = (rating?: string) => {
+    switch (rating) {
+      case 'High': return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400';
+      case 'Medium': return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400';
+      case 'Low': return 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400';
+      default: return 'bg-muted text-muted-foreground';
+    }
+  };
+
+  const getCapabilityColor = (capability?: string) => {
+    switch (capability?.toLowerCase()) {
+      case 'high': return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400';
+      case 'medium': return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400';
+      case 'low': return 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400';
       default: return 'bg-muted text-muted-foreground';
     }
   };
@@ -99,7 +132,7 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
                   <Badge className={getMqlRatingColor(mql.mqlRating)}>
                     {mql.mqlRating}
                   </Badge>
-                  {mql.mqlCapability && (
+                  {mql.mqlCapability && mql.mqlRating !== 'N/A' && (
                     <p className="text-xs text-muted-foreground mt-1.5 capitalize">
                       {mql.mqlCapability} capability
                     </p>
@@ -141,6 +174,24 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
                 </div>
               )}
 
+              {/* MQL Age & Gender */}
+              {mqlDataAvailable && (mql?.age || mql?.gender) && (
+                <div className="flex items-center gap-2 text-sm">
+                  <User className="h-4 w-4 text-muted-foreground" />
+                  <span>
+                    {mql?.age ? `${mql.age} yrs` : ''}{mql?.age && mql?.gender ? ', ' : ''}{mql?.gender || ''}
+                  </span>
+                </div>
+              )}
+
+              {/* Designation - prefer MQL */}
+              {displayDesignation && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Briefcase className="h-4 w-4 text-muted-foreground" />
+                  <span>{displayDesignation}</span>
+                </div>
+              )}
+
               {lead.occupation && (
                 <div className="flex items-center gap-2 text-sm">
                   <Briefcase className="h-4 w-4 text-muted-foreground" />
@@ -173,6 +224,17 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
                 <div className="flex items-center gap-2 text-sm">
                   <Home className="h-4 w-4 text-muted-foreground" />
                   <span>{lead.currentResidence}</span>
+                </div>
+              )}
+
+              {/* MQL Locality Grade */}
+              {mqlDataAvailable && mql?.localityGrade && (
+                <div className="flex items-center gap-2 text-sm">
+                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                  <span>Locality: </span>
+                  <Badge variant="outline" className={getLocalityGradeColor(mql.localityGrade)}>
+                    {mql.localityGrade}
+                  </Badge>
                 </div>
               )}
             </div>
@@ -218,131 +280,67 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
                 {analysis?.persona_description && (
                   <p className="text-sm text-muted-foreground">{analysis.persona_description}</p>
                 )}
+                {/* MQL Lifestyle indicator */}
+                {mqlDataAvailable && mql?.mqlLifestyle && (
+                  <div className="mt-2 pt-2 border-t border-border">
+                    <span className="text-xs text-muted-foreground">Lifestyle: </span>
+                    <span className="text-xs font-medium capitalize">{mql.mqlLifestyle}</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
           <Separator />
 
-          {/* MQL Data Enrichment Section */}
-          {mql?.enrichedAt && (
-            <>
-              <div>
-                <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5" />
-                  Data Enrichment (MQL)
-                </h3>
-                <div className="grid md:grid-cols-4 gap-4">
-                  <div className="p-3 bg-muted rounded-lg">
-                    <p className="text-xs text-muted-foreground mb-1">Credit Score</p>
-                    <p className="font-semibold text-lg">{mql.creditScore || 'N/A'}</p>
-                  </div>
-                  <div className="p-3 bg-muted rounded-lg">
-                    <p className="text-xs text-muted-foreground mb-1">MQL Lifestyle</p>
-                    <p className="font-semibold capitalize">{mql.mqlLifestyle || 'N/A'}</p>
-                  </div>
-                  <div className="p-3 bg-muted rounded-lg">
-                    <p className="text-xs text-muted-foreground mb-1">Age / Gender</p>
-                    <p className="font-semibold">
-                      {mql.age ? `${mql.age} yrs` : 'N/A'} / {mql.gender || 'N/A'}
-                    </p>
-                  </div>
-                  <div className="p-3 bg-muted rounded-lg">
-                    <p className="text-xs text-muted-foreground mb-1">Location</p>
-                    <p className="font-semibold">{mql.location || 'N/A'}</p>
-                  </div>
-                </div>
-
-                {/* Employment & Banking */}
-                <div className="grid md:grid-cols-2 gap-4 mt-4">
-                  <div className="p-4 bg-muted/50 rounded-lg">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Building2 className="h-4 w-4" />
-                      <h4 className="font-semibold text-sm">Employment</h4>
-                    </div>
-                    <div className="space-y-2 text-sm">
-                      <div>
-                        <span className="text-muted-foreground">Employer: </span>
-                        <span>{mql.employerName || 'N/A'}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Designation: </span>
-                        <span>{mql.designation || 'N/A'}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-4 bg-muted/50 rounded-lg">
-                    <div className="flex items-center gap-2 mb-3">
-                      <CreditCard className="h-4 w-4" />
-                      <h4 className="font-semibold text-sm">Banking Profile</h4>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div>
-                        <span className="text-muted-foreground">Total Loans: </span>
-                        <span>{mql.totalLoans ?? 'N/A'}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Active: </span>
-                        <span>{mql.activeLoans ?? 'N/A'}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Home Loans: </span>
-                        <span>{mql.homeLoans ?? 'N/A'}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Auto Loans: </span>
-                        <span>{mql.autoLoans ?? 'N/A'}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Card Usage: </span>
-                        <span>{mql.highestCardUsagePercent ? `${mql.highestCardUsagePercent}%` : 'N/A'}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Amex Holder: </span>
-                        <span>{mql.isAmexHolder ? 'Yes' : 'No'}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <p className="text-xs text-muted-foreground mt-2">
-                  Last enriched: {new Date(mql.enrichedAt).toLocaleString()}
+          {/* Financial Profile */}
+          <div>
+            <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
+              <DollarSign className="h-5 w-5" />
+              Financial Profile
+            </h3>
+            <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-4">
+              <div className="p-3 bg-muted rounded-lg">
+                <p className="text-xs text-muted-foreground mb-1">Budget</p>
+                <p className="font-semibold">{lead.budget || 'N/A'}</p>
+              </div>
+              <div className="p-3 bg-muted rounded-lg">
+                <p className="text-xs text-muted-foreground mb-1">In-Hand Funds</p>
+                <p className="font-semibold">
+                  {analysis?.extracted_signals?.in_hand_funds 
+                    ? `₹${(analysis.extracted_signals.in_hand_funds / 100000).toFixed(2)}L`
+                    : 'N/A'
+                  }
                 </p>
               </div>
-              <Separator />
-            </>
-          )}
-
-          {/* Financial Profile */}
-          <>
-            <div>
-              <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-                <DollarSign className="h-5 w-5" />
-                Financial Profile
-              </h3>
-              <div className="grid md:grid-cols-3 gap-4">
-                <div className="p-3 bg-muted rounded-lg">
-                  <p className="text-xs text-muted-foreground mb-1">Budget</p>
-                  <p className="font-semibold">{lead.budget || 'N/A'}</p>
-                </div>
-                <div className="p-3 bg-muted rounded-lg">
-                  <p className="text-xs text-muted-foreground mb-1">In-Hand Funds</p>
-                  <p className="font-semibold">
-                    {analysis?.extracted_signals?.in_hand_funds 
-                      ? `₹${(analysis.extracted_signals.in_hand_funds / 100000).toFixed(2)}L`
-                      : 'N/A'
-                    }
-                  </p>
-                </div>
-                <div className="p-3 bg-muted rounded-lg">
-                  <p className="text-xs text-muted-foreground mb-1">Funding Source</p>
-                  <p className="font-semibold">{lead.fundingSource || 'N/A'}</p>
-                </div>
+              <div className="p-3 bg-muted rounded-lg">
+                <p className="text-xs text-muted-foreground mb-1">Funding Source</p>
+                <p className="font-semibold">{lead.fundingSource || 'N/A'}</p>
               </div>
+              
+              {/* MQL Capability */}
+              {mqlDataAvailable && mql?.mqlCapability && (
+                <div className="p-3 bg-muted rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">MQL Capability</p>
+                  <Badge variant="outline" className={getCapabilityColor(mql.mqlCapability)}>
+                    {mql.mqlCapability}
+                  </Badge>
+                </div>
+              )}
+
+              {/* Credit Rating (LLM derived) */}
+              {analysis?.mql_credit_rating && (
+                <div className="p-3 bg-muted rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">Credit Rating</p>
+                  <Badge variant="outline" className={getCreditRatingColor(analysis.mql_credit_rating)}>
+                    {analysis.mql_credit_rating}
+                  </Badge>
+                </div>
+              )}
             </div>
-            <Separator />
-          </>
+          </div>
+
+          <Separator />
 
           {/* AI Analysis */}
           <div className="space-y-4">

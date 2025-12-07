@@ -8,6 +8,9 @@ export interface MqlEnrichment {
   age?: number;
   gender?: string;
   location?: string;
+  localityGrade?: string;
+  lifestyle?: string;
+  finalIncomeLacs?: number;
   employerName?: string;
   designation?: string;
   totalLoans?: number;
@@ -98,5 +101,9 @@ export interface AnalysisResult {
       sample_feedback?: 'positive' | 'negative' | 'neutral' | 'not_seen';
       core_motivation?: string;
     };
+    // New MQL-derived fields
+    mql_credit_rating?: 'High' | 'Medium' | 'Low' | null;
+    overridden_fields?: string[];
+    mql_data_available?: boolean;
   };
 }
