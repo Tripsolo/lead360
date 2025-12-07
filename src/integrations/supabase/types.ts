@@ -110,12 +110,15 @@ export type Database = {
           designation: string | null
           employer_name: string | null
           enriched_at: string
+          final_income_lacs: number | null
           gender: string | null
           highest_card_usage_percent: number | null
           home_loans: number | null
           id: string
           is_amex_holder: boolean | null
           lead_id: string
+          lifestyle: string | null
+          locality_grade: string | null
           location: string | null
           mql_capability: string | null
           mql_lifestyle: string | null
@@ -134,12 +137,15 @@ export type Database = {
           designation?: string | null
           employer_name?: string | null
           enriched_at?: string
+          final_income_lacs?: number | null
           gender?: string | null
           highest_card_usage_percent?: number | null
           home_loans?: number | null
           id?: string
           is_amex_holder?: boolean | null
           lead_id: string
+          lifestyle?: string | null
+          locality_grade?: string | null
           location?: string | null
           mql_capability?: string | null
           mql_lifestyle?: string | null
@@ -158,12 +164,15 @@ export type Database = {
           designation?: string | null
           employer_name?: string | null
           enriched_at?: string
+          final_income_lacs?: number | null
           gender?: string | null
           highest_card_usage_percent?: number | null
           home_loans?: number | null
           id?: string
           is_amex_holder?: boolean | null
           lead_id?: string
+          lifestyle?: string | null
+          locality_grade?: string | null
           location?: string | null
           mql_capability?: string | null
           mql_lifestyle?: string | null
