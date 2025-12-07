@@ -1,5 +1,25 @@
 export type LeadRating = 'Hot' | 'Warm' | 'Cold';
 
+export interface MqlEnrichment {
+  mqlRating?: string;
+  mqlCapability?: string;
+  mqlLifestyle?: string;
+  creditScore?: number;
+  age?: number;
+  gender?: string;
+  location?: string;
+  employerName?: string;
+  designation?: string;
+  totalLoans?: number;
+  activeLoans?: number;
+  homeLoans?: number;
+  autoLoans?: number;
+  highestCardUsagePercent?: number;
+  isAmexHolder?: boolean;
+  enrichedAt?: string;
+  rawResponse?: Record<string, any>;
+}
+
 export interface Lead {
   id: string;
   name: string;
@@ -36,6 +56,9 @@ export interface Lead {
   constructionStage?: string;
   fundingSource?: string;
   inHandFunds?: string;
+  
+  // MQL Enrichment data
+  mqlEnrichment?: MqlEnrichment;
 }
 
 export interface AnalysisResult {

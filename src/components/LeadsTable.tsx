@@ -21,7 +21,7 @@ interface LeadsTableProps {
   onExport: () => void;
 }
 
-type SortField = 'name' | 'date' | 'rating' | 'phone';
+type SortField = 'name' | 'date' | 'rating' | 'phone' | 'mqlRating';
 type SortDirection = 'asc' | 'desc' | null;
 
 export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: LeadsTableProps) => {
@@ -52,8 +52,17 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: Leads
   // Sort leads
   if (sortField && sortDirection) {
     filteredLeads = [...filteredLeads].sort((a, b) => {
-      let aVal: any = a[sortField];
-      let bVal: any = b[sortField];
+      let aVal: any;
+      let bVal: any;
+
+      if (sortField === 'mqlRating') {
+        const mqlOrder: Record<string, number> = { 'P1': 5, 'P2': 4, 'P3': 3, 'P4': 2, 'P5': 1 };
+        aVal = mqlOrder[a.mqlEnrichment?.mqlRating || ''] || 0;
+        bVal = mqlOrder[b.mqlEnrichment?.mqlRating || ''] || 0;
+      } else {
+        aVal = a[sortField as keyof Lead];
+        bVal = b[sortField as keyof Lead];
+      }
 
       if (sortField === 'date') {
         aVal = new Date(aVal || 0).getTime();
@@ -62,7 +71,7 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: Leads
         const ratingOrder = { 'Hot': 3, 'Warm': 2, 'Cold': 1 };
         aVal = ratingOrder[aVal as keyof typeof ratingOrder] || 0;
         bVal = ratingOrder[bVal as keyof typeof ratingOrder] || 0;
-      } else {
+      } else if (sortField !== 'mqlRating') {
         aVal = String(aVal || '').toLowerCase();
         bVal = String(bVal || '').toLowerCase();
       }
@@ -77,7 +86,6 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: Leads
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
-      // Cycle through: asc -> desc -> null
       if (sortDirection === 'asc') {
         setSortDirection('desc');
       } else if (sortDirection === 'desc') {
@@ -102,6 +110,17 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: Leads
       case 'Hot': return 'bg-status-hot text-white';
       case 'Warm': return 'bg-status-warm text-white';
       case 'Cold': return 'bg-status-cold text-white';
+      default: return 'bg-muted text-muted-foreground';
+    }
+  };
+
+  const getMqlRatingColor = (rating?: string) => {
+    switch (rating) {
+      case 'P1': return 'bg-emerald-600 text-white';
+      case 'P2': return 'bg-emerald-500 text-white';
+      case 'P3': return 'bg-amber-500 text-white';
+      case 'P4': return 'bg-orange-500 text-white';
+      case 'P5': return 'bg-gray-400 text-white';
       default: return 'bg-muted text-muted-foreground';
     }
   };
@@ -151,7 +170,7 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: Leads
       </div>
 
       {/* Table */}
-      <div className="border rounded-lg">
+      <div className="border rounded-lg overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -183,13 +202,19 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: Leads
                 </Button>
               </TableHead>
               <TableHead>Manager Rating</TableHead>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('mqlRating')} className="h-8 px-2">
+                  MQL Rating
+                  <SortIcon field="mqlRating" />
+                </Button>
+              </TableHead>
               <TableHead>Key Concern</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredLeads.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                   No leads found matching your filters
                 </TableCell>
               </TableRow>
@@ -221,6 +246,15 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: Leads
                     {lead.managerRating ? (
                       <Badge className={getRatingColor(lead.managerRating)}>
                         {lead.managerRating}
+                      </Badge>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {lead.mqlEnrichment?.mqlRating ? (
+                      <Badge className={getMqlRatingColor(lead.mqlEnrichment.mqlRating)}>
+                        {lead.mqlEnrichment.mqlRating}
                       </Badge>
                     ) : (
                       <span className="text-muted-foreground text-sm">-</span>

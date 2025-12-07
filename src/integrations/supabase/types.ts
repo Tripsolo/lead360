@@ -100,6 +100,81 @@ export type Database = {
           },
         ]
       }
+      lead_enrichments: {
+        Row: {
+          active_loans: number | null
+          age: number | null
+          auto_loans: number | null
+          created_at: string
+          credit_score: number | null
+          designation: string | null
+          employer_name: string | null
+          enriched_at: string
+          gender: string | null
+          highest_card_usage_percent: number | null
+          home_loans: number | null
+          id: string
+          is_amex_holder: boolean | null
+          lead_id: string
+          location: string | null
+          mql_capability: string | null
+          mql_lifestyle: string | null
+          mql_rating: string | null
+          project_id: string | null
+          raw_response: Json | null
+          total_loans: number | null
+          updated_at: string
+        }
+        Insert: {
+          active_loans?: number | null
+          age?: number | null
+          auto_loans?: number | null
+          created_at?: string
+          credit_score?: number | null
+          designation?: string | null
+          employer_name?: string | null
+          enriched_at?: string
+          gender?: string | null
+          highest_card_usage_percent?: number | null
+          home_loans?: number | null
+          id?: string
+          is_amex_holder?: boolean | null
+          lead_id: string
+          location?: string | null
+          mql_capability?: string | null
+          mql_lifestyle?: string | null
+          mql_rating?: string | null
+          project_id?: string | null
+          raw_response?: Json | null
+          total_loans?: number | null
+          updated_at?: string
+        }
+        Update: {
+          active_loans?: number | null
+          age?: number | null
+          auto_loans?: number | null
+          created_at?: string
+          credit_score?: number | null
+          designation?: string | null
+          employer_name?: string | null
+          enriched_at?: string
+          gender?: string | null
+          highest_card_usage_percent?: number | null
+          home_loans?: number | null
+          id?: string
+          is_amex_holder?: boolean | null
+          lead_id?: string
+          location?: string | null
+          mql_capability?: string | null
+          mql_lifestyle?: string | null
+          mql_rating?: string | null
+          project_id?: string | null
+          raw_response?: Json | null
+          total_loans?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       leads: {
         Row: {
           created_at: string
