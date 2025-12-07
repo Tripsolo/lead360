@@ -184,6 +184,99 @@ const Index = () => {
     }
   };
 
+  // Helper function to update leads with enrichment data
+  const updateLeadsWithEnrichments = (enrichments: any[]) => {
+    const updatedLeads = leads.map(lead => {
+      const enrichment = enrichments.find((e: any) => e.lead_id === lead.id);
+      if (enrichment) {
+        return {
+          ...lead,
+          mqlEnrichment: {
+            mqlRating: enrichment.mql_rating || undefined,
+            mqlCapability: enrichment.mql_capability || undefined,
+            mqlLifestyle: enrichment.mql_lifestyle || undefined,
+            creditScore: enrichment.credit_score || undefined,
+            age: enrichment.age || undefined,
+            gender: enrichment.gender || undefined,
+            location: enrichment.location || undefined,
+            employerName: enrichment.employer_name || undefined,
+            designation: enrichment.designation || undefined,
+            totalLoans: enrichment.total_loans || undefined,
+            activeLoans: enrichment.active_loans || undefined,
+            homeLoans: enrichment.home_loans || undefined,
+            autoLoans: enrichment.auto_loans || undefined,
+            highestCardUsagePercent: enrichment.highest_card_usage_percent || undefined,
+            isAmexHolder: enrichment.is_amex_holder || undefined,
+            enrichedAt: enrichment.enriched_at || undefined,
+            rawResponse: enrichment.raw_response as Record<string, any> || undefined,
+          } as MqlEnrichment,
+        };
+      }
+      return lead;
+    });
+    setLeads(updatedLeads);
+    return updatedLeads;
+  };
+
+  // Poll for enrichment results
+  const pollForEnrichmentResults = async (leadIdsToCheck: string[], maxAttempts = 20) => {
+    let attempts = 0;
+    const pollInterval = 5000; // 5 seconds
+
+    while (attempts < maxAttempts) {
+      attempts++;
+      console.log(`Polling for enrichment results, attempt ${attempts}/${maxAttempts}`);
+
+      const { data: enrichments } = await supabase
+        .from('lead_enrichments')
+        .select('*')
+        .in('lead_id', leadIdsToCheck)
+        .eq('project_id', selectedProjectId);
+
+      if (enrichments && enrichments.length >= leadIdsToCheck.length) {
+        // All leads have been enriched
+        updateLeadsWithEnrichments(enrichments);
+        
+        const successCount = enrichments.filter(e => e.mql_rating !== 'N/A').length;
+        const failedCount = enrichments.filter(e => e.mql_rating === 'N/A').length;
+        
+        toast({
+          title: 'Enrichment complete',
+          description: `${successCount} leads enriched successfully, ${failedCount} failed.`,
+        });
+        return true;
+      }
+
+      // Update UI with partial results
+      if (enrichments && enrichments.length > 0) {
+        updateLeadsWithEnrichments(enrichments);
+        toast({
+          title: 'Enrichment in progress',
+          description: `${enrichments.length}/${leadIdsToCheck.length} leads processed...`,
+        });
+      }
+
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
+    }
+
+    // Max attempts reached, show what we have
+    const { data: finalEnrichments } = await supabase
+      .from('lead_enrichments')
+      .select('*')
+      .in('lead_id', leadIdsToCheck)
+      .eq('project_id', selectedProjectId);
+
+    if (finalEnrichments && finalEnrichments.length > 0) {
+      updateLeadsWithEnrichments(finalEnrichments);
+    }
+
+    toast({
+      title: 'Enrichment partially complete',
+      description: `Processed ${finalEnrichments?.length || 0}/${leadIdsToCheck.length} leads. Some leads may still be processing.`,
+    });
+    return false;
+  };
+
   const handleEnrichLeads = async () => {
     setIsEnriching(true);
     try {
@@ -198,37 +291,19 @@ const Index = () => {
         throw new Error(error.message || 'Failed to enrich leads');
       }
 
-      if (data?.enrichments) {
-        // Update leads with enrichment data
-        const updatedLeads = leads.map(lead => {
-          const enrichment = data.enrichments.find((e: any) => e.lead_id === lead.id);
-          if (enrichment) {
-            return {
-              ...lead,
-              mqlEnrichment: {
-                mqlRating: enrichment.mql_rating || undefined,
-                mqlCapability: enrichment.mql_capability || undefined,
-                mqlLifestyle: enrichment.mql_lifestyle || undefined,
-                creditScore: enrichment.credit_score || undefined,
-                age: enrichment.age || undefined,
-                gender: enrichment.gender || undefined,
-                location: enrichment.location || undefined,
-                employerName: enrichment.employer_name || undefined,
-                designation: enrichment.designation || undefined,
-                totalLoans: enrichment.total_loans || undefined,
-                activeLoans: enrichment.active_loans || undefined,
-                homeLoans: enrichment.home_loans || undefined,
-                autoLoans: enrichment.auto_loans || undefined,
-                highestCardUsagePercent: enrichment.highest_card_usage_percent || undefined,
-                isAmexHolder: enrichment.is_amex_holder || undefined,
-                enrichedAt: enrichment.enriched_at || undefined,
-                rawResponse: enrichment.raw_response as Record<string, any> || undefined,
-              } as MqlEnrichment,
-            };
-          }
-          return lead;
+      // Handle async processing response
+      if (data?.status === 'processing') {
+        toast({
+          title: 'Enrichment started',
+          description: data.message || 'Processing leads in background...',
         });
-        setLeads(updatedLeads);
+
+        // Poll for results
+        const leadIdsToCheck = data.meta?.leadsToEnrichIds || leads.map(l => l.id);
+        await pollForEnrichmentResults(leadIdsToCheck);
+      } else if (data?.enrichments) {
+        // Synchronous response with enrichments
+        updateLeadsWithEnrichments(data.enrichments);
         
         const meta = data.meta || {};
         toast({
