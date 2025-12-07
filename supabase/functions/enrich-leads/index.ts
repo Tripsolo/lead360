@@ -95,19 +95,19 @@ serve(async (req) => {
         // Add delay between requests to avoid rate limiting
         await new Promise(resolve => setTimeout(resolve, 200));
 
-        // Call MQL Batch API
-        const mqlResponse = await fetch("https://api.enrichment.raisn.ai/api/v1/mql/batch", {
+        // Call MQL Batch API (correct endpoint per docs)
+        const mqlResponse = await fetch("https://api.dev.raisn.ai/api/lead/mql/batch/", {
           method: "POST",
           headers: {
             "x-schema": "Kalpataru",
             "authorization": mqlApiKey,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
+          body: JSON.stringify([{
             name: lead.name || "",
             phone: lead.phone || "",
             project_id: projectId,
-          }),
+          }]),
         });
 
         if (!mqlResponse.ok) {
@@ -127,8 +127,11 @@ serve(async (req) => {
           continue;
         }
 
-        const mqlData = await mqlResponse.json();
-        console.log(`MQL response for lead ${lead.id}:`, JSON.stringify(mqlData).substring(0, 500));
+        const mqlDataArray = await mqlResponse.json();
+        console.log(`MQL raw response for lead ${lead.id}:`, JSON.stringify(mqlDataArray).substring(0, 500));
+        
+        // Extract first lead from batch response array
+        const mqlData = Array.isArray(mqlDataArray) ? mqlDataArray[0] : mqlDataArray;
 
         // Check if enrichment failed or returned N/A
         const status = mqlData.status || "SUCCESS";
