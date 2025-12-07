@@ -6,13 +6,23 @@ import { LeadsTable } from '@/components/LeadsTable';
 import { LeadReportModal } from '@/components/LeadReportModal';
 import { parseExcelFile } from '@/utils/excelParser';
 import { exportLeadsToExcel } from '@/utils/excelExport';
-import { Lead, AnalysisResult } from '@/types/lead';
+import { Lead, AnalysisResult, MqlEnrichment } from '@/types/lead';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Sparkles, Upload, LogOut } from 'lucide-react';
+import { Sparkles, Upload, LogOut, Database } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { ExcelSchema } from '@/config/projects';
 import type { User, Session } from '@supabase/supabase-js';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const Index = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -20,21 +30,21 @@ const Index = () => {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isEnriching, setIsEnriching] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [ratingFilter, setRatingFilter] = useState<string | null>(null);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [showEnrichPrompt, setShowEnrichPrompt] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
         
-        // Redirect to auth if not authenticated
         if (!session) {
           setTimeout(() => {
             navigate('/auth');
@@ -43,7 +53,6 @@ const Index = () => {
       }
     );
 
-    // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -59,7 +68,6 @@ const Index = () => {
   const handleFileSelect = async (file: File, projectId: string) => {
     setIsLoading(true);
     try {
-      // Fetch project with brand schema for validation
       const { data: project, error } = await supabase
         .from('projects')
         .select('*, brands(*)')
@@ -77,10 +85,8 @@ const Index = () => {
       }
 
       const schema = project.brands.excel_schema as unknown as ExcelSchema;
-      
       const parsedLeads = await parseExcelFile(file, schema);
       
-      // Validate max 50 leads
       if (parsedLeads.length > 50) {
         toast({
           title: 'Too many leads',
@@ -91,36 +97,76 @@ const Index = () => {
         return;
       }
 
-      // Fetch cached analyses for these leads
       const leadIds = parsedLeads.map(lead => lead.id);
+      
+      // Fetch cached analyses
       const { data: cachedAnalyses } = await supabase
         .from('lead_analyses')
         .select('lead_id, rating, insights, full_analysis')
         .in('lead_id', leadIds)
         .eq('project_id', projectId);
       
+      // Fetch cached enrichments
+      const { data: cachedEnrichments } = await supabase
+        .from('lead_enrichments')
+        .select('*')
+        .in('lead_id', leadIds)
+        .eq('project_id', projectId);
+
       // Merge cached data into parsed leads
       const enrichedLeads = parsedLeads.map(lead => {
         const cached = cachedAnalyses?.find(a => a.lead_id === lead.id);
+        const enrichment = cachedEnrichments?.find(e => e.lead_id === lead.id);
+        
+        let mqlEnrichment: MqlEnrichment | undefined;
+        if (enrichment) {
+          mqlEnrichment = {
+            mqlRating: enrichment.mql_rating || undefined,
+            mqlCapability: enrichment.mql_capability || undefined,
+            mqlLifestyle: enrichment.mql_lifestyle || undefined,
+            creditScore: enrichment.credit_score || undefined,
+            age: enrichment.age || undefined,
+            gender: enrichment.gender || undefined,
+            location: enrichment.location || undefined,
+            employerName: enrichment.employer_name || undefined,
+            designation: enrichment.designation || undefined,
+            totalLoans: enrichment.total_loans || undefined,
+            activeLoans: enrichment.active_loans || undefined,
+            homeLoans: enrichment.home_loans || undefined,
+            autoLoans: enrichment.auto_loans || undefined,
+            highestCardUsagePercent: enrichment.highest_card_usage_percent || undefined,
+            isAmexHolder: enrichment.is_amex_holder || undefined,
+            enrichedAt: enrichment.enriched_at || undefined,
+            rawResponse: enrichment.raw_response as Record<string, any> || undefined,
+          };
+        }
+        
         if (cached) {
           return {
             ...lead,
             rating: cached.rating as Lead['rating'],
             aiInsights: cached.insights || undefined,
             fullAnalysis: cached.full_analysis as Lead['fullAnalysis'],
+            mqlEnrichment,
           };
         }
-        return lead;
+        return { ...lead, mqlEnrichment };
       });
 
       setLeads(enrichedLeads);
       setSelectedProjectId(projectId);
       
-      // Update toast message to indicate cache usage
       const cachedCount = cachedAnalyses?.length || 0;
+      const enrichedCount = cachedEnrichments?.length || 0;
       let description = `Loaded ${parsedLeads.length} leads from the Excel file.`;
       if (cachedCount > 0) {
-        description += ` (${cachedCount} with cached analysis)`;
+        description += ` (${cachedCount} with cached analysis`;
+        if (enrichedCount > 0) {
+          description += `, ${enrichedCount} enriched`;
+        }
+        description += ')';
+      } else if (enrichedCount > 0) {
+        description += ` (${enrichedCount} enriched)`;
       }
       
       toast({
@@ -138,7 +184,79 @@ const Index = () => {
     }
   };
 
-  const handleAnalyzeLeads = async () => {
+  const handleEnrichLeads = async () => {
+    setIsEnriching(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('enrich-leads', {
+        body: { 
+          leads: leads.map(l => ({ id: l.id, name: l.name, phone: l.phone })),
+          projectId: selectedProjectId
+        },
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Failed to enrich leads');
+      }
+
+      if (data?.enrichments) {
+        // Update leads with enrichment data
+        const updatedLeads = leads.map(lead => {
+          const enrichment = data.enrichments.find((e: any) => e.lead_id === lead.id);
+          if (enrichment) {
+            return {
+              ...lead,
+              mqlEnrichment: {
+                mqlRating: enrichment.mql_rating || undefined,
+                mqlCapability: enrichment.mql_capability || undefined,
+                mqlLifestyle: enrichment.mql_lifestyle || undefined,
+                creditScore: enrichment.credit_score || undefined,
+                age: enrichment.age || undefined,
+                gender: enrichment.gender || undefined,
+                location: enrichment.location || undefined,
+                employerName: enrichment.employer_name || undefined,
+                designation: enrichment.designation || undefined,
+                totalLoans: enrichment.total_loans || undefined,
+                activeLoans: enrichment.active_loans || undefined,
+                homeLoans: enrichment.home_loans || undefined,
+                autoLoans: enrichment.auto_loans || undefined,
+                highestCardUsagePercent: enrichment.highest_card_usage_percent || undefined,
+                isAmexHolder: enrichment.is_amex_holder || undefined,
+                enrichedAt: enrichment.enriched_at || undefined,
+                rawResponse: enrichment.raw_response as Record<string, any> || undefined,
+              } as MqlEnrichment,
+            };
+          }
+          return lead;
+        });
+        setLeads(updatedLeads);
+        
+        const meta = data.meta || {};
+        toast({
+          title: 'Enrichment complete',
+          description: `${meta.enriched || 0} leads enriched, ${meta.cached || 0} from cache, ${meta.failed || 0} failed.`,
+        });
+      }
+    } catch (error) {
+      console.error('Enrichment error:', error);
+      toast({
+        title: 'Enrichment failed',
+        description: error instanceof Error ? error.message : 'Failed to enrich leads.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsEnriching(false);
+    }
+  };
+
+  const handleAnalyzeLeads = async (skipEnrichmentPrompt = false) => {
+    // Check if leads have enrichment data
+    const hasEnrichment = leads.some(l => l.mqlEnrichment?.enrichedAt);
+    
+    if (!hasEnrichment && !skipEnrichmentPrompt) {
+      setShowEnrichPrompt(true);
+      return;
+    }
+
     setIsAnalyzing(true);
     try {
       const { data, error } = await supabase.functions.invoke('analyze-leads', {
@@ -167,7 +285,6 @@ const Index = () => {
         });
         setLeads(updatedLeads);
         
-        // Show detailed success message with cache info
         const meta = data.meta || {};
         const cachedCount = meta.cached || 0;
         const freshCount = meta.fresh || 0;
@@ -224,7 +341,6 @@ const Index = () => {
     navigate('/auth');
   };
 
-  // Don't render until we know auth status
   if (!user) {
     return null;
   }
@@ -251,16 +367,27 @@ const Index = () => {
         ) : (
           <div className="space-y-8">
             {/* Action Buttons */}
-            <div className="flex justify-between items-center">
+            <div className="flex flex-wrap gap-3 items-center">
               <Button 
-                onClick={handleAnalyzeLeads} 
-                disabled={isAnalyzing} 
+                onClick={handleEnrichLeads} 
+                disabled={isEnriching || isAnalyzing} 
+                size="lg"
+                variant="outline"
+                className="border-primary text-primary hover:bg-primary/10"
+              >
+                <Database className="mr-2 h-5 w-5" />
+                {isEnriching ? 'Enriching...' : 'Enrich with Data'}
+              </Button>
+              <Button 
+                onClick={() => handleAnalyzeLeads()} 
+                disabled={isAnalyzing || isEnriching} 
                 size="lg"
                 className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
               >
                 <Sparkles className="mr-2 h-5 w-5" />
                 {isAnalyzing ? 'Analyzing...' : 'Analyze with AI'}
               </Button>
+              <div className="flex-1" />
               <Button variant="outline" onClick={handleReset} size="lg">
                 <Upload className="mr-2 h-5 w-5" />
                 Upload New File
@@ -291,6 +418,32 @@ const Index = () => {
           </div>
         )}
       </div>
+
+      {/* Enrichment Prompt Dialog */}
+      <AlertDialog open={showEnrichPrompt} onOpenChange={setShowEnrichPrompt}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Enrich leads with external data?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Would you like to enrich leads with external data first? This provides credit scores, employment details, and banking information for more accurate analysis.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setShowEnrichPrompt(false);
+              handleAnalyzeLeads(true);
+            }}>
+              Skip & Analyze
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              setShowEnrichPrompt(false);
+              handleEnrichLeads();
+            }}>
+              Enrich First
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

@@ -8,7 +8,7 @@ import {
 import { Lead } from '@/types/lead';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Mail, Phone, Briefcase, MapPin, Home, DollarSign, Calendar, Target, AlertCircle, MessageSquare, Users, CheckCircle2, Lightbulb } from 'lucide-react';
+import { Mail, Phone, Briefcase, MapPin, Home, DollarSign, Calendar, Target, AlertCircle, MessageSquare, Users, CheckCircle2, Lightbulb, CreditCard, Building2, TrendingUp } from 'lucide-react';
 
 interface LeadReportModalProps {
   lead: Lead | null;
@@ -20,12 +20,24 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
   if (!lead) return null;
 
   const analysis = lead.fullAnalysis;
+  const mql = lead.mqlEnrichment;
 
   const getRatingColor = (rating?: string) => {
     switch (rating) {
       case 'Hot': return 'bg-status-hot text-white';
       case 'Warm': return 'bg-status-warm text-white';
       case 'Cold': return 'bg-status-cold text-white';
+      default: return 'bg-muted text-muted-foreground';
+    }
+  };
+
+  const getMqlRatingColor = (rating?: string) => {
+    switch (rating) {
+      case 'P1': return 'bg-emerald-600 text-white';
+      case 'P2': return 'bg-emerald-500 text-white';
+      case 'P3': return 'bg-amber-500 text-white';
+      case 'P4': return 'bg-orange-500 text-white';
+      case 'P5': return 'bg-gray-400 text-white';
       default: return 'bg-muted text-muted-foreground';
     }
   };
@@ -52,11 +64,11 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Ratings Section - Compact 3 Column Grid */}
-          <div className="grid grid-cols-[auto_auto_1fr] gap-3 items-start">
+          {/* Ratings Section - Compact Grid */}
+          <div className="grid grid-cols-[auto_auto_auto_1fr] gap-3 items-start">
             {/* AI Rating */}
             {lead.rating && (
-              <div className="p-2.5 bg-muted/30 rounded-lg min-w-[140px]">
+              <div className="p-2.5 bg-muted/30 rounded-lg min-w-[120px]">
                 <p className="text-sm text-muted-foreground mb-1.5">AI Rating</p>
                 <Badge className={getRatingColor(lead.rating)}>
                   {lead.rating}
@@ -71,13 +83,32 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
             
             {/* Manager Rating */}
             {lead.managerRating && (
-              <div className="p-2.5 bg-muted/30 rounded-lg min-w-[140px]">
+              <div className="p-2.5 bg-muted/30 rounded-lg min-w-[120px]">
                 <p className="text-sm text-muted-foreground mb-1.5">Manager Rating</p>
                 <Badge className={getRatingColor(lead.managerRating)}>
                   {lead.managerRating}
                 </Badge>
               </div>
             )}
+
+            {/* MQL Rating */}
+            <div className="p-2.5 bg-muted/30 rounded-lg min-w-[120px]">
+              <p className="text-sm text-muted-foreground mb-1.5">MQL Rating</p>
+              {mql?.mqlRating ? (
+                <>
+                  <Badge className={getMqlRatingColor(mql.mqlRating)}>
+                    {mql.mqlRating}
+                  </Badge>
+                  {mql.mqlCapability && (
+                    <p className="text-xs text-muted-foreground mt-1.5 capitalize">
+                      {mql.mqlCapability} capability
+                    </p>
+                  )}
+                </>
+              ) : (
+                <span className="text-sm text-muted-foreground">Not enriched</span>
+              )}
+            </div>
 
             {/* Rating Rationale - Takes remaining space */}
             {analysis?.rating_rationale && (
@@ -192,6 +223,96 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
           </div>
 
           <Separator />
+
+          {/* MQL Data Enrichment Section */}
+          {mql?.enrichedAt && (
+            <>
+              <div>
+                <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5" />
+                  Data Enrichment (MQL)
+                </h3>
+                <div className="grid md:grid-cols-4 gap-4">
+                  <div className="p-3 bg-muted rounded-lg">
+                    <p className="text-xs text-muted-foreground mb-1">Credit Score</p>
+                    <p className="font-semibold text-lg">{mql.creditScore || 'N/A'}</p>
+                  </div>
+                  <div className="p-3 bg-muted rounded-lg">
+                    <p className="text-xs text-muted-foreground mb-1">MQL Lifestyle</p>
+                    <p className="font-semibold capitalize">{mql.mqlLifestyle || 'N/A'}</p>
+                  </div>
+                  <div className="p-3 bg-muted rounded-lg">
+                    <p className="text-xs text-muted-foreground mb-1">Age / Gender</p>
+                    <p className="font-semibold">
+                      {mql.age ? `${mql.age} yrs` : 'N/A'} / {mql.gender || 'N/A'}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-muted rounded-lg">
+                    <p className="text-xs text-muted-foreground mb-1">Location</p>
+                    <p className="font-semibold">{mql.location || 'N/A'}</p>
+                  </div>
+                </div>
+
+                {/* Employment & Banking */}
+                <div className="grid md:grid-cols-2 gap-4 mt-4">
+                  <div className="p-4 bg-muted/50 rounded-lg">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Building2 className="h-4 w-4" />
+                      <h4 className="font-semibold text-sm">Employment</h4>
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Employer: </span>
+                        <span>{mql.employerName || 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Designation: </span>
+                        <span>{mql.designation || 'N/A'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-muted/50 rounded-lg">
+                    <div className="flex items-center gap-2 mb-3">
+                      <CreditCard className="h-4 w-4" />
+                      <h4 className="font-semibold text-sm">Banking Profile</h4>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Total Loans: </span>
+                        <span>{mql.totalLoans ?? 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Active: </span>
+                        <span>{mql.activeLoans ?? 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Home Loans: </span>
+                        <span>{mql.homeLoans ?? 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Auto Loans: </span>
+                        <span>{mql.autoLoans ?? 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Card Usage: </span>
+                        <span>{mql.highestCardUsagePercent ? `${mql.highestCardUsagePercent}%` : 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Amex Holder: </span>
+                        <span>{mql.isAmexHolder ? 'Yes' : 'No'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-xs text-muted-foreground mt-2">
+                  Last enriched: {new Date(mql.enrichedAt).toLocaleString()}
+                </p>
+              </div>
+              <Separator />
+            </>
+          )}
 
           {/* Financial Profile */}
           <>
