@@ -66,7 +66,9 @@ serve(async (req) => {
       .in("lead_id", leadIds)
       .eq("project_id", projectId);
 
-    console.log(`Found ${existingAnalyses?.length || 0} existing analyses, ${mqlEnrichments?.length || 0} MQL enrichments`);
+    console.log(
+      `Found ${existingAnalyses?.length || 0} existing analyses, ${mqlEnrichments?.length || 0} MQL enrichments`,
+    );
 
     // Step 2: Categorize leads (cached, re-analyze, or new)
     const leadsToAnalyze: any[] = [];
@@ -93,7 +95,9 @@ serve(async (req) => {
       const mqlIsNewer = enrichedAt && analyzedAt && enrichedAt > analyzedAt;
 
       if (newRevisitTime !== storedRevisitTime || mqlIsNewer) {
-        console.log(`Lead ${lead.id} needs re-analysis (revisit changed: ${newRevisitTime !== storedRevisitTime}, MQL newer: ${mqlIsNewer})`);
+        console.log(
+          `Lead ${lead.id} needs re-analysis (revisit changed: ${newRevisitTime !== storedRevisitTime}, MQL newer: ${mqlIsNewer})`,
+        );
         leadsToAnalyze.push({ ...lead, mqlEnrichment });
       } else {
         cachedResults.push({
@@ -170,7 +174,7 @@ Analyze each lead independently and objectively. Focus on extracting conversion 
     const mqlFieldExplainer = `# MQL ENRICHMENT FIELD DEFINITIONS (External Verified Data)
 
 ## Person Info
-- mql_rating: MQL Rating (P1/P2/P3/P4/P5) - P1 is highest quality, P5 is lowest
+- mql_rating: MQL Rating ("P0"/"P1"/"P2"/"N/A") - P0 is highest quality, P2 is lowest. N/A means that no data was available to generate a rating
 - mql_capability: Budget capability vs cheapest SKU - "high" (120%+), "medium" (within budget), "low" (<80%)
 - mql_lifestyle: Lifestyle indicator - "luxury", "aspirational", "value_for_money"
 - locality_grade: Current residence quality - "Premium", "Popular", "Affordable"
@@ -310,26 +314,69 @@ Factor in MQL age:
 ## Detection Rules (Check in Priority Order)
 Use BOTH CRM and MQL data. MQL lifestyle grade should influence persona description.
 
+## Detection Rules (Check in Priority Order)
+
 ### 1. NRI Buyer (Highest Priority)
-Detection: Correspondence Country = NOT India
+Detection: Correspondence Country = NOT India OR Country field indicates overseas location
+Characteristics:
+- Higher budget capability due to forex advantage
+- Prefers video calls, digital documentation
+- Needs extra trust signals (brand reputation, delivery track record)
+- May need assistance with India-specific regulations
 
 ### 2. Retirement Planner
-Detection: Occupation = "Retired" OR MQL age >= 55
+Detection: Occupation = "Retired" OR Designation mentions "Retired"
+Characteristics:
+- Often selling existing property (SOP funding)
+- Values greenery, open spaces, healthcare proximity
+- Prefers ground/lower floors for accessibility
+- Budget typically from accumulated savings + SOP
 
 ### 3. Business Owner
-Detection: Occupation = "Business" OR "Self-Employed"
+Detection: Occupation = "Business" OR "Self-Employed" OR Designation contains "Owner"/"Proprietor"/"Director" (non-corporate)
+Characteristics:
+- Self-funding capability (cash-rich)
+- Prefers premium/exclusive units
+- May want multiple units (investment angle)
+- Flexible on timing, decisive when interested
 
 ### 4. Investor
-Detection: Comments mention "investment"/"rental income"
+Detection: Comments mention "investment"/"rental income"/"tax saving"/"appreciation" OR Purpose = Investment
+Characteristics:
+- Prefers smaller units (1-2 BHK) for rental yield
+- Focuses on ROI, rental potential, appreciation
+- May not visit site personally
+- Price-sensitive, compares multiple options
 
 ### 5. Upgrade Seeker
-Detection: Building Name populated OR MQL home_loans > 0
+Detection: Building Name is populated (currently owns/rents) AND shows indicators of wanting larger/better home
+Characteristics:
+- Currently owns/rents smaller home
+- Family growing or lifestyle upgrade needed
+- Budget typically 1.5-2x current home value
+- Compares amenities and space improvements
 
 ### 6. First-Time Buyer
-Detection: No building name AND Source = Loan AND MQL home_loans = 0
+Detection: Building Name is empty/unclear AND Source of Funding = Loan AND no prior property ownership indicated
+Characteristics:
+- Currently renting (no owned property)
+- First property purchase - needs process guidance
+- Loan-dependent, may need pre-approval assistance
+- Longer decision cycle, involves family in decisions
 
-### 7. Fallback Custom Persona
-Generate 2-word label based on occupation + life stage
+### 7. Fallback: Custom Persona (Use if none of the above match clearly)
+If the lead doesn't clearly fit any of the above personas, generate a custom 2-word persona label based on:
+- Their primary occupation/profession (e.g., "IT Professional", "Healthcare Worker", "Teacher")
+- Life stage indicators (e.g., "Young Couple", "Growing Family", "Mid-Career Executive")
+- Core motivation (e.g., "Proximity Seeker" for someone prioritizing work location)
+
+Examples of fallback personas: "IT Professional", "Healthcare Worker", "Young Couple", "Mid-Career Executive", "Family Migrant", "Corporate Professional"
+
+## PERSONA SELECTION INSTRUCTIONS:
+1. Check detection rules in PRIORITY ORDER (NRI > Retirement > Business Owner > Investor > Upgrade Seeker > First-Time Buyer)
+2. Select the FIRST persona whose detection criteria are met
+3. If NO predefined persona matches clearly, use the Fallback to generate a custom 2-word label
+4. Generate a 2-line persona_description that aligns with the selected persona type
 
 ## PERSONA DESCRIPTION INSTRUCTIONS:
 Generate a 2-line description incorporating:
@@ -346,23 +393,23 @@ Generate a 2-line description incorporating:
       const leadDataJson = JSON.stringify(lead, null, 2);
 
       // Build MQL section conditionally
-      const mqlAvailable = mqlEnrichment && mqlEnrichment.mql_rating && mqlEnrichment.mql_rating !== 'N/A';
-      
+      const mqlAvailable = mqlEnrichment && mqlEnrichment.mql_rating && mqlEnrichment.mql_rating !== "N/A";
+
       let mqlSection = "";
       if (mqlAvailable) {
         mqlSection = `# MQL ENRICHMENT DATA (Verified External Data)
-Rating: ${mqlEnrichment.mql_rating || 'N/A'}
-Capability: ${mqlEnrichment.mql_capability || 'N/A'}
-Lifestyle: ${mqlEnrichment.mql_lifestyle || mqlEnrichment.lifestyle || 'N/A'}
-Locality Grade: ${mqlEnrichment.locality_grade || 'N/A'}
-Age: ${mqlEnrichment.age || 'N/A'}
-Gender: ${mqlEnrichment.gender || 'N/A'}
-Designation: ${mqlEnrichment.designation || 'N/A'}
-Employer: ${mqlEnrichment.employer_name || 'N/A'}
-Annual Income (Lacs): ${mqlEnrichment.final_income_lacs || 'N/A'}
-Credit Score: ${mqlEnrichment.credit_score || 'N/A'}
-Home Loans: ${mqlEnrichment.home_loans ?? 'N/A'}
-Active Loans: ${mqlEnrichment.active_loans ?? 'N/A'}
+Rating: ${mqlEnrichment.mql_rating || "N/A"}
+Capability: ${mqlEnrichment.mql_capability || "N/A"}
+Lifestyle: ${mqlEnrichment.mql_lifestyle || mqlEnrichment.lifestyle || "N/A"}
+Locality Grade: ${mqlEnrichment.locality_grade || "N/A"}
+Age: ${mqlEnrichment.age || "N/A"}
+Gender: ${mqlEnrichment.gender || "N/A"}
+Designation: ${mqlEnrichment.designation || "N/A"}
+Employer: ${mqlEnrichment.employer_name || "N/A"}
+Annual Income (Lacs): ${mqlEnrichment.final_income_lacs || "N/A"}
+Credit Score: ${mqlEnrichment.credit_score || "N/A"}
+Home Loans: ${mqlEnrichment.home_loans ?? "N/A"}
+Active Loans: ${mqlEnrichment.active_loans ?? "N/A"}
 
 IMPORTANT: Derive credit_rating from credit_score: 750+ = "High", 650-749 = "Medium", <650 = "Low"`;
       } else {
@@ -389,7 +436,13 @@ Primary: ${projectMetadata?.usps?.primary?.map((usp: string) => `\n- ${usp}`).jo
 ${projectMetadata?.inventory?.configurations?.map((config: any) => `- ${config.type}: ₹${config.price_range_cr?.[0]}-${config.price_range_cr?.[1]} Cr`).join("\n") || "N/A"}
 
 ## Common Objections & Rebuttals
-${projectMetadata?.common_objections ? Object.entries(projectMetadata.common_objections).map(([key, obj]: [string, any]) => `- ${key}: ${obj.rebuttal}`).join("\n") : "N/A"}`;
+${
+  projectMetadata?.common_objections
+    ? Object.entries(projectMetadata.common_objections)
+        .map(([key, obj]: [string, any]) => `- ${key}: ${obj.rebuttal}`)
+        .join("\n")
+    : "N/A"
+}`;
 
       const privacyRules = `# PRIVACY RULES (CRITICAL - NEVER VIOLATE):
 1. NEVER mention credit score numbers in any output field
@@ -398,6 +451,50 @@ ${projectMetadata?.common_objections ? Object.entries(projectMetadata.common_obj
 4. NEVER mention income figures
 5. Use these values ONLY for internal scoring calculations
 6. Output only derived ratings: mql_credit_rating (High/Medium/Low), mql_capability`;
+
+      const outputConstraints = `# OUTPUT CONSTRAINTS (CRITICAL - STRICTLY ENFORCE):
+- Rating rationale should only focus on the overall score and reasoning. Do not specify individual dimension scores. When using dimension names, use full names instead of acronyms
+- Summary: Maximum 30 words. Be concise and focused.
+- Next Best Action: Maximum 15 words. Keep it actionable and specific.`;
+
+      const concernGeneration = `#Key Concerns: These must be the CUSTOMER'S concerns about the project or specific unit they are considering. Focus on: price/budget gap, location/connectivity issues, possession date/timeline, unit configuration/size, amenities/facilities. DO NOT include generic sales concerns.
+- Concern Categories: For EACH key_concern, classify it into ONE of these categories (same order as key_concerns array):
+  1. "Price" - Budget gaps, pricing issues, financing concerns, EMI issues
+  2. "Location" - Connectivity, infrastructure, surroundings, pollution, traffic, facilities nearby
+  3. "Possession" - Delivery timeline, construction delays, handover dates
+  4. "Config" - Unit configuration, layout issues, view concerns, floor preference, carpet area
+  5. "Amenities" - Amenities in home or complex, facilities
+  6. "Trust" - Builder reputation, track record concerns
+  7. "Others" - Anything else
+- Primary Concern Category: The SINGLE most important concern category. If multiple concerns exist, pick the one that appears FIRST in the priority order above ( Location > Config > Price > Possession > Amenities > Trust > Others)`;
+
+      const talkingpointsGeneration = `# TALKING POINTS GENERATION (CRITICAL - FOLLOW PRIORITY RULES):
+Generate 2-3 talking points TOTAL following these strict priority rules:
+
+PRIORITY 1: Competitor Handling (Max 2 points)
+- Only include if any competitor is mentioned in CRM data (competitor name, competition project, or visit comments)
+- Maximum 2 talking points for competitor handling
+- Each point max 15 words
+- Topic type: "Competitor handling"
+
+PRIORITY 2: Objection Handling (Max 1 point)
+- Only include if customer has specific concerns or objections from notes or CRM fields
+- Maximum 1 talking point for objection handling
+- Max 15 words
+- Topic type: "Objection handling"
+
+PRIORITY 3: What to Highlight (Max 2 points)
+- Pick the project USPs/value propositions most relevant to the customer's persona and profile
+- Maximum 2 talking points for highlighting features
+- Each point max 15 words
+- Topic type: "What to highlight"
+
+DISTRIBUTION RULES:
+- Minimum 2 talking points, maximum 3 talking points total
+- If competitor mentioned: Include 1-2 competitor handling points first
+- If customer has concerns/objections: Include 1 objection handling point second
+- Fill remaining slots (up to 3 total) with "What to highlight" points
+- Each talking point must be max 15 words`;
 
       const outputStructure = `# OUTPUT STRUCTURE
 Return a JSON object with this EXACT structure:
@@ -453,6 +550,12 @@ ${personaDefinitions}
 
 ${privacyRules}
 
+${outputConstraints}
+
+${concernGeneration}
+
+${talkingpointsGeneration}
+
 # LEAD DATA TO ANALYZE
 ${leadDataJson}
 
@@ -504,7 +607,7 @@ ${outputStructure}`;
       } catch (parseError) {
         parseSuccess = false;
         console.error("Failed to parse AI response for lead:", lead.id);
-        
+
         const lower = analysisText.toLowerCase();
         let rating: "Hot" | "Warm" | "Cold" = "Warm";
         if (lower.includes("hot")) rating = "Hot";
@@ -538,21 +641,27 @@ ${outputStructure}`;
         const lead = leadsToAnalyze.find((l) => l.id === result.leadId);
         if (!lead) continue;
 
-        await supabase.from("leads").upsert({
-          lead_id: lead.id,
-          project_id: projectId,
-          crm_data: lead.rawData,
-          latest_revisit_date: result.revisitDate || null,
-        }, { onConflict: "lead_id,project_id" });
+        await supabase.from("leads").upsert(
+          {
+            lead_id: lead.id,
+            project_id: projectId,
+            crm_data: lead.rawData,
+            latest_revisit_date: result.revisitDate || null,
+          },
+          { onConflict: "lead_id,project_id" },
+        );
 
-        await supabase.from("lead_analyses").upsert({
-          lead_id: lead.id,
-          project_id: projectId,
-          rating: result.rating,
-          insights: result.insights,
-          full_analysis: result.fullAnalysis,
-          revisit_date_at_analysis: result.revisitDate || null,
-        }, { onConflict: "lead_id,project_id" });
+        await supabase.from("lead_analyses").upsert(
+          {
+            lead_id: lead.id,
+            project_id: projectId,
+            rating: result.rating,
+            insights: result.insights,
+            full_analysis: result.fullAnalysis,
+            revisit_date_at_analysis: result.revisitDate || null,
+          },
+          { onConflict: "lead_id,project_id" },
+        );
       }
     }
 
