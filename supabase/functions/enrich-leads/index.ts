@@ -107,9 +107,9 @@ async function processEnrichmentBatch(
         continue;
       }
 
-      let mqlDataArray;
+      let batchResponse;
       try {
-        mqlDataArray = JSON.parse(responseText);
+        batchResponse = JSON.parse(responseText);
       } catch (parseError) {
         console.error(`[MQL Error] Failed to parse JSON response for lead ${lead.id}:`, parseError);
         await supabase.from("lead_enrichments").upsert({
@@ -122,12 +122,18 @@ async function processEnrichmentBatch(
         continue;
       }
       
-      // Extract first lead from batch response array
-      const mqlData = Array.isArray(mqlDataArray) ? mqlDataArray[0] : mqlDataArray;
+      // MQL batch API returns: { leads: [{ person_info: {...}, demography: {...}, ... }] }
+      const leadsArray = batchResponse.leads || [];
+      const mqlData = leadsArray[0] || {};
+      const personInfo = mqlData.person_info || {};
+      const demography = mqlData.demography || {};
+      const income = mqlData.income || {};
+      const bankingSummary = mqlData.banking_summary || {};
 
-      // Check if enrichment failed or returned N/A
+      // Check if enrichment failed - status is inside each lead object
       const status = mqlData.status || "SUCCESS";
-      const rating = mqlData.mql_rating || mqlData.rating || null;
+      // Rating is in person_info.rating (e.g., "P0", "P1")
+      const rating = personInfo.rating || null;
       
       if (status === "FAILED" || rating === "N/A") {
         console.log(`[MQL] Lead ${lead.id} enrichment returned N/A or FAILED`);
@@ -143,30 +149,30 @@ async function processEnrichmentBatch(
         continue;
       }
 
-      // Extract data from response - handle various response structures
+      // Extract data from MQL response using correct nested structure
       const enrichmentData = {
         lead_id: lead.id,
         project_id: projectId,
         enriched_at: new Date().toISOString(),
-        mql_rating: mqlData.mql_rating || mqlData.rating || null,
-        mql_capability: mqlData.mql_capability || mqlData.capability || null,
-        mql_lifestyle: mqlData.mql_lifestyle || mqlData.person_info?.lifestyle || mqlData.lifestyle || null,
-        credit_score: mqlData.person_info?.credit_score || mqlData.credit_score || null,
-        age: mqlData.person_info?.age || mqlData.demography?.age || null,
-        gender: mqlData.person_info?.gender || mqlData.demography?.gender || null,
-        location: mqlData.person_info?.location || mqlData.demography?.location || null,
-        locality_grade: mqlData.person_info?.locality_grade || mqlData.locality_grade || null,
-        lifestyle: mqlData.person_info?.lifestyle || mqlData.lifestyle || null,
-        employer_name: mqlData.employment_details?.employer_name || mqlData.employer_name || null,
-        designation: mqlData.employment_details?.designation || mqlData.designation || null,
-        final_income_lacs: mqlData.income?.final_income_lacs || mqlData.final_income_lacs || null,
-        total_loans: mqlData.banking_loans?.total_loans || mqlData.total_loans || null,
-        active_loans: mqlData.banking_loans?.active_loans || mqlData.active_loans || null,
-        home_loans: mqlData.banking_loans?.home_loans || mqlData.home_loans || null,
-        auto_loans: mqlData.banking_loans?.auto_loans || mqlData.auto_loans || null,
-        highest_card_usage_percent: mqlData.banking_cards?.highest_usage_percent || mqlData.highest_card_usage_percent || null,
-        is_amex_holder: mqlData.banking_cards?.is_amex_holder || mqlData.is_amex_holder || null,
-        raw_response: mqlData,
+        mql_rating: rating,  // Already extracted from person_info.rating
+        mql_capability: personInfo.capability || null,
+        mql_lifestyle: personInfo.lifestyle || null,
+        credit_score: mqlData.credit_score || null,
+        age: personInfo.age || demography.age || null,
+        gender: personInfo.gender || demography.gender || null,
+        location: personInfo.location || demography.location || null,
+        locality_grade: personInfo.locality_grade || null,
+        lifestyle: personInfo.lifestyle || null,
+        employer_name: demography.designation?.split(', ')[1] || null,  // "salaried, COMPANY NAME"
+        designation: demography.designation?.split(', ')[0] || null,   // "salaried" or "self-employed"
+        final_income_lacs: income.final_income_lacs || null,
+        total_loans: bankingSummary.total_loans || null,
+        active_loans: bankingSummary.active_loans || null,
+        home_loans: bankingSummary.home_loans || null,
+        auto_loans: bankingSummary.auto_loans || null,
+        highest_card_usage_percent: null,  // Calculate from banking_cards if needed
+        is_amex_holder: null,
+        raw_response: batchResponse,  // Store full batch response for debugging
       };
 
       // Upsert enrichment data
