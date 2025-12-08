@@ -182,11 +182,14 @@ Analyze each lead independently and objectively. Focus on extracting conversion 
 ## Demography
 - age: Verified age (use for life stage signals)
 - gender: Verified gender
-- designation: Verified role + employer (USE THIS OVER CRM designation if available - more accurate)
 
-## Income
-- final_income_lacs: Estimated annual income in Lakhs (use for financial capability scoring)
-- pre_tax_income_lacs: Pre-tax income if available
+## Employment Details (For Salaried Users)
+- employer_name: Company/organization name (verified from MQL, more accurate than CRM)
+- designation: Role/title (verified from MQL, more accurate than CRM)
+- employment_status: "salaried", "self-employed", "contract", etc.
+
+## Income (For Scoring Only - NEVER Mention in Output)
+- final_income_lacs: Estimated annual income in Lakhs (THE ONLY income metric to use for scoring)
 
 ## Business Details (For Self-Employed/Business Owners)
 - business_type: "Proprietorship", "Partnership", "Private Limited", "LLP", etc.
@@ -210,9 +213,9 @@ Analyze each lead independently and objectively. Focus on extracting conversion 
 - emi_to_income_ratio: EMI burden as % of monthly income
 
 ## FIELD PRECEDENCE RULES (CRITICAL):
-1. Employer Name: ALWAYS use CRM value
-2. Location/Residence: ALWAYS use CRM value  
-3. Designation: Use MQL value if available (more accurate than CRM)
+1. Employer Name: Use MQL value if available (verified), fallback to CRM
+2. Designation: Use MQL value if available (more accurate than CRM), fallback to CRM
+3. Location/Residence: ALWAYS use CRM value (customer-stated)
 4. If CRM location significantly differs from MQL locality_grade, add "locality_grade" to overridden_fields array`;
 
     const leadScoringModel = `# LEAD SCORING MODEL: PPS (Predictive Probability Score) FRAMEWORK
@@ -480,6 +483,12 @@ These belong in the Summary section, not here.`;
           homeLoanRecency = yearsSinceLoan < 3 ? "Within 3 years" : yearsSinceLoan < 5 ? "3-5 years ago" : "5+ years ago";
         }
         
+        // Extract employment status from raw response if available
+        const rawLeadData = mqlEnrichment.raw_response?.leads?.[0] || {};
+        const employmentDetails = rawLeadData.employment_details || [];
+        const primaryEmployment = employmentDetails[0] || {};
+        const employmentStatus = primaryEmployment.employment_status || primaryEmployment.status || "N/A";
+        
         mqlSection = `# MQL ENRICHMENT DATA (Verified External Data)
 
 ## Basic Profile
@@ -489,14 +498,16 @@ Lifestyle: ${mqlEnrichment.mql_lifestyle || mqlEnrichment.lifestyle || "N/A"}
 Locality Grade: ${mqlEnrichment.locality_grade || "N/A"}
 Age: ${mqlEnrichment.age || "N/A"}
 Gender: ${mqlEnrichment.gender || "N/A"}
+
+## Employment Details (For Salaried Users)
+Employer Name: ${mqlEnrichment.employer_name || "N/A"}
 Designation: ${mqlEnrichment.designation || "N/A"}
-Employer: ${mqlEnrichment.employer_name || "N/A"}
+Employment Status: ${employmentStatus}
 
 ## Income (For Scoring Only - NEVER Mention in Output)
 Annual Income (Lacs): ${mqlEnrichment.final_income_lacs || "N/A"}
-Pre-Tax Income (Lacs): ${mqlEnrichment.pre_tax_income_lacs || "N/A"}
 
-## Business Details (For Scoring Only - NEVER Mention Specific Values)
+## Business Details (For Self-Employed - For Scoring Only - NEVER Mention Specific Values)
 Business Type: ${mqlEnrichment.business_type || "N/A"}
 Industry: ${mqlEnrichment.industry || "N/A"}
 Turnover Slab: ${mqlEnrichment.turnover_slab || "N/A"}

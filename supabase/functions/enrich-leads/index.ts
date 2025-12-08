@@ -253,6 +253,27 @@ async function processEnrichmentBatch(
         mqlData.credit_score || null
       );
 
+      // Extract employment details properly from employment_details array
+      const employmentDetails = mqlData.employment_details || [];
+      const primaryEmployment = employmentDetails[0] || {};
+      
+      // For salaried users, extract from employment_details array
+      // Fallback to demography parsing only if employment_details is empty
+      const employerName = primaryEmployment.employer_name || 
+                           primaryEmployment.company_name || 
+                           (demography.designation?.includes(', ') ? demography.designation.split(', ')[1] : null);
+                           
+      const designationValue = primaryEmployment.designation || 
+                               primaryEmployment.role || 
+                               (demography.designation?.includes(', ') ? demography.designation.split(', ')[0] : demography.designation) || 
+                               null;
+      
+      // Extract employment status (salaried/self-employed/etc)
+      const employmentStatus = primaryEmployment.employment_status || 
+                               primaryEmployment.status || 
+                               (demography.designation?.toLowerCase().includes('self-employed') ? 'self-employed' : 
+                                demography.designation?.toLowerCase().includes('salaried') ? 'salaried' : null);
+
       // Extract data from MQL response using correct nested structure
       const enrichmentData = {
         lead_id: lead.id,
@@ -267,8 +288,8 @@ async function processEnrichmentBatch(
         location: personInfo.location || demography.location || null,
         locality_grade: personInfo.locality_grade || null,
         lifestyle: personInfo.lifestyle || null,
-        employer_name: demography.designation?.split(', ')[1] || null,
-        designation: demography.designation?.split(', ')[0] || null,
+        employer_name: employerName,
+        designation: designationValue,
         final_income_lacs: income.final_income_lacs || null,
         pre_tax_income_lacs: income.pre_tax_income_lacs || income.pre_tax_income || null,
         total_loans: bankingSummary.total_loans || null,
