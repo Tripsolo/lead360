@@ -7,7 +7,10 @@ import {
 import { Lead } from '@/types/lead';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Mail, Phone, Briefcase, MapPin, Home, DollarSign, Target, AlertCircle, MessageSquare, Users, Lightbulb, User, Calendar } from 'lucide-react';
+import { Mail, Phone, Briefcase, MapPin, Home, DollarSign, Target, AlertCircle, MessageSquare, Users, Lightbulb, User, Building2 } from 'lucide-react';
+
+// Helper to convert snake_case to readable text
+const formatSnakeCase = (text: string) => text.replace(/_/g, ' ');
 
 interface LeadReportModalProps {
   lead: Lead | null;
@@ -95,50 +98,34 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Ratings Section - Compact Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 items-start">
-            {/* AI Rating */}
-            <div className="p-2.5 bg-muted/30 rounded-lg">
-              <p className="text-sm text-muted-foreground mb-1.5">AI Rating</p>
-              <Badge className={`${getRatingColor(lead.rating)} min-w-[60px] justify-center`}>
-                {lead.rating || '-'}
-              </Badge>
-              {analysis?.rating_confidence && (
-                <p className="text-xs text-muted-foreground mt-1.5">
-                  {analysis.rating_confidence} confidence
-                </p>
-              )}
+          {/* Ratings Section - Restructured Layout */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 items-start">
+            {/* Left column: AI Rating + MQL Rating stacked */}
+            <div className="space-y-3">
+              <div className="p-2.5 bg-muted/30 rounded-lg">
+                <p className="text-sm text-muted-foreground mb-1.5">AI Rating</p>
+                <Badge className={`${getRatingColor(lead.rating)} min-w-[60px] justify-center`}>
+                  {lead.rating || '-'}
+                </Badge>
+              </div>
+              <div className="p-2.5 bg-muted/30 rounded-lg">
+                <p className="text-sm text-muted-foreground mb-1.5">MQL Rating</p>
+                <Badge className={`${getMqlRatingColor(mql?.mqlRating)} min-w-[60px] justify-center`}>
+                  {mql?.mqlRating || 'N/A'}
+                </Badge>
+              </div>
             </div>
             
-            {/* Manager Rating */}
-            <div className="p-2.5 bg-muted/30 rounded-lg">
+            {/* Middle column: Manager Rating */}
+            <div className="p-2.5 bg-muted/30 rounded-lg h-fit">
               <p className="text-sm text-muted-foreground mb-1.5">Manager Rating</p>
               <Badge className={`${getRatingColor(lead.managerRating)} min-w-[60px] justify-center`}>
                 {lead.managerRating || '-'}
               </Badge>
             </div>
 
-            {/* MQL Rating */}
+            {/* Right column: Rating Rationale */}
             <div className="p-2.5 bg-muted/30 rounded-lg">
-              <p className="text-sm text-muted-foreground mb-1.5">MQL Rating</p>
-              <Badge className={`${getMqlRatingColor(mql?.mqlRating)} min-w-[60px] justify-center`}>
-                {mql?.mqlRating || 'N/A'}
-              </Badge>
-              {mql?.mqlCapability && mql.mqlRating !== 'N/A' && (
-                <p className="text-xs text-muted-foreground mt-1.5 capitalize">
-                  {mql.mqlCapability} capability
-                </p>
-              )}
-            </div>
-
-            {/* PPS Score */}
-            <div className="p-2.5 bg-muted/30 rounded-lg">
-              <p className="text-sm text-muted-foreground mb-1.5">PPS Score</p>
-              <p className="font-bold text-lg">{analysis?.pps_score || '-'}</p>
-            </div>
-
-            {/* Rating Rationale - Takes remaining space */}
-            <div className="p-2.5 bg-muted/30 rounded-lg md:col-span-1">
               <p className="text-sm text-muted-foreground mb-1.5">Rating Rationale</p>
               <p className="text-sm">{analysis?.rating_rationale || 'N/A'}</p>
             </div>
@@ -176,18 +163,11 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
                 </div>
               )}
 
-              {/* Designation - prefer MQL */}
+              {/* Designation - prefer MQL, show CRM only if different */}
               {displayDesignation && (
                 <div className="flex items-center gap-2 text-sm">
                   <Briefcase className="h-4 w-4 text-muted-foreground" />
                   <span>{displayDesignation}</span>
-                </div>
-              )}
-
-              {lead.occupation && (
-                <div className="flex items-center gap-2 text-sm">
-                  <Briefcase className="h-4 w-4 text-muted-foreground" />
-                  <span>{lead.occupation}</span>
                 </div>
               )}
 
@@ -200,8 +180,8 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
 
               {lead.workLocation && (
                 <div className="flex items-center gap-2 text-sm">
-                  <MapPin className="h-4 w-4 text-muted-foreground" />
-                  <span>Work: {lead.workLocation}</span>
+                  <Building2 className="h-4 w-4 text-muted-foreground" />
+                  <span>{lead.workLocation}</span>
                 </div>
               )}
 
@@ -212,18 +192,23 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
                 </div>
               )}
 
+              {/* Current Residence with Locality Badge inline */}
               {lead.currentResidence && (
-                <div className="flex items-center gap-2 text-sm">
+                <div className="flex items-center gap-2 text-sm flex-wrap">
                   <Home className="h-4 w-4 text-muted-foreground" />
                   <span>{lead.currentResidence}</span>
+                  {mqlDataAvailable && mql?.localityGrade && (
+                    <Badge variant="outline" className={`${getLocalityGradeColor(mql.localityGrade)} text-xs`}>
+                      {mql.localityGrade}
+                    </Badge>
+                  )}
                 </div>
               )}
 
-              {/* MQL Locality Grade */}
-              {mqlDataAvailable && mql?.localityGrade && (
+              {/* Show locality separately only if no current residence */}
+              {!lead.currentResidence && mqlDataAvailable && mql?.localityGrade && (
                 <div className="flex items-center gap-2 text-sm">
                   <MapPin className="h-4 w-4 text-muted-foreground" />
-                  <span>Locality: </span>
                   <Badge variant="outline" className={getLocalityGradeColor(mql.localityGrade)}>
                     {mql.localityGrade}
                   </Badge>
@@ -270,14 +255,7 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
                   <p className="text-sm text-muted-foreground mb-2">N/A</p>
                 )}
                 {analysis?.persona_description && (
-                  <p className="text-sm text-muted-foreground">{analysis.persona_description}</p>
-                )}
-                {/* MQL Lifestyle indicator */}
-                {mqlDataAvailable && mql?.mqlLifestyle && (
-                  <div className="mt-2 pt-2 border-t border-border">
-                    <span className="text-xs text-muted-foreground">Lifestyle: </span>
-                    <span className="text-xs font-medium capitalize">{mql.mqlLifestyle}</span>
-                  </div>
+                  <p className="text-sm text-muted-foreground">{formatSnakeCase(analysis.persona_description)}</p>
                 )}
               </div>
             </div>
