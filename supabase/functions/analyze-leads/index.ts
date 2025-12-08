@@ -692,21 +692,11 @@ ${outputStructure}`;
 
     const freshResults = await Promise.all(analysisPromises);
 
-    // Store results
+    // Store analysis results (leads are already stored during file upload)
     for (const result of freshResults) {
       if (result.parseSuccess) {
         const lead = leadsToAnalyze.find((l) => l.id === result.leadId);
         if (!lead) continue;
-
-        await supabase.from("leads").upsert(
-          {
-            lead_id: lead.id,
-            project_id: projectId,
-            crm_data: lead.rawData,
-            latest_revisit_date: result.revisitDate || null,
-          },
-          { onConflict: "lead_id,project_id" },
-        );
 
         await supabase.from("lead_analyses").upsert(
           {
