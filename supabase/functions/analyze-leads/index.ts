@@ -232,13 +232,13 @@ You MUST calculate a numerical PPS Score (0-100) based on 5 weighted dimensions.
 ### A1. Occupational Wealth Mapping (10 pts):
 Use MQL designation if available, otherwise CRM designation.
 Use MQL final_income_lacs if available for income-based adjustments.
-- Elite Corporate (VP, Director, CHRO, CXO at major firms) OR income > 50L: 10 pts
-- High-Skill Professional (Specialist Doctors, CA Partners, Pilots, Merchant Navy Officers) OR income 30-50L: 9 pts
+- Elite Corporate (VP, Director, CHRO, CXO at major firms) OR income > 70L: 10 pts
+- High-Skill Professional (Specialist Doctors, CA Partners, Pilots, Merchant Navy Officers) OR income 50-70L: 8 pts
 - Business Owner - Score by TURNOVER TIER (see Business Owner Scoring below): 4-12 pts
-- Mid-Senior Corporate (Sr. Manager, Project Manager at IT/Banking/MNCs) OR income 15-30L: 7 pts
+- Mid-Senior Corporate (Sr. Manager, Project Manager at IT/Banking/MNCs) OR income 25-50L: 6 pts
 - Retired/Homemaker (with visible asset base): 5 pts
-- Entry/Mid-Level Salaried (Sales Manager, Executive, Jr. Engineer) OR income < 15L: 4 pts
-- Unknown/Unclear occupation: 2 pts
+- Entry/Mid-Level Salaried (Sales Manager, Executive, Jr. Engineer) OR income < 25L: 4 pts
+- Unknown/Unclear occupation: 3 pts
 
 ### BUSINESS OWNER SCORING (Enhanced - Turnover-Based):
 If MQL business_type or turnover_slab is available:
@@ -263,14 +263,16 @@ Calculate gap = (Unit Price - Stated Budget) / Unit Price * 100
 WITHOUT MQL DATA (Standard Gap Calculation):
 - Negative gap (Budget > Price): 10 pts
 - Gap 0-10%: 8 pts
-- Gap 10-20%: 5 pts
-- Gap 20-30%: 3 pts
-- Gap > 30% or Budget not stated: 1 pt
+- Gap 10-20%: 6 pts
+- Gap 20-30%: 2 pts
+- Gap > 30% or Budget not stated: 0 pt
 
 WITH MQL DATA (Enhanced Scoring):
-- MQL capability "high" + Budget matches: 10 pts
-- MQL capability "medium" + Budget matches: 8 pts
-- MQL capability "low": Cap at 5 pts regardless of stated budget
+- MQL capability "high" + Budget vs price gap is within 10% or less: 10 pts
+- MQL capability "high" + Budget vs price gap is within 10-30%: 8 pts
+- MQL capability "medium" + Budget vs price gap is within 10% or less: 7 pts
+- MQL capability "medium" + Budget vs price gap iswithin 10-30%: 5 pts
+- MQL capability "low": Cap at 2 pts regardless of stated budget
 
 ### A3. Source of Funds Liquidity (10 pts):
 Factor in MQL credit_rating, credit_behavior_signal, and emi_to_income_ratio:
@@ -284,23 +286,19 @@ Factor in MQL credit_rating, credit_behavior_signal, and emi_to_income_ratio:
 - Sale of Property: 3-5 pts based on process status
 - Unclear: 2 pts
 
-## DIMENSION B: INTENT & ENGAGEMENT (IE) - 25 Points Max
+## DIMENSION B: INTENT & ENGAGEMENT (IE) - 15 Points Max
 
 ### B1. Visit Behavior (10 pts):
 - 3+ Revisits OR brought full family: 10 pts
 - 2nd Revisit: 8 pts
 - First Visit but duplicate lead (returned): 7 pts
-- First Visit only: 5 pts
+- First Visit + Positive feedback/visited sample flat: 6 pts
+- First Visit + Neutral/negative feedback: 3 pts
 
-### B2. Product Engagement (10 pts):
-- Sample flat/Roots visited + Positive feedback: 10 pts
-- Sample flat toured + Neutral feedback: 7 pts
-- Discussion/Presentation only (skipped tour): 4 pts
-- Quick walkthrough / Left early: 2 pts
-
-### B3. Competitor Awareness Signal (5 pts):
+### B2. Awareness Signal (5 pts):
 If MQL home_loan_count > 0: +2 bonus (indicates active property buyer/investor)
 - Visited premium competitors: 5 pts
+- If existing Kalpatru resident: 5 pts
 - Visited similar segment: 4 pts
 - No competitors mentioned: 2 pts
 
@@ -323,19 +321,20 @@ Factor in MQL age and loan history for life-stage signals:
 - Investment purpose: 5 pts
 - Just exploring: 2 pts
 
-## DIMENSION D: PRODUCT-MARKET FIT (PMF) - 15 Points Max
+## DIMENSION D: PRODUCT-MARKET FIT (PMF) - 25 Points Max
 
 ### D1. Configuration Match (10 pts):
 Factor in MQL lifestyle for expectation alignment:
-- Exact match + MQL lifestyle "luxury" matches premium project: 10 pts
+- Exact match + MQL lifestyle "luxury" OR "aspirational" matches premium project: 10 pts
 - Minor compromise: 7 pts
 - Major compromise: 4 pts
 
-### D2. Location Fit (5 pts):
-Compare MQL locality_grade with project positioning:
-- locality_grade matches project tier (Premium→Premium): 5 pts
-- One tier aspirational (Popular→Premium): 4 pts
-- Large mismatch (Affordable→Luxury): 2 pts
+### D2. Location Fit (15 pts):
+- If already stays in Thane or has lived in Thane: 15 pts
+- If positive feedback about location or clear reason mentioned in CRM notes why they want to move here - 12 pts
+- If work location is in Thane or close to project location: 10 pts
+- If looking to move here for retirement: 8 pts
+- If they live in a location which is more than 20km away from Thane: 5 pts
 - Use CRM location for work proximity (unchanged)
 
 ## DIMENSION E: AUTHORITY & DECISION DYNAMICS (ADD) - 10 Points Max
@@ -447,20 +446,20 @@ These belong in the Summary section, not here.`;
     let competitorPricingMatrix = `# COMPETITOR PRICING REFERENCE (For Talking Points)\n\n`;
     competitorPricingMatrix += `| Competitor | Config | Carpet Sqft | Price Range | Possession | Notes |\n`;
     competitorPricingMatrix += `|------------|--------|-------------|-------------|------------|-------|\n`;
-    
+
     for (const [compName, compData] of Object.entries(competitors)) {
       const comp = compData as any;
       const inventory = comp.inventory_sold || comp.inventory || [];
       for (const inv of inventory) {
-        competitorPricingMatrix += `| ${compName} | ${inv.config || 'N/A'} | ${inv.carpet_sqft || 'N/A'} | ₹${inv.price_range || 'N/A'} | ${inv.possession || comp.possession || 'N/A'} | ${inv.notes || ''} |\n`;
+        competitorPricingMatrix += `| ${compName} | ${inv.config || "N/A"} | ${inv.carpet_sqft || "N/A"} | ₹${inv.price_range || "N/A"} | ${inv.possession || comp.possession || "N/A"} | ${inv.notes || ""} |\n`;
       }
     }
-    
+
     // Add Eternia inventory for comparison
     const eterniaInventory = projectMetadata?.inventory?.configurations || [];
     competitorPricingMatrix += `\n## ETERNIA INVENTORY (For Comparison):\n`;
     for (const config of eterniaInventory) {
-      competitorPricingMatrix += `- ${config.type}: ${config.carpet_sqft_range?.[0]}-${config.carpet_sqft_range?.[1]} sqft, ₹${config.price_range_cr?.[0]}-${config.price_range_cr?.[1]} Cr, Target: ${config.target_persona || 'N/A'}\n`;
+      competitorPricingMatrix += `- ${config.type}: ${config.carpet_sqft_range?.[0]}-${config.carpet_sqft_range?.[1]} sqft, ₹${config.price_range_cr?.[0]}-${config.price_range_cr?.[1]} Cr, Target: ${config.target_persona || "N/A"}\n`;
     }
 
     // Process leads that need analysis
@@ -480,15 +479,16 @@ These belong in the Summary section, not here.`;
         if (mqlEnrichment.latest_home_loan_date) {
           const loanDate = new Date(mqlEnrichment.latest_home_loan_date);
           const yearsSinceLoan = (Date.now() - loanDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
-          homeLoanRecency = yearsSinceLoan < 3 ? "Within 3 years" : yearsSinceLoan < 5 ? "3-5 years ago" : "5+ years ago";
+          homeLoanRecency =
+            yearsSinceLoan < 3 ? "Within 3 years" : yearsSinceLoan < 5 ? "3-5 years ago" : "5+ years ago";
         }
-        
+
         // Extract employment status from raw response if available
         const rawLeadData = mqlEnrichment.raw_response?.leads?.[0] || {};
         const employmentDetails = rawLeadData.employment_details || [];
         const primaryEmployment = employmentDetails[0] || {};
         const employmentStatus = primaryEmployment.employment_status || primaryEmployment.status || "N/A";
-        
+
         mqlSection = `# MQL ENRICHMENT DATA (Verified External Data)
 
 ## Basic Profile
@@ -791,12 +791,12 @@ ${outputStructure}`;
           }
 
           const errorText = await response.text();
-          
+
           // Check if it's a retryable error (503 overloaded)
           if (response.status === 503 && attempt < maxRetries) {
             const backoffMs = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
             console.warn(`Google AI API overloaded (attempt ${attempt}/${maxRetries}), retrying in ${backoffMs}ms...`);
-            await new Promise(resolve => setTimeout(resolve, backoffMs));
+            await new Promise((resolve) => setTimeout(resolve, backoffMs));
             continue;
           }
 
@@ -807,7 +807,7 @@ ${outputStructure}`;
           if (attempt < maxRetries) {
             const backoffMs = Math.pow(2, attempt) * 1000;
             console.warn(`Fetch error (attempt ${attempt}/${maxRetries}), retrying in ${backoffMs}ms...`);
-            await new Promise(resolve => setTimeout(resolve, backoffMs));
+            await new Promise((resolve) => setTimeout(resolve, backoffMs));
           }
         }
       }
