@@ -844,6 +844,40 @@ ${outputStructure}`;
         };
       }
 
+      // Apply MQL-based final score adjustment (internal calibration)
+      if (parseSuccess && analysisResult.pps_score !== undefined) {
+        const mqlRating = mqlEnrichment?.mql_rating || "N/A";
+        let adjustedPpsScore = analysisResult.pps_score;
+
+        switch (mqlRating) {
+          case "P0":
+            // No adjustment
+            break;
+          case "P1":
+            adjustedPpsScore = Math.round(adjustedPpsScore * 0.90);
+            break;
+          case "P2":
+            adjustedPpsScore = Math.round(adjustedPpsScore * 0.80);
+            break;
+          default:
+            adjustedPpsScore = Math.round(adjustedPpsScore * 0.95);
+            break;
+        }
+
+        // Re-derive rating based on adjusted score
+        let adjustedRating: "Hot" | "Warm" | "Cold";
+        if (adjustedPpsScore >= 85) {
+          adjustedRating = "Hot";
+        } else if (adjustedPpsScore >= 65) {
+          adjustedRating = "Warm";
+        } else {
+          adjustedRating = "Cold";
+        }
+
+        analysisResult.pps_score = adjustedPpsScore;
+        analysisResult.ai_rating = adjustedRating;
+      }
+
       return {
         leadId: lead.id,
         rating: analysisResult.ai_rating,
