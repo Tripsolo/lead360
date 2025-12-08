@@ -618,12 +618,22 @@ ${leadDataJson}
 ${outputStructure}`;
 
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${googleApiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent?key=${googleApiKey}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             contents: [{ parts: [{ text: fullPrompt }] }],
+            tools: [
+              {
+                google_search_retrieval: {
+                  dynamic_retrieval_config: {
+                    mode: "MODE_DYNAMIC",
+                    dynamic_threshold: 0.7,
+                  },
+                },
+              },
+            ],
             generationConfig: {
               temperature: 0.2,
               topK: 40,
