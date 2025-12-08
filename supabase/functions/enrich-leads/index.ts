@@ -96,16 +96,40 @@ async function processEnrichmentBatch(
       console.log(`[MQL Response] Body: ${responseText.substring(0, 1000)}`);
 
       if (!mqlResponse.ok) {
-        console.error(`[MQL Error] Lead ${lead.id}: HTTP ${mqlResponse.status} - ${responseText}`);
+        // Try to parse the response to check for DATA_NOT_FOUND (valid "no data" response)
+        let parsedError;
+        try {
+          parsedError = JSON.parse(responseText);
+        } catch {
+          parsedError = null;
+        }
         
-        // Store failed enrichment with N/A rating
-        await supabase.from("lead_enrichments").upsert({
-          lead_id: lead.id,
-          project_id: projectId,
-          enriched_at: new Date().toISOString(),
-          mql_rating: "N/A",
-          raw_response: { status: "FAILED", error: responseText, http_status: mqlResponse.status },
-        }, { onConflict: "lead_id,project_id" });
+        const leadData = parsedError?.leads?.[0];
+        const isNoDataFound = leadData?.error === 'DATA_NOT_FOUND';
+        
+        if (isNoDataFound) {
+          // DATA_NOT_FOUND is a valid processed state - log as info, not error
+          console.log(`[MQL] Lead ${lead.id}: No data found in MQL system (DATA_NOT_FOUND)`);
+          
+          await supabase.from("lead_enrichments").upsert({
+            lead_id: lead.id,
+            project_id: projectId,
+            enriched_at: new Date().toISOString(),
+            mql_rating: "N/A",
+            raw_response: parsedError,  // Store full response for UI to distinguish no-data vs failure
+          }, { onConflict: "lead_id,project_id" });
+        } else {
+          // Actual failure - log as error
+          console.error(`[MQL Error] Lead ${lead.id}: HTTP ${mqlResponse.status} - ${responseText}`);
+          
+          await supabase.from("lead_enrichments").upsert({
+            lead_id: lead.id,
+            project_id: projectId,
+            enriched_at: new Date().toISOString(),
+            mql_rating: "N/A",
+            raw_response: { status: "FAILED", error: responseText, http_status: mqlResponse.status },
+          }, { onConflict: "lead_id,project_id" });
+        }
         
         continue;
       }

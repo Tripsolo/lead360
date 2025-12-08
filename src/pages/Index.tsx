@@ -187,38 +187,38 @@ const Index = () => {
     }
   };
 
-  // Helper function to update leads with enrichment data
+  // Helper function to update leads with enrichment data (uses functional update to avoid stale closure)
   const updateLeadsWithEnrichments = (enrichments: any[]) => {
-    const updatedLeads = leads.map(lead => {
-      const enrichment = enrichments.find((e: any) => e.lead_id === lead.id);
-      if (enrichment) {
-        return {
-          ...lead,
-          mqlEnrichment: {
-            mqlRating: enrichment.mql_rating || undefined,
-            mqlCapability: enrichment.mql_capability || undefined,
-            mqlLifestyle: enrichment.mql_lifestyle || undefined,
-            creditScore: enrichment.credit_score || undefined,
-            age: enrichment.age || undefined,
-            gender: enrichment.gender || undefined,
-            location: enrichment.location || undefined,
-            employerName: enrichment.employer_name || undefined,
-            designation: enrichment.designation || undefined,
-            totalLoans: enrichment.total_loans || undefined,
-            activeLoans: enrichment.active_loans || undefined,
-            homeLoans: enrichment.home_loans || undefined,
-            autoLoans: enrichment.auto_loans || undefined,
-            highestCardUsagePercent: enrichment.highest_card_usage_percent || undefined,
-            isAmexHolder: enrichment.is_amex_holder || undefined,
-            enrichedAt: enrichment.enriched_at || undefined,
-            rawResponse: enrichment.raw_response as Record<string, any> || undefined,
-          } as MqlEnrichment,
-        };
-      }
-      return lead;
-    });
-    setLeads(updatedLeads);
-    return updatedLeads;
+    setLeads(currentLeads => 
+      currentLeads.map(lead => {
+        const enrichment = enrichments.find((e: any) => e.lead_id === lead.id);
+        if (enrichment) {
+          return {
+            ...lead,
+            mqlEnrichment: {
+              mqlRating: enrichment.mql_rating || undefined,
+              mqlCapability: enrichment.mql_capability || undefined,
+              mqlLifestyle: enrichment.mql_lifestyle || undefined,
+              creditScore: enrichment.credit_score || undefined,
+              age: enrichment.age || undefined,
+              gender: enrichment.gender || undefined,
+              location: enrichment.location || undefined,
+              employerName: enrichment.employer_name || undefined,
+              designation: enrichment.designation || undefined,
+              totalLoans: enrichment.total_loans || undefined,
+              activeLoans: enrichment.active_loans || undefined,
+              homeLoans: enrichment.home_loans || undefined,
+              autoLoans: enrichment.auto_loans || undefined,
+              highestCardUsagePercent: enrichment.highest_card_usage_percent || undefined,
+              isAmexHolder: enrichment.is_amex_holder || undefined,
+              enrichedAt: enrichment.enriched_at || undefined,
+              rawResponse: enrichment.raw_response as Record<string, any> || undefined,
+            } as MqlEnrichment,
+          };
+        }
+        return lead;
+      })
+    );
   };
 
   // Poll for enrichment results
@@ -240,12 +240,23 @@ const Index = () => {
         // All leads have been enriched
         updateLeadsWithEnrichments(enrichments);
         
-        const successCount = enrichments.filter(e => e.mql_rating !== 'N/A').length;
-        const failedCount = enrichments.filter(e => e.mql_rating === 'N/A').length;
+        const successCount = enrichments.filter(e => e.mql_rating && e.mql_rating !== 'N/A').length;
+        const noDataCount = enrichments.filter(e => {
+          const rawResponse = e.raw_response as Record<string, any> | null;
+          return e.mql_rating === 'N/A' && rawResponse?.leads?.[0]?.error === 'DATA_NOT_FOUND';
+        }).length;
+        const failedCount = enrichments.filter(e => {
+          const rawResponse = e.raw_response as Record<string, any> | null;
+          return e.mql_rating === 'N/A' && rawResponse?.leads?.[0]?.error !== 'DATA_NOT_FOUND';
+        }).length;
+        
+        let description = `100% complete - ${successCount} enriched`;
+        if (noDataCount > 0) description += `, ${noDataCount} no data found`;
+        if (failedCount > 0) description += `, ${failedCount} failed`;
         
         toast({
           title: 'Enrichment complete',
-          description: `100% complete - ${successCount} leads enriched successfully, ${failedCount} failed.`,
+          description,
         });
         return true;
       }
