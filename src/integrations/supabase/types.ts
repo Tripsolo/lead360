@@ -102,20 +102,34 @@ export type Database = {
       }
       lead_enrichments: {
         Row: {
+          active_emi_burden: number | null
           active_loans: number | null
           age: number | null
+          auto_loan_count: number | null
           auto_loans: number | null
+          business_type: string | null
+          consumer_loan_count: number | null
           created_at: string
+          credit_behavior_signal: string | null
+          credit_card_count: number | null
           credit_score: number | null
           designation: string | null
+          emi_to_income_ratio: number | null
           employer_name: string | null
           enriched_at: string
           final_income_lacs: number | null
           gender: string | null
+          guarantor_loan_count: number | null
+          has_premium_cards: boolean | null
           highest_card_usage_percent: number | null
+          home_loan_active: number | null
+          home_loan_count: number | null
+          home_loan_paid_off: number | null
           home_loans: number | null
           id: string
+          industry: string | null
           is_amex_holder: boolean | null
+          latest_home_loan_date: string | null
           lead_id: string
           lifestyle: string | null
           locality_grade: string | null
@@ -123,26 +137,42 @@ export type Database = {
           mql_capability: string | null
           mql_lifestyle: string | null
           mql_rating: string | null
+          pre_tax_income_lacs: number | null
           project_id: string | null
           raw_response: Json | null
           total_loans: number | null
+          turnover_slab: string | null
           updated_at: string
         }
         Insert: {
+          active_emi_burden?: number | null
           active_loans?: number | null
           age?: number | null
+          auto_loan_count?: number | null
           auto_loans?: number | null
+          business_type?: string | null
+          consumer_loan_count?: number | null
           created_at?: string
+          credit_behavior_signal?: string | null
+          credit_card_count?: number | null
           credit_score?: number | null
           designation?: string | null
+          emi_to_income_ratio?: number | null
           employer_name?: string | null
           enriched_at?: string
           final_income_lacs?: number | null
           gender?: string | null
+          guarantor_loan_count?: number | null
+          has_premium_cards?: boolean | null
           highest_card_usage_percent?: number | null
+          home_loan_active?: number | null
+          home_loan_count?: number | null
+          home_loan_paid_off?: number | null
           home_loans?: number | null
           id?: string
+          industry?: string | null
           is_amex_holder?: boolean | null
+          latest_home_loan_date?: string | null
           lead_id: string
           lifestyle?: string | null
           locality_grade?: string | null
@@ -150,26 +180,42 @@ export type Database = {
           mql_capability?: string | null
           mql_lifestyle?: string | null
           mql_rating?: string | null
+          pre_tax_income_lacs?: number | null
           project_id?: string | null
           raw_response?: Json | null
           total_loans?: number | null
+          turnover_slab?: string | null
           updated_at?: string
         }
         Update: {
+          active_emi_burden?: number | null
           active_loans?: number | null
           age?: number | null
+          auto_loan_count?: number | null
           auto_loans?: number | null
+          business_type?: string | null
+          consumer_loan_count?: number | null
           created_at?: string
+          credit_behavior_signal?: string | null
+          credit_card_count?: number | null
           credit_score?: number | null
           designation?: string | null
+          emi_to_income_ratio?: number | null
           employer_name?: string | null
           enriched_at?: string
           final_income_lacs?: number | null
           gender?: string | null
+          guarantor_loan_count?: number | null
+          has_premium_cards?: boolean | null
           highest_card_usage_percent?: number | null
+          home_loan_active?: number | null
+          home_loan_count?: number | null
+          home_loan_paid_off?: number | null
           home_loans?: number | null
           id?: string
+          industry?: string | null
           is_amex_holder?: boolean | null
+          latest_home_loan_date?: string | null
           lead_id?: string
           lifestyle?: string | null
           locality_grade?: string | null
@@ -177,9 +223,11 @@ export type Database = {
           mql_capability?: string | null
           mql_lifestyle?: string | null
           mql_rating?: string | null
+          pre_tax_income_lacs?: number | null
           project_id?: string | null
           raw_response?: Json | null
           total_loans?: number | null
+          turnover_slab?: string | null
           updated_at?: string
         }
         Relationships: []

@@ -12,38 +12,63 @@ interface LeadToEnrich {
   phone?: string;
 }
 
-interface MqlApiResponse {
-  id: string;
-  status: string;
-  mql_rating: string;
-  mql_capability: string;
-  mql_lifestyle: string;
-  person_info: {
-    credit_score: number;
-    age: number;
-    gender: string;
-    location: string;
-    locality_grade: string;
-    lifestyle: string;
+interface LoanDetail {
+  loan_type?: string;
+  sanction_date?: string;
+  sanction_amount?: number;
+  emi_amount?: number;
+  current_balance?: number;
+  is_guarantor?: boolean;
+  status?: string;
+}
+
+interface BusinessDetail {
+  gst_number?: string;
+  business_name?: string;
+  business_type?: string;
+  industry?: string;
+  turnover_slab?: string;
+  hsn_codes?: string[];
+}
+
+// Parse turnover slab to get numeric range for comparison
+function parseTurnoverToIncome(turnoverSlab: string): { minIncome: number; maxIncome: number } | null {
+  const slabMap: Record<string, { minIncome: number; maxIncome: number }> = {
+    "0-40L": { minIncome: 0, maxIncome: 8 },          // ~20% margin assumption
+    "40L-1.5Cr": { minIncome: 8, maxIncome: 30 },     // ~20% margin assumption
+    "1.5Cr-5Cr": { minIncome: 30, maxIncome: 75 },    // ~15% margin assumption
+    "5Cr-25Cr": { minIncome: 50, maxIncome: 200 },    // ~8-10% margin assumption
+    "25Cr+": { minIncome: 100, maxIncome: 500 },      // ~4-5% margin assumption
   };
-  employment_details: {
-    employer_name: string;
-    designation: string;
-  };
-  income: {
-    final_income_lacs: number;
-  };
-  banking_loans: {
-    total_loans: number;
-    active_loans: number;
-    home_loans: number;
-    auto_loans: number;
-    sanction_date?: string;
-  };
-  banking_cards: {
-    highest_usage_percent: number;
-    is_amex_holder: boolean;
-  };
+  return slabMap[turnoverSlab] || null;
+}
+
+// Derive credit behavior signal from loan patterns
+function deriveCreditBehaviorSignal(
+  loans: LoanDetail[],
+  activeLoans: number,
+  creditScore: number | null
+): string {
+  const closedLoans = loans.filter(l => l.status === "closed" || l.status === "paid_off").length;
+  const hasDefaults = loans.some(l => l.status === "default" || l.status === "npa");
+  
+  if (hasDefaults) {
+    return "credit_risk";
+  }
+  
+  if (activeLoans === 0 && closedLoans > 0 && creditScore && creditScore >= 750) {
+    return "clean_credit";
+  }
+  
+  if (activeLoans >= 3) {
+    return "active_borrower";
+  }
+  
+  if (activeLoans <= 1 && closedLoans === 0 && (!creditScore || creditScore < 700)) {
+    return "conservative_borrower";
+  }
+  
+  return "moderate_borrower";
 }
 
 // Background processing function for enrichment
@@ -64,7 +89,7 @@ async function processEnrichmentBatch(
   for (let i = 0; i < leadsToEnrich.length; i++) {
     const lead = leadsToEnrich[i];
     try {
-      // Add delay between requests to avoid rate limiting (reduced from 500ms to 100ms)
+      // Add delay between requests to avoid rate limiting
       if (i > 0) {
         await new Promise(resolve => setTimeout(resolve, 100));
       }
@@ -72,7 +97,7 @@ async function processEnrichmentBatch(
       const payload = [{
         name: lead.name || "",
         phone: lead.phone || "",
-        project_id: projectName,  // Use project name, not internal ID
+        project_id: projectName,
       }];
 
       console.log(`[MQL Request] Lead ID: ${lead.id}`);
@@ -93,10 +118,9 @@ async function processEnrichmentBatch(
       console.log(`[MQL Response] Headers: ${JSON.stringify(Object.fromEntries(mqlResponse.headers.entries()))}`);
 
       const responseText = await mqlResponse.text();
-      console.log(`[MQL Response] Body: ${responseText.substring(0, 1000)}`);
+      console.log(`[MQL Response] Body: ${responseText.substring(0, 2000)}`);
 
       if (!mqlResponse.ok) {
-        // Try to parse the response to check for DATA_NOT_FOUND (valid "no data" response)
         let parsedError;
         try {
           parsedError = JSON.parse(responseText);
@@ -108,7 +132,6 @@ async function processEnrichmentBatch(
         const isNoDataFound = leadData?.error === 'DATA_NOT_FOUND';
         
         if (isNoDataFound) {
-          // DATA_NOT_FOUND is a valid processed state - log as info, not error
           console.log(`[MQL] Lead ${lead.id}: No data found in MQL system (DATA_NOT_FOUND)`);
           
           await supabase.from("lead_enrichments").upsert({
@@ -116,10 +139,9 @@ async function processEnrichmentBatch(
             project_id: projectId,
             enriched_at: new Date().toISOString(),
             mql_rating: "N/A",
-            raw_response: parsedError,  // Store full response for UI to distinguish no-data vs failure
+            raw_response: parsedError,
           }, { onConflict: "lead_id,project_id" });
         } else {
-          // Actual failure - log as error
           console.error(`[MQL Error] Lead ${lead.id}: HTTP ${mqlResponse.status} - ${responseText}`);
           
           await supabase.from("lead_enrichments").upsert({
@@ -156,10 +178,12 @@ async function processEnrichmentBatch(
       const demography = mqlData.demography || {};
       const income = mqlData.income || {};
       const bankingSummary = mqlData.banking_summary || {};
+      const bankingLoans = mqlData.banking_loans || [];
+      const bankingCards = mqlData.banking_cards || [];
+      const businessDetails = mqlData.business_details || {};
 
-      // Check if enrichment failed - status is inside each lead object
+      // Check if enrichment failed
       const status = mqlData.status || "SUCCESS";
-      // Rating is in person_info.rating (e.g., "P0", "P1")
       const rating = personInfo.rating || null;
       
       if (status === "FAILED" || rating === "N/A") {
@@ -176,12 +200,65 @@ async function processEnrichmentBatch(
         continue;
       }
 
+      // Parse loan details for enhanced analysis
+      const loans: LoanDetail[] = Array.isArray(bankingLoans) ? bankingLoans : [];
+      
+      // Categorize loans
+      const homeLoans = loans.filter(l => l.loan_type?.toLowerCase().includes("home") || l.loan_type?.toLowerCase().includes("housing"));
+      const autoLoans = loans.filter(l => l.loan_type?.toLowerCase().includes("auto") || l.loan_type?.toLowerCase().includes("vehicle") || l.loan_type?.toLowerCase().includes("car"));
+      const consumerLoans = loans.filter(l => l.loan_type?.toLowerCase().includes("personal") || l.loan_type?.toLowerCase().includes("consumer"));
+      const guarantorLoans = loans.filter(l => l.is_guarantor === true);
+      
+      const activeHomeLoans = homeLoans.filter(l => l.status === "active" || !l.status).length;
+      const paidOffHomeLoans = homeLoans.filter(l => l.status === "closed" || l.status === "paid_off").length;
+      
+      // Find latest home loan sanction date
+      let latestHomeLoanDate: Date | null = null;
+      for (const loan of homeLoans) {
+        if (loan.sanction_date) {
+          const loanDate = new Date(loan.sanction_date);
+          if (!latestHomeLoanDate || loanDate > latestHomeLoanDate) {
+            latestHomeLoanDate = loanDate;
+          }
+        }
+      }
+      
+      // Calculate total active EMI burden
+      const activeLoans = loans.filter(l => l.status === "active" || !l.status);
+      const totalActiveEmi = activeLoans.reduce((sum, l) => sum + (l.emi_amount || 0), 0);
+      
+      // Calculate EMI to income ratio
+      const monthlyIncome = (income.final_income_lacs || 0) * 100000 / 12;
+      const emiToIncomeRatio = monthlyIncome > 0 ? (totalActiveEmi / monthlyIncome) * 100 : null;
+      
+      // Parse credit cards
+      const cards = Array.isArray(bankingCards) ? bankingCards : [];
+      const hasPremiumCards = cards.some((c: any) => 
+        c.card_type?.toLowerCase().includes("amex") || 
+        c.card_type?.toLowerCase().includes("platinum") ||
+        c.card_type?.toLowerCase().includes("signature") ||
+        c.card_type?.toLowerCase().includes("infinite")
+      );
+      const highestCardUsage = cards.reduce((max: number, c: any) => Math.max(max, c.usage_percent || 0), 0);
+      
+      // Parse business details
+      const businessType = businessDetails.business_type || businessDetails.entity_type || null;
+      const industry = businessDetails.industry || businessDetails.sector || null;
+      const turnoverSlab = businessDetails.turnover_slab || businessDetails.turnover || null;
+      
+      // Derive credit behavior signal
+      const creditBehaviorSignal = deriveCreditBehaviorSignal(
+        loans,
+        bankingSummary.active_loans || 0,
+        mqlData.credit_score || null
+      );
+
       // Extract data from MQL response using correct nested structure
       const enrichmentData = {
         lead_id: lead.id,
         project_id: projectId,
         enriched_at: new Date().toISOString(),
-        mql_rating: rating,  // Already extracted from person_info.rating
+        mql_rating: rating,
         mql_capability: personInfo.capability || null,
         mql_lifestyle: personInfo.lifestyle || null,
         credit_score: mqlData.credit_score || null,
@@ -190,16 +267,33 @@ async function processEnrichmentBatch(
         location: personInfo.location || demography.location || null,
         locality_grade: personInfo.locality_grade || null,
         lifestyle: personInfo.lifestyle || null,
-        employer_name: demography.designation?.split(', ')[1] || null,  // "salaried, COMPANY NAME"
-        designation: demography.designation?.split(', ')[0] || null,   // "salaried" or "self-employed"
+        employer_name: demography.designation?.split(', ')[1] || null,
+        designation: demography.designation?.split(', ')[0] || null,
         final_income_lacs: income.final_income_lacs || null,
+        pre_tax_income_lacs: income.pre_tax_income_lacs || income.pre_tax_income || null,
         total_loans: bankingSummary.total_loans || null,
         active_loans: bankingSummary.active_loans || null,
-        home_loans: bankingSummary.home_loans || null,
-        auto_loans: bankingSummary.auto_loans || null,
-        highest_card_usage_percent: null,  // Calculate from banking_cards if needed
-        is_amex_holder: null,
-        raw_response: batchResponse,  // Store full batch response for debugging
+        home_loans: bankingSummary.home_loans || homeLoans.length || null,
+        auto_loans: bankingSummary.auto_loans || autoLoans.length || null,
+        highest_card_usage_percent: highestCardUsage || null,
+        is_amex_holder: hasPremiumCards || null,
+        // New enhanced fields
+        business_type: businessType,
+        industry: industry,
+        turnover_slab: turnoverSlab,
+        active_emi_burden: totalActiveEmi > 0 ? totalActiveEmi : null,
+        emi_to_income_ratio: emiToIncomeRatio,
+        home_loan_count: homeLoans.length || null,
+        home_loan_active: activeHomeLoans || null,
+        home_loan_paid_off: paidOffHomeLoans || null,
+        auto_loan_count: autoLoans.length || null,
+        consumer_loan_count: consumerLoans.length || null,
+        guarantor_loan_count: guarantorLoans.length || null,
+        credit_card_count: cards.length || null,
+        has_premium_cards: hasPremiumCards,
+        latest_home_loan_date: latestHomeLoanDate?.toISOString() || null,
+        credit_behavior_signal: creditBehaviorSignal,
+        raw_response: batchResponse,
       };
 
       // Upsert enrichment data
@@ -212,11 +306,10 @@ async function processEnrichmentBatch(
         continue;
       }
 
-      console.log(`[Success] Enriched lead ${lead.id} with rating: ${enrichmentData.mql_rating}`);
+      console.log(`[Success] Enriched lead ${lead.id} with rating: ${enrichmentData.mql_rating}, business_type: ${businessType}, emi_ratio: ${emiToIncomeRatio?.toFixed(1)}%`);
     } catch (error) {
       console.error(`[Error] Exception enriching lead ${lead.id}:`, error);
       
-      // Store error in database
       try {
         await supabase.from("lead_enrichments").upsert({
           lead_id: lead.id,
@@ -262,7 +355,7 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Step 2: Fetch brand info to get dynamic mql_schema
+    // Fetch brand info to get dynamic mql_schema
     console.log(`[enrich-leads] Fetching project and brand info for project: ${projectId}`);
     
     const { data: projectData, error: projectError } = await supabase
@@ -291,7 +384,6 @@ serve(async (req) => {
       console.error("[enrich-leads] Failed to fetch brand:", brandError);
     }
 
-    // Extract mql_schema from brand metadata, fallback to brand_id
     const brandMetadata = brandData?.metadata as Record<string, any> | null;
     const mqlSchema = brandMetadata?.mql_schema || projectData.brand_id;
     
@@ -337,11 +429,10 @@ serve(async (req) => {
     // Start background processing
     console.log(`[enrich-leads] Starting background processing for ${leadsToEnrich.length} leads`);
     
-    // Use EdgeRuntime.waitUntil for background processing if available
     const backgroundPromise = processEnrichmentBatch(
       leadsToEnrich,
       projectId,
-      projectData.name,  // Pass project name for MQL API
+      projectData.name,
       mqlSchema,
       mqlApiKey,
       supabaseUrl,
@@ -352,7 +443,6 @@ serve(async (req) => {
     if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) {
       EdgeRuntime.waitUntil(backgroundPromise);
       
-      // Return immediately with processing status
       return new Response(
         JSON.stringify({
           status: "processing",
