@@ -760,29 +760,60 @@ ${leadDataJson}
 
 ${outputStructure}`;
 
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent?key=${googleApiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: fullPrompt }] }],
-            tools: [{ google_search: {} }],
-            generationConfig: {
-              temperature: 0.2,
-              topK: 40,
-              topP: 0.95,
-              maxOutputTokens: 8192,
-              responseMimeType: "application/json",
-            },
-          }),
-        },
-      );
+      // Retry logic for transient API errors (503 overloaded)
+      const maxRetries = 3;
+      let lastError: Error | null = null;
+      let response: Response | null = null;
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Google AI API error:", errorText);
-        throw new Error(`Failed to analyze lead: ${errorText}`);
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent?key=${googleApiKey}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: fullPrompt }] }],
+                tools: [{ google_search: {} }],
+                generationConfig: {
+                  temperature: 0.2,
+                  topK: 40,
+                  topP: 0.95,
+                  maxOutputTokens: 8192,
+                  responseMimeType: "application/json",
+                },
+              }),
+            },
+          );
+
+          if (response.ok) {
+            break; // Success, exit retry loop
+          }
+
+          const errorText = await response.text();
+          
+          // Check if it's a retryable error (503 overloaded)
+          if (response.status === 503 && attempt < maxRetries) {
+            const backoffMs = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+            console.warn(`Google AI API overloaded (attempt ${attempt}/${maxRetries}), retrying in ${backoffMs}ms...`);
+            await new Promise(resolve => setTimeout(resolve, backoffMs));
+            continue;
+          }
+
+          console.error("Google AI API error:", errorText);
+          lastError = new Error(`Failed to analyze lead: ${errorText}`);
+        } catch (fetchError) {
+          lastError = fetchError instanceof Error ? fetchError : new Error(String(fetchError));
+          if (attempt < maxRetries) {
+            const backoffMs = Math.pow(2, attempt) * 1000;
+            console.warn(`Fetch error (attempt ${attempt}/${maxRetries}), retrying in ${backoffMs}ms...`);
+            await new Promise(resolve => setTimeout(resolve, backoffMs));
+          }
+        }
+      }
+
+      if (!response?.ok) {
+        throw lastError || new Error("Failed to analyze lead after retries");
       }
 
       const data = await response.json();
