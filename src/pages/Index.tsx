@@ -101,6 +101,24 @@ const Index = () => {
 
       const leadIds = parsedLeads.map(lead => lead.id);
       
+      // Store leads in database immediately to prevent orphaning
+      const leadsToStore = parsedLeads.map(lead => ({
+        lead_id: lead.id,
+        project_id: projectId,
+        crm_data: lead.rawData,
+        latest_revisit_date: lead.rawData?.["Latest Revisit Date"] || null,
+      }));
+
+      const { error: upsertError } = await supabase
+        .from('leads')
+        .upsert(leadsToStore, { onConflict: 'lead_id,project_id' });
+
+      if (upsertError) {
+        console.error('Error storing leads:', upsertError);
+      } else {
+        console.log(`Stored ${leadsToStore.length} leads in database`);
+      }
+      
       // Fetch cached analyses
       const { data: cachedAnalyses } = await supabase
         .from('lead_analyses')
@@ -163,6 +181,12 @@ const Index = () => {
       
       const cachedCount = cachedAnalyses?.length || 0;
       const enrichedCount = cachedEnrichments?.length || 0;
+      
+      // Check for orphaned enrichments (enriched but not analyzed)
+      const orphanedEnrichments = cachedEnrichments?.filter(
+        e => !cachedAnalyses?.some(a => a.lead_id === e.lead_id)
+      ) || [];
+      
       let description = `Loaded ${parsedLeads.length} leads from the Excel file.`;
       if (cachedCount > 0) {
         description += ` (${cachedCount} with cached analysis`;
@@ -178,6 +202,15 @@ const Index = () => {
         title: 'File parsed successfully',
         description,
       });
+      
+      // Warn about orphaned enrichments that need analysis
+      if (orphanedEnrichments.length > 0) {
+        toast({
+          title: 'Leads need analysis',
+          description: `${orphanedEnrichments.length} enriched lead(s) have not been analyzed yet. Click "Analyze with AI" to complete.`,
+          variant: 'default',
+        });
+      }
     } catch (error) {
       toast({
         title: 'Error parsing file',
