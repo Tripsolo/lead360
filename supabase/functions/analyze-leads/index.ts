@@ -386,12 +386,18 @@ Examples of fallback personas: "IT Professional", "Healthcare Worker", "Young Co
 3. If NO predefined persona matches clearly, use the Fallback to generate a custom 2-word label
 4. Generate a 2-line persona_description that aligns with the selected persona type
 
-## PERSONA DESCRIPTION INSTRUCTIONS:
-Generate a 2-line description incorporating:
-- MQL lifestyle grade (luxury/aspirational/value_for_money) if available
-- MQL age for life-stage context
-- CRM occupation and family indicators
-- Buying motivation`;
+## PERSONA DESCRIPTION INSTRUCTIONS (CRITICAL - FOLLOW EXACTLY):
+The persona_description should be a 2-line description that focuses ONLY on:
+1. DEMOGRAPHICS: Age, gender, family composition (use MQL age/gender if available)
+2. FINANCIAL/PROFESSIONAL PROFILE: Occupation, designation, income capability, lifestyle grade (luxury/aspirational/value_for_money)
+3. PRIMARY BUYING MOTIVATION: Why they are looking to buy (upgrade, first home, investment, retirement, relocation, etc.)
+
+DO NOT include in persona_description:
+- Visit details or visit experience
+- Property preferences (size, floor, facing)
+- Concerns or objections
+- Timeline or decision factors
+These belong in the Summary section, not here.`;
 
     // Process leads that need analysis
     const analysisPromises = leadsToAnalyze.map(async (leadWithMql: any, index: number) => {
@@ -540,10 +546,10 @@ Return a JSON object with this EXACT structure:
     "product_market_fit": 0-15,
     "authority_dynamics": 0-10
   },
-  "rating_rationale": "PPS Score: X/100 (Rating). Brief explanation",
+  "rating_rationale": "PPS Score: X/100. Brief explanation of key scoring factors without rating label",
   "persona": "Persona label",
-  "persona_description": "2-line description using CRM + MQL data",
-  "summary": "2-3 sentence overview (max 30 words)",
+  "persona_description": "2-line description focusing on: (1) demographics - age, gender, family composition; (2) financial/professional profile - occupation, designation, income capability; (3) primary buying motivation. DO NOT include visit details, property preferences, or concerns here.",
+  "summary": "Summarize the lead's visit notes: what they are looking for, visit experience/feedback, decision factors and timelines mentioned. DO NOT repeat demographic or professional details. Max 30 words.",
   "key_concerns": ["concern1", "concern2"],
   "concern_categories": ["Price", "Location"],
   "primary_concern_category": "Price",

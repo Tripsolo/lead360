@@ -127,7 +127,20 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
             {/* Right column: Rating Rationale */}
             <div className="p-2.5 bg-muted/30 rounded-lg">
               <p className="text-sm text-muted-foreground mb-1.5">Rating Rationale</p>
-              <p className="text-sm">{analysis?.rating_rationale || 'N/A'}</p>
+              <p className="text-sm">
+                {analysis?.rating_rationale ? (
+                  <>
+                    {analysis.rating_rationale.match(/PPS Score: \d+\/100/) ? (
+                      <>
+                        <span className="font-bold">{analysis.rating_rationale.match(/PPS Score: \d+\/100/)?.[0]}</span>
+                        {analysis.rating_rationale.replace(/PPS Score: \d+\/100/, '')}
+                      </>
+                    ) : (
+                      analysis.rating_rationale
+                    )}
+                  </>
+                ) : 'N/A'}
+              </p>
             </div>
           </div>
 
@@ -272,7 +285,12 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
             <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-4">
               <div className="p-3 bg-muted rounded-lg">
                 <p className="text-xs text-muted-foreground mb-1">Budget</p>
-                <p className="font-semibold">{lead.budget || 'N/A'}</p>
+                <p className="font-semibold">
+                  {analysis?.extracted_signals?.budget_stated 
+                    ? `₹${(analysis.extracted_signals.budget_stated / 10000000).toFixed(2)}Cr`
+                    : 'N/A'
+                  }
+                </p>
               </div>
               <div className="p-3 bg-muted rounded-lg">
                 <p className="text-xs text-muted-foreground mb-1">In-Hand Funds</p>
