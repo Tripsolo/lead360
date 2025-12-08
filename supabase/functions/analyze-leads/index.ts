@@ -186,15 +186,28 @@ Analyze each lead independently and objectively. Focus on extracting conversion 
 
 ## Income
 - final_income_lacs: Estimated annual income in Lakhs (use for financial capability scoring)
+- pre_tax_income_lacs: Pre-tax income if available
+
+## Business Details (For Self-Employed/Business Owners)
+- business_type: "Proprietorship", "Partnership", "Private Limited", "LLP", etc.
+- industry: Derived industry/sector (e.g., "Industrial Equipment", "Textile Trading", "IT Services")
+- turnover_slab: Business turnover tier - "0-40L", "40L-1.5Cr", "1.5Cr-5Cr", "5Cr-25Cr", "25Cr+"
 
 ## Credit Profile (NEVER MENTION RAW VALUES IN OUTPUT)
 - credit_score: Credit score number
 - Credit Rating Derivation Rules: 750+ = "High", 650-749 = "Medium", <650 = "Low"
+- credit_behavior_signal: Derived pattern - "clean_credit", "active_borrower", "conservative_borrower", "credit_risk"
 
-## Banking Loans (NEVER MENTION SPECIFIC VALUES IN OUTPUT)
-- home_loans: Count of home loans (indicates property ownership history)
-- active_loans: Current loan obligations (affects new loan eligibility)
-- If home_loans > 0: indicates existing property owner (upgrade buyer signal)
+## Banking Loans (DETAILED - NEVER MENTION SPECIFIC VALUES IN OUTPUT)
+- home_loan_count: Total housing loans ever taken
+- home_loan_active: Currently active home loans
+- home_loan_paid_off: Closed/paid-off home loans
+- latest_home_loan_date: Date of most recent home loan sanction
+- auto_loan_count: Vehicle loans
+- consumer_loan_count: Personal/consumer loans
+- guarantor_loan_count: Loans where person is guarantor (indicates family network/wealth)
+- active_emi_burden: Total monthly EMI across all active loans
+- emi_to_income_ratio: EMI burden as % of monthly income
 
 ## FIELD PRECEDENCE RULES (CRITICAL):
 1. Employer Name: ALWAYS use CRM value
@@ -218,11 +231,28 @@ Use MQL designation if available, otherwise CRM designation.
 Use MQL final_income_lacs if available for income-based adjustments.
 - Elite Corporate (VP, Director, CHRO, CXO at major firms) OR income > 50L: 10 pts
 - High-Skill Professional (Specialist Doctors, CA Partners, Pilots, Merchant Navy Officers) OR income 30-50L: 9 pts
-- Business Owner (SME/Traders) - Cash rich: 8 pts
+- Business Owner - Score by TURNOVER TIER (see Business Owner Scoring below): 4-12 pts
 - Mid-Senior Corporate (Sr. Manager, Project Manager at IT/Banking/MNCs) OR income 15-30L: 7 pts
 - Retired/Homemaker (with visible asset base): 5 pts
 - Entry/Mid-Level Salaried (Sales Manager, Executive, Jr. Engineer) OR income < 15L: 4 pts
 - Unknown/Unclear occupation: 2 pts
+
+### BUSINESS OWNER SCORING (Enhanced - Turnover-Based):
+If MQL business_type or turnover_slab is available:
+| Turnover Slab | Base Points | Notes |
+|---------------|-------------|-------|
+| 25Cr+         | 12 pts      | Large enterprise, very high capability |
+| 5Cr-25Cr      | 10 pts      | Mid-size business, strong capability |
+| 1.5Cr-5Cr     | 8 pts       | SME, good capability |
+| 40L-1.5Cr     | 6 pts       | Small business, moderate capability |
+| 0-40L         | 4 pts       | Micro-business/startup |
+
+### MARGIN-AWARE INCOME ADJUSTMENT:
+When both turnover_slab and final_income_lacs are available:
+- Compare MQL income with implied income from turnover (turnover * margin %)
+- Typical margins: Trading 5-8%, Manufacturing 10-15%, Services 20-30%, IT 25-40%
+- If GST-implied income > MQL income by 50%+: Add +2-3 pts capability uplift
+- NEVER discount MQL income estimate - only uplift if GST data suggests higher capability
 
 ### A2. Budget Gap Ratio (10 pts):
 Calculate gap = (Unit Price - Stated Budget) / Unit Price * 100
@@ -240,12 +270,14 @@ WITH MQL DATA (Enhanced Scoring):
 - MQL capability "low": Cap at 5 pts regardless of stated budget
 
 ### A3. Source of Funds Liquidity (10 pts):
-Factor in MQL credit_rating and active_loans:
-- Self-Funding + High Credit Rating: 10 pts
+Factor in MQL credit_rating, credit_behavior_signal, and emi_to_income_ratio:
+- Self-Funding + High Credit Rating + credit_behavior = "clean_credit": 10 pts
 - Self-Funding + Medium Credit Rating: 9 pts
-- Loan + High Credit Rating + active_loans <= 1: 8 pts
-- Loan + Medium Credit Rating: 6 pts
-- Loan + Low Credit Rating OR active_loans > 2: 4 pts
+- Loan + High Credit Rating + emi_to_income_ratio < 30%: 8 pts
+- Loan + Medium Credit Rating + emi_to_income_ratio < 50%: 6 pts
+- Loan + emi_to_income_ratio > 50% (HIGH EMI BURDEN): 3 pts (PENALIZE)
+- Loan + emi_to_income_ratio 30-50% (MODERATE STRESS): 5 pts (-2 pts penalty)
+- Loan + Low Credit Rating OR credit_behavior = "credit_risk": 4 pts
 - Sale of Property: 3-5 pts based on process status
 - Unclear: 2 pts
 
@@ -264,7 +296,7 @@ Factor in MQL credit_rating and active_loans:
 - Quick walkthrough / Left early: 2 pts
 
 ### B3. Competitor Awareness Signal (5 pts):
-If MQL home_loans > 0: +2 bonus (indicates active property buyer)
+If MQL home_loan_count > 0: +2 bonus (indicates active property buyer/investor)
 - Visited premium competitors: 5 pts
 - Visited similar segment: 4 pts
 - No competitors mentioned: 2 pts
@@ -278,11 +310,13 @@ If MQL home_loans > 0: +2 bonus (indicates active property buyer)
 - Needs RTMI but project is 1+ year: 2 pts
 
 ### C2. Life Trigger Urgency (10 pts):
-Factor in MQL age for life-stage signals:
+Factor in MQL age and loan history for life-stage signals:
 - Currently on rent: 10 pts
 - Marriage/Relocation trigger: 10 pts
 - MQL age 55+ (retirement planning): +2 bonus
-- MQL home_loans > 0 (upgrade buyer): +1 bonus
+- Home loan sanctioned in last 3 years AND active: -3 pts (unlikely to buy again soon)
+  - EXCEPTION: If home_loan_active >= 2: Override penalty → Investor signal +5 pts
+- Home loan paid off 5+ years ago: +3 pts (Upgrade buyer ready)
 - Investment purpose: 5 pts
 - Just exploring: 2 pts
 
@@ -303,7 +337,8 @@ Compare MQL locality_grade with project positioning:
 
 ## DIMENSION E: AUTHORITY & DECISION DYNAMICS (ADD) - 10 Points Max
 
-Factor in MQL age:
+Factor in MQL age and guarantor_loan_count:
+- guarantor_loan_count > 0: +1 pt (indicates family wealth/network)
 - MQL age 55+: Likely self-decision (+2 pts)
 - MQL age 25-34: May need family consultation (-1 pt)
 - All decision makers present: 10 pts
@@ -312,10 +347,11 @@ Factor in MQL age:
 
 ## SPECIAL SIGNALS & MULTIPLIERS:
 - Biophilic Buyer: +3 to PMF
-- Business Owner: +5 to FC
+- Business Owner with turnover 5Cr+: Already captured in A1 scoring
 - Existing brand customer: +5 to IE
 - Investment-only with low budget: Cap at 40
-- Strong competitor preference with booking: -10`;
+- Strong competitor preference with booking: -10
+- Multiple active home loans (2+): Investor persona, adjust scoring per rules above`;
 
     const personaDefinitions = `# PERSONA IDENTIFICATION GUIDE
 
@@ -333,7 +369,7 @@ Characteristics:
 - May need assistance with India-specific regulations
 
 ### 2. Retirement Planner
-Detection: Occupation = "Retired" OR Designation mentions "Retired"
+Detection: Occupation = "Retired" OR Designation mentions "Retired" OR MQL age >= 55
 Characteristics:
 - Often selling existing property (SOP funding)
 - Values greenery, open spaces, healthcare proximity
@@ -341,15 +377,16 @@ Characteristics:
 - Budget typically from accumulated savings + SOP
 
 ### 3. Business Owner
-Detection: Occupation = "Business" OR "Self-Employed" OR Designation contains "Owner"/"Proprietor"/"Director" (non-corporate)
+Detection: Occupation = "Business" OR "Self-Employed" OR Designation contains "Owner"/"Proprietor"/"Director" (non-corporate) OR MQL business_type is populated
 Characteristics:
-- Self-funding capability (cash-rich)
+- Self-funding capability (cash-rich, especially high turnover tiers)
 - Prefers premium/exclusive units
 - May want multiple units (investment angle)
 - Flexible on timing, decisive when interested
+- If turnover_slab available, mention scale (SME/Mid-size/Large enterprise) in persona description
 
 ### 4. Investor
-Detection: Comments mention "investment"/"rental income"/"tax saving"/"appreciation" OR Purpose = Investment
+Detection: Comments mention "investment"/"rental income"/"tax saving"/"appreciation" OR Purpose = Investment OR home_loan_active >= 2 (multiple property owner)
 Characteristics:
 - Prefers smaller units (1-2 BHK) for rental yield
 - Focuses on ROI, rental potential, appreciation
@@ -357,7 +394,7 @@ Characteristics:
 - Price-sensitive, compares multiple options
 
 ### 5. Upgrade Seeker
-Detection: Building Name is populated (currently owns/rents) AND shows indicators of wanting larger/better home
+Detection: Building Name is populated (currently owns/rents) AND shows indicators of wanting larger/better home OR (home_loan_paid_off > 0 AND latest_home_loan_date is 5+ years ago)
 Characteristics:
 - Currently owns/rents smaller home
 - Family growing or lifestyle upgrade needed
@@ -365,7 +402,7 @@ Characteristics:
 - Compares amenities and space improvements
 
 ### 6. First-Time Buyer
-Detection: Building Name is empty/unclear AND Source of Funding = Loan AND no prior property ownership indicated
+Detection: Building Name is empty/unclear AND Source of Funding = Loan AND no prior property ownership indicated AND home_loan_count = 0
 Characteristics:
 - Currently renting (no owned property)
 - First property purchase - needs process guidance
@@ -390,6 +427,8 @@ Examples of fallback personas: "IT Professional", "Healthcare Worker", "Young Co
 The persona_description should be a 2-line description that focuses ONLY on:
 1. DEMOGRAPHICS: Age, gender, family composition (use MQL age/gender if available)
 2. FINANCIAL/PROFESSIONAL PROFILE: Occupation, designation, income capability, lifestyle grade (luxury/aspirational/value_for_money)
+   - For Business Owners: Include business type (Proprietorship/Company) and industry if available, but NEVER mention GST numbers or business names
+   - For Business Owners: Mention turnover scale abstractly (e.g., "mid-size industrial equipment business" not "turnover 1.5Cr-5Cr")
 3. PRIMARY BUYING MOTIVATION: Why they are looking to buy (upgrade, first home, investment, retirement, relocation, etc.)
 
 DO NOT include in persona_description:
@@ -397,7 +436,29 @@ DO NOT include in persona_description:
 - Property preferences (size, floor, facing)
 - Concerns or objections
 - Timeline or decision factors
+- GST numbers, business names, or specific financial figures
 These belong in the Summary section, not here.`;
+
+    // Build competitor pricing matrix from project metadata
+    const competitors = projectMetadata?.competitors || {};
+    let competitorPricingMatrix = `# COMPETITOR PRICING REFERENCE (For Talking Points)\n\n`;
+    competitorPricingMatrix += `| Competitor | Config | Carpet Sqft | Price Range | Possession | Notes |\n`;
+    competitorPricingMatrix += `|------------|--------|-------------|-------------|------------|-------|\n`;
+    
+    for (const [compName, compData] of Object.entries(competitors)) {
+      const comp = compData as any;
+      const inventory = comp.inventory_sold || comp.inventory || [];
+      for (const inv of inventory) {
+        competitorPricingMatrix += `| ${compName} | ${inv.config || 'N/A'} | ${inv.carpet_sqft || 'N/A'} | ₹${inv.price_range || 'N/A'} | ${inv.possession || comp.possession || 'N/A'} | ${inv.notes || ''} |\n`;
+      }
+    }
+    
+    // Add Eternia inventory for comparison
+    const eterniaInventory = projectMetadata?.inventory?.configurations || [];
+    competitorPricingMatrix += `\n## ETERNIA INVENTORY (For Comparison):\n`;
+    for (const config of eterniaInventory) {
+      competitorPricingMatrix += `- ${config.type}: ${config.carpet_sqft_range?.[0]}-${config.carpet_sqft_range?.[1]} sqft, ₹${config.price_range_cr?.[0]}-${config.price_range_cr?.[1]} Cr, Target: ${config.target_persona || 'N/A'}\n`;
+    }
 
     // Process leads that need analysis
     const analysisPromises = leadsToAnalyze.map(async (leadWithMql: any, index: number) => {
@@ -406,12 +467,22 @@ These belong in the Summary section, not here.`;
       const { mqlEnrichment, ...lead } = leadWithMql;
       const leadDataJson = JSON.stringify(lead, null, 2);
 
-      // Build MQL section conditionally
+      // Build MQL section conditionally with enhanced fields
       const mqlAvailable = mqlEnrichment && mqlEnrichment.mql_rating && mqlEnrichment.mql_rating !== "N/A";
 
       let mqlSection = "";
       if (mqlAvailable) {
+        // Calculate years since latest home loan
+        let homeLoanRecency = "N/A";
+        if (mqlEnrichment.latest_home_loan_date) {
+          const loanDate = new Date(mqlEnrichment.latest_home_loan_date);
+          const yearsSinceLoan = (Date.now() - loanDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+          homeLoanRecency = yearsSinceLoan < 3 ? "Within 3 years" : yearsSinceLoan < 5 ? "3-5 years ago" : "5+ years ago";
+        }
+        
         mqlSection = `# MQL ENRICHMENT DATA (Verified External Data)
+
+## Basic Profile
 Rating: ${mqlEnrichment.mql_rating || "N/A"}
 Capability: ${mqlEnrichment.mql_capability || "N/A"}
 Lifestyle: ${mqlEnrichment.mql_lifestyle || mqlEnrichment.lifestyle || "N/A"}
@@ -420,12 +491,42 @@ Age: ${mqlEnrichment.age || "N/A"}
 Gender: ${mqlEnrichment.gender || "N/A"}
 Designation: ${mqlEnrichment.designation || "N/A"}
 Employer: ${mqlEnrichment.employer_name || "N/A"}
-Annual Income (Lacs): ${mqlEnrichment.final_income_lacs || "N/A"}
-Credit Score: ${mqlEnrichment.credit_score || "N/A"}
-Home Loans: ${mqlEnrichment.home_loans ?? "N/A"}
-Active Loans: ${mqlEnrichment.active_loans ?? "N/A"}
 
-IMPORTANT: Derive credit_rating from credit_score: 750+ = "High", 650-749 = "Medium", <650 = "Low"`;
+## Income (For Scoring Only - NEVER Mention in Output)
+Annual Income (Lacs): ${mqlEnrichment.final_income_lacs || "N/A"}
+Pre-Tax Income (Lacs): ${mqlEnrichment.pre_tax_income_lacs || "N/A"}
+
+## Business Details (For Scoring Only - NEVER Mention Specific Values)
+Business Type: ${mqlEnrichment.business_type || "N/A"}
+Industry: ${mqlEnrichment.industry || "N/A"}
+Turnover Slab: ${mqlEnrichment.turnover_slab || "N/A"}
+
+## Credit Profile (For Scoring Only - NEVER Mention in Output)
+Credit Score: ${mqlEnrichment.credit_score || "N/A"}
+Credit Behavior: ${mqlEnrichment.credit_behavior_signal || "N/A"}
+
+## Loan History (For Scoring Only - NEVER Mention Specific Values)
+Home Loans - Total: ${mqlEnrichment.home_loan_count ?? "N/A"}, Active: ${mqlEnrichment.home_loan_active ?? "N/A"}, Paid Off: ${mqlEnrichment.home_loan_paid_off ?? "N/A"}
+Latest Home Loan: ${homeLoanRecency}
+Auto Loans: ${mqlEnrichment.auto_loan_count ?? "N/A"}
+Consumer/Personal Loans: ${mqlEnrichment.consumer_loan_count ?? "N/A"}
+Guarantor Loans: ${mqlEnrichment.guarantor_loan_count ?? "N/A"}
+
+## EMI Burden (For Scoring Only - NEVER Mention Specific Values)
+Active EMI Burden (Monthly): ${mqlEnrichment.active_emi_burden ? `₹${mqlEnrichment.active_emi_burden}` : "N/A"}
+EMI-to-Income Ratio: ${mqlEnrichment.emi_to_income_ratio ? `${mqlEnrichment.emi_to_income_ratio.toFixed(1)}%` : "N/A"}
+
+## Credit Cards
+Card Count: ${mqlEnrichment.credit_card_count ?? "N/A"}
+Has Premium Cards (Amex/Platinum): ${mqlEnrichment.has_premium_cards ? "Yes" : "No"}
+
+IMPORTANT SCORING RULES:
+1. Derive credit_rating from credit_score: 750+ = "High", 650-749 = "Medium", <650 = "Low"
+2. For Business Owners: Use turnover_slab for A1 scoring (see BUSINESS OWNER SCORING table)
+3. If GST-implied income (based on turnover tier) > MQL income by 50%+: Apply +2-3 pts capability uplift
+4. EMI Burden Penalty: If emi_to_income_ratio > 50%: -5 pts to A3. If 30-50%: -2 pts to A3
+5. Home Loan Timeline: If latest_home_loan within 3 years AND active: -3 pts to C2 UNLESS home_loan_active >= 2 (Investor: +5 pts instead)
+6. Guarantor Signal: If guarantor_loan_count > 0: +1 pt to E`;
       } else {
         mqlSection = `# MQL DATA: Not available for this lead. Score using CRM data only. Set mql_data_available to false.`;
       }
@@ -460,6 +561,11 @@ Vehicle-Free Podium: ${projectMetadata.township.podium_acres || "N/A"} acres`
 Primary: ${projectMetadata?.usps?.primary?.map((usp: string) => `\n- ${usp}`).join("") || "N/A"}
 Construction Quality: ${projectMetadata?.usps?.construction_quality?.map((qual: string) => `\n- ${qual}`).join("") || "N/A"}
 
+## Project DNA
+Architectural Partner: ${projectMetadata?.project_dna?.architect || "N/A"}
+Landscape Partner: ${projectMetadata?.project_dna?.landscape || "N/A"}
+Layout Philosophy: ${projectMetadata?.project_dna?.layout_philosophy || "N/A"}
+
 ## Inventory Configurations
 ${
   projectMetadata?.inventory?.configurations
@@ -483,14 +589,17 @@ ${
 
       const privacyRules = `# PRIVACY RULES (CRITICAL - NEVER VIOLATE):
 1. NEVER mention credit score numbers in any output field
-2. NEVER mention specific loan amounts or EMI values
-3. NEVER mention card usage percentages
-4. NEVER mention income figures
-5. Use these values ONLY for internal scoring calculations
-6. Output only derived ratings: mql_credit_rating (High/Medium/Low), mql_capability`;
+2. NEVER mention specific loan amounts, EMI values, or emi_to_income_ratio percentages
+3. NEVER mention card usage percentages or card limits
+4. NEVER mention income figures (final_income_lacs, pre_tax_income)
+5. NEVER mention turnover slab numbers directly (use abstract descriptions like "mid-size business")
+6. NEVER mention GST numbers or business names
+7. Use these values ONLY for internal scoring calculations
+8. Output only derived ratings: mql_credit_rating (High/Medium/Low), mql_capability
+9. For Business Owners: Describe scale abstractly (e.g., "established manufacturing business" not "turnover 5Cr-25Cr")`;
 
       const outputConstraints = `# OUTPUT CONSTRAINTS (CRITICAL - STRICTLY ENFORCE):
-- Rating rationale should only focus on the overall score and reasoning. Do not specify individual dimension scores. When using dimension names, use full names instead of acronyms
+- Rating rationale should start with "**PPS Score: X/100.**" in bold, followed by key scoring factors. Do NOT include rating label like "(Hot)" or "(Warm)" in the rationale - that's shown separately
 - Summary: Maximum 30 words. Be concise and focused.
 - Next Best Action: Maximum 15 words. Keep it actionable and specific.`;
 
@@ -510,9 +619,20 @@ Generate 2-3 talking points TOTAL following these strict priority rules:
 
 PRIORITY 1: Competitor Handling (Max 2 points)
 - Only include if any competitor is mentioned in CRM data (competitor name, competition project, or visit comments)
-- Maximum 2 talking points for competitor handling
+- Use BOTH qualitative AND quantitative comparisons when data is available
+- Include specific metrics from the COMPETITOR PRICING REFERENCE: price-per-sqft, carpet area comparison, possession timeline
+- Format examples:
+  - "Eternia 3BHK offers 20% more carpet area (1100 vs 918 sqft) at competitive ₹/sqft"
+  - "Amara possession is 2026; Eternia Phase 1 matches with added 250-acre park premium"
+  - "Godrej Ascend 3BHK at 855 sqft vs Eternia Large 3BHK at 1100+ sqft - 30% more space"
 - Each point max 15 words
 - Topic type: "Competitor handling"
+
+FOR RTMI (Ready-to-Move-In) SEEKERS:
+- Check which competitors offer earlier possession from COMPETITOR PRICING REFERENCE
+- Acknowledge the timeline gap honestly
+- Highlight why Eternia is worth the wait: park ecosystem, township moat, layout efficiency, construction quality
+- Example: "Amara is RTMI but Eternia's 250-acre park ecosystem adds long-term value premium"
 
 PRIORITY 2: Objection Handling (Max 1 point)
 - Only include if customer has specific concerns or objections from notes or CRM fields
@@ -531,7 +651,9 @@ DISTRIBUTION RULES:
 - If competitor mentioned: Include 1-2 competitor handling points first
 - If customer has concerns/objections: Include 1 objection handling point second
 - Fill remaining slots (up to 3 total) with "What to highlight" points
-- Each talking point must be max 15 words`;
+- Each talking point must be max 15 words
+
+${competitorPricingMatrix}`;
 
       const outputStructure = `# OUTPUT STRUCTURE
 Return a JSON object with this EXACT structure:
@@ -546,9 +668,9 @@ Return a JSON object with this EXACT structure:
     "product_market_fit": 0-15,
     "authority_dynamics": 0-10
   },
-  "rating_rationale": "PPS Score: X/100. Brief explanation of key scoring factors without rating label",
+  "rating_rationale": "**PPS Score: X/100.** Brief explanation of key scoring factors without rating label",
   "persona": "Persona label",
-  "persona_description": "2-line description focusing on: (1) demographics - age, gender, family composition; (2) financial/professional profile - occupation, designation, income capability; (3) primary buying motivation. DO NOT include visit details, property preferences, or concerns here.",
+  "persona_description": "2-line description focusing on: (1) demographics - age, gender, family composition; (2) financial/professional profile - occupation, designation, income capability; (3) primary buying motivation. For business owners, mention scale abstractly (e.g., 'established manufacturing business') without specific turnover figures. DO NOT include visit details, property preferences, or concerns here.",
   "summary": "Summarize the lead's visit notes: what they are looking for, visit experience/feedback, decision factors and timelines mentioned. DO NOT repeat demographic or professional details. Max 30 words.",
   "key_concerns": ["concern1", "concern2"],
   "concern_categories": ["Price", "Location"],
@@ -565,6 +687,8 @@ Return a JSON object with this EXACT structure:
     "core_motivation": "string"
   },
   "mql_credit_rating": "High" | "Medium" | "Low" | null,
+  "mql_emi_burden": "Low" | "Moderate" | "High" | null,
+  "mql_investor_signal": boolean,
   "overridden_fields": [],
   "mql_data_available": ${mqlAvailable}
 }`;
@@ -601,19 +725,27 @@ ${leadDataJson}
 2. Extract structured information (Budget, In-hand funds, Finalization time, etc.)
 3. Calculate the PPS Score using the 5-dimension framework:
    - Score Financial Capability (A1 + A2 + A3, max 30)
+     - For Business Owners: Use TURNOVER TIER scoring table
+     - Apply margin-aware income adjustment if GST-implied income > MQL income by 50%+
    - Score Intent & Engagement (B1 + B2 + B3, max 25)
    - Score Urgency & Timeline (C1 + C2, max 20)
+     - Apply home loan timeline rules: recent active loan = -3 pts (unless 2+ active = investor +5 pts)
    - Score Product-Market Fit (D1 + D2, max 15)
    - Score Authority & Decision Dynamics (max 10)
+     - Add +1 pt if guarantor_loan_count > 0
+   - Apply EMI burden penalty to A3: >50% = -5 pts, 30-50% = -2 pts
    - Apply special multipliers if applicable
    - Sum all dimensions for total PPS (0-100)
 4. If MQL data available, use it to enhance scoring per the field precedence rules
 5. Derive credit_rating from credit_score if available: 750+ = High, 650-749 = Medium, <650 = Low
-6. If CRM location differs from MQL locality_grade context, add "locality_grade" to overridden_fields
-7. Identify persona using the Persona Identification Guide - check detection rules in priority order (NRI > Retirement > Business Owner > Investor > Upgrade Seeker > First-Time Buyer > Fallback Custom)
-8. Generate a 2-line persona_description that captures occupation, lifestyle, family situation, and buying motivation - must align with selected persona
-9. Concerns, talking points, competitor handling: Use CRM data ONLY
-10. Create actionable next steps and talking points
+6. Derive mql_emi_burden: <30% = Low, 30-50% = Moderate, >50% = High
+7. Set mql_investor_signal = true if home_loan_active >= 2
+8. If CRM location differs from MQL locality_grade context, add "locality_grade" to overridden_fields
+9. Identify persona using the Persona Identification Guide - check detection rules in priority order (NRI > Retirement > Business Owner > Investor > Upgrade Seeker > First-Time Buyer > Fallback Custom)
+10. Generate a 2-line persona_description that captures occupation, lifestyle, family situation, and buying motivation - must align with selected persona. For Business Owners, describe scale abstractly without specific figures.
+11. Concerns, talking points, competitor handling: Use CRM data ONLY
+12. For competitor talking points: Use BOTH qualitative AND quantitative comparisons from COMPETITOR PRICING REFERENCE
+13. Create actionable next steps and talking points
 
 ${outputStructure}`;
 
