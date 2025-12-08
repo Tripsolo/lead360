@@ -71,9 +71,9 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: Leads
         aVal = new Date(aVal || 0).getTime();
         bVal = new Date(bVal || 0).getTime();
       } else if (sortField === 'rating') {
-        const ratingOrder = { 'Hot': 3, 'Warm': 2, 'Cold': 1 };
-        aVal = ratingOrder[aVal as keyof typeof ratingOrder] || 0;
-        bVal = ratingOrder[bVal as keyof typeof ratingOrder] || 0;
+        const ratingOrder: Record<string, number> = { 'hot': 3, 'warm': 2, 'cold': 1 };
+        aVal = ratingOrder[String(aVal || '').toLowerCase()] || 0;
+        bVal = ratingOrder[String(bVal || '').toLowerCase()] || 0;
       } else if (sortField !== 'mqlRating') {
         aVal = String(aVal || '').toLowerCase();
         bVal = String(bVal || '').toLowerCase();
@@ -109,12 +109,18 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: Leads
   };
 
   const getRatingColor = (rating?: string) => {
-    switch (rating) {
-      case 'Hot': return 'bg-status-hot text-white';
-      case 'Warm': return 'bg-status-warm text-white';
-      case 'Cold': return 'bg-status-cold text-white';
+    const normalizedRating = rating?.toLowerCase();
+    switch (normalizedRating) {
+      case 'hot': return 'bg-status-hot text-white';
+      case 'warm': return 'bg-status-warm text-white';
+      case 'cold': return 'bg-status-cold text-white';
       default: return 'bg-gray-400 text-white';
     }
+  };
+
+  const formatRating = (rating?: string) => {
+    if (!rating) return '-';
+    return rating.charAt(0).toUpperCase() + rating.slice(1).toLowerCase();
   };
 
   const getMqlRatingColor = (rating?: string) => {
@@ -244,7 +250,7 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: Leads
                   <TableCell>
                     {lead.rating ? (
                       <Badge className={`${getRatingColor(lead.rating)} min-w-[60px] justify-center`}>
-                        {lead.rating}
+                        {formatRating(lead.rating)}
                       </Badge>
                     ) : (
                       <Badge className="bg-gray-400 text-white min-w-[60px] justify-center">-</Badge>
@@ -253,7 +259,7 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: Leads
                   <TableCell>
                     {lead.managerRating ? (
                       <Badge className={`${getRatingColor(lead.managerRating)} min-w-[60px] justify-center`}>
-                        {lead.managerRating}
+                        {formatRating(lead.managerRating)}
                       </Badge>
                     ) : (
                       <Badge className="bg-gray-400 text-white min-w-[60px] justify-center">-</Badge>
