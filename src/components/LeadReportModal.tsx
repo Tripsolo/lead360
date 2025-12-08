@@ -32,19 +32,17 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
       case 'Hot': return 'bg-status-hot text-white';
       case 'Warm': return 'bg-status-warm text-white';
       case 'Cold': return 'bg-status-cold text-white';
-      default: return 'bg-muted text-muted-foreground';
+      default: return 'bg-gray-400 text-white';
     }
   };
 
   const getMqlRatingColor = (rating?: string) => {
     switch (rating) {
-      case 'P1': return 'bg-emerald-600 text-white';
-      case 'P2': return 'bg-emerald-500 text-white';
-      case 'P3': return 'bg-amber-500 text-white';
-      case 'P4': return 'bg-orange-500 text-white';
-      case 'P5': return 'bg-gray-400 text-white';
-      case 'N/A': return 'bg-muted text-muted-foreground';
-      default: return 'bg-muted text-muted-foreground';
+      case 'P0': return 'bg-status-hot text-white';
+      case 'P1': return 'bg-status-warm text-white';
+      case 'P2': return 'bg-status-cold text-white';
+      case 'N/A': return 'bg-gray-400 text-white';
+      default: return 'bg-gray-400 text-white';
     }
   };
 
@@ -98,58 +96,52 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
 
         <div className="space-y-6">
           {/* Ratings Section - Compact Grid */}
-          <div className="grid grid-cols-[auto_auto_auto_1fr] gap-3 items-start">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 items-start">
             {/* AI Rating */}
-            {lead.rating && (
-              <div className="p-2.5 bg-muted/30 rounded-lg min-w-[120px]">
-                <p className="text-sm text-muted-foreground mb-1.5">AI Rating</p>
-                <Badge className={getRatingColor(lead.rating)}>
-                  {lead.rating}
-                </Badge>
-                {analysis?.rating_confidence && (
-                  <p className="text-xs text-muted-foreground mt-1.5">
-                    {analysis.rating_confidence} confidence
-                  </p>
-                )}
-              </div>
-            )}
+            <div className="p-2.5 bg-muted/30 rounded-lg">
+              <p className="text-sm text-muted-foreground mb-1.5">AI Rating</p>
+              <Badge className={`${getRatingColor(lead.rating)} min-w-[60px] justify-center`}>
+                {lead.rating || '-'}
+              </Badge>
+              {analysis?.rating_confidence && (
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  {analysis.rating_confidence} confidence
+                </p>
+              )}
+            </div>
             
             {/* Manager Rating */}
-            {lead.managerRating && (
-              <div className="p-2.5 bg-muted/30 rounded-lg min-w-[120px]">
-                <p className="text-sm text-muted-foreground mb-1.5">Manager Rating</p>
-                <Badge className={getRatingColor(lead.managerRating)}>
-                  {lead.managerRating}
-                </Badge>
-              </div>
-            )}
+            <div className="p-2.5 bg-muted/30 rounded-lg">
+              <p className="text-sm text-muted-foreground mb-1.5">Manager Rating</p>
+              <Badge className={`${getRatingColor(lead.managerRating)} min-w-[60px] justify-center`}>
+                {lead.managerRating || '-'}
+              </Badge>
+            </div>
 
             {/* MQL Rating */}
-            <div className="p-2.5 bg-muted/30 rounded-lg min-w-[120px]">
+            <div className="p-2.5 bg-muted/30 rounded-lg">
               <p className="text-sm text-muted-foreground mb-1.5">MQL Rating</p>
-              {mql?.mqlRating ? (
-                <>
-                  <Badge className={getMqlRatingColor(mql.mqlRating)}>
-                    {mql.mqlRating}
-                  </Badge>
-                  {mql.mqlCapability && mql.mqlRating !== 'N/A' && (
-                    <p className="text-xs text-muted-foreground mt-1.5 capitalize">
-                      {mql.mqlCapability} capability
-                    </p>
-                  )}
-                </>
-              ) : (
-                <span className="text-sm text-muted-foreground">Not enriched</span>
+              <Badge className={`${getMqlRatingColor(mql?.mqlRating)} min-w-[60px] justify-center`}>
+                {mql?.mqlRating || 'N/A'}
+              </Badge>
+              {mql?.mqlCapability && mql.mqlRating !== 'N/A' && (
+                <p className="text-xs text-muted-foreground mt-1.5 capitalize">
+                  {mql.mqlCapability} capability
+                </p>
               )}
             </div>
 
+            {/* PPS Score */}
+            <div className="p-2.5 bg-muted/30 rounded-lg">
+              <p className="text-sm text-muted-foreground mb-1.5">PPS Score</p>
+              <p className="font-bold text-lg">{analysis?.pps_score || '-'}</p>
+            </div>
+
             {/* Rating Rationale - Takes remaining space */}
-            {analysis?.rating_rationale && (
-              <div className="p-2.5 bg-muted/30 rounded-lg">
-                <p className="text-sm text-muted-foreground mb-1.5">Rating Rationale</p>
-                <p className="text-sm">{analysis.rating_rationale}</p>
-              </div>
-            )}
+            <div className="p-2.5 bg-muted/30 rounded-lg md:col-span-1">
+              <p className="text-sm text-muted-foreground mb-1.5">Rating Rationale</p>
+              <p className="text-sm">{analysis?.rating_rationale || 'N/A'}</p>
+            </div>
           </div>
 
           <Separator />

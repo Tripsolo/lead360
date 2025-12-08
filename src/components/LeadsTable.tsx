@@ -21,7 +21,7 @@ interface LeadsTableProps {
   onExport: () => void;
 }
 
-type SortField = 'name' | 'date' | 'rating' | 'phone' | 'mqlRating';
+type SortField = 'name' | 'date' | 'rating' | 'phone' | 'mqlRating' | 'ppsScore';
 type SortDirection = 'asc' | 'desc' | null;
 
 export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: LeadsTableProps) => {
@@ -56,9 +56,12 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: Leads
       let bVal: any;
 
       if (sortField === 'mqlRating') {
-        const mqlOrder: Record<string, number> = { 'P1': 5, 'P2': 4, 'P3': 3, 'P4': 2, 'P5': 1 };
+        const mqlOrder: Record<string, number> = { 'P0': 6, 'P1': 5, 'P2': 4, 'P3': 3, 'P4': 2, 'P5': 1 };
         aVal = mqlOrder[a.mqlEnrichment?.mqlRating || ''] || 0;
         bVal = mqlOrder[b.mqlEnrichment?.mqlRating || ''] || 0;
+      } else if (sortField === 'ppsScore') {
+        aVal = a.fullAnalysis?.pps_score || 0;
+        bVal = b.fullAnalysis?.pps_score || 0;
       } else {
         aVal = a[sortField as keyof Lead];
         bVal = b[sortField as keyof Lead];
@@ -110,18 +113,17 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: Leads
       case 'Hot': return 'bg-status-hot text-white';
       case 'Warm': return 'bg-status-warm text-white';
       case 'Cold': return 'bg-status-cold text-white';
-      default: return 'bg-muted text-muted-foreground';
+      default: return 'bg-gray-400 text-white';
     }
   };
 
   const getMqlRatingColor = (rating?: string) => {
     switch (rating) {
-      case 'P1': return 'bg-emerald-600 text-white';
-      case 'P2': return 'bg-emerald-500 text-white';
-      case 'P3': return 'bg-amber-500 text-white';
-      case 'P4': return 'bg-orange-500 text-white';
-      case 'P5': return 'bg-gray-400 text-white';
-      default: return 'bg-muted text-muted-foreground';
+      case 'P0': return 'bg-status-hot text-white';
+      case 'P1': return 'bg-status-warm text-white';
+      case 'P2': return 'bg-status-cold text-white';
+      case 'N/A': return 'bg-gray-400 text-white';
+      default: return 'bg-gray-400 text-white';
     }
   };
 
@@ -208,13 +210,19 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: Leads
                   <SortIcon field="mqlRating" />
                 </Button>
               </TableHead>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('ppsScore')} className="h-8 px-2">
+                  PPS Score
+                  <SortIcon field="ppsScore" />
+                </Button>
+              </TableHead>
               <TableHead>Key Concern</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredLeads.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
                   No leads found matching your filters
                 </TableCell>
               </TableRow>
@@ -235,29 +243,32 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: Leads
                   </TableCell>
                   <TableCell>
                     {lead.rating ? (
-                      <Badge className={getRatingColor(lead.rating)}>
+                      <Badge className={`${getRatingColor(lead.rating)} min-w-[60px] justify-center`}>
                         {lead.rating}
                       </Badge>
                     ) : (
-                      <span className="text-muted-foreground text-sm">-</span>
+                      <Badge className="bg-gray-400 text-white min-w-[60px] justify-center">-</Badge>
                     )}
                   </TableCell>
                   <TableCell>
                     {lead.managerRating ? (
-                      <Badge className={getRatingColor(lead.managerRating)}>
+                      <Badge className={`${getRatingColor(lead.managerRating)} min-w-[60px] justify-center`}>
                         {lead.managerRating}
                       </Badge>
                     ) : (
-                      <span className="text-muted-foreground text-sm">-</span>
+                      <Badge className="bg-gray-400 text-white min-w-[60px] justify-center">-</Badge>
                     )}
                   </TableCell>
                   <TableCell>
-                    {lead.mqlEnrichment?.mqlRating ? (
-                      <Badge className={getMqlRatingColor(lead.mqlEnrichment.mqlRating)}>
-                        {lead.mqlEnrichment.mqlRating}
-                      </Badge>
+                    <Badge className={`${getMqlRatingColor(lead.mqlEnrichment?.mqlRating)} min-w-[60px] justify-center`}>
+                      {lead.mqlEnrichment?.mqlRating || 'N/A'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {lead.fullAnalysis?.pps_score ? (
+                      <span className="font-semibold">{lead.fullAnalysis.pps_score}</span>
                     ) : (
-                      <span className="text-muted-foreground text-sm">-</span>
+                      <span className="text-muted-foreground">-</span>
                     )}
                   </TableCell>
                   <TableCell className="max-w-xs">
