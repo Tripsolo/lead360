@@ -624,16 +624,7 @@ ${outputStructure}`;
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             contents: [{ parts: [{ text: fullPrompt }] }],
-            tools: [
-              {
-                google_search_retrieval: {
-                  dynamic_retrieval_config: {
-                    mode: "MODE_DYNAMIC",
-                    dynamic_threshold: 0.7,
-                  },
-                },
-              },
-            ],
+            tools: [{ google_search: {} }],
             generationConfig: {
               temperature: 0.2,
               topK: 40,
