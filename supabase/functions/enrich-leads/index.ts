@@ -61,10 +61,13 @@ async function processEnrichmentBatch(
   console.log(`[Background] Starting enrichment batch for ${leadsToEnrich.length} leads`);
   console.log(`[Background] MQL Schema: "${mqlSchema}", Project Name for API: "${projectName}"`);
 
-  for (const lead of leadsToEnrich) {
+  for (let i = 0; i < leadsToEnrich.length; i++) {
+    const lead = leadsToEnrich[i];
     try {
-      // Add delay between requests to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Add delay between requests to avoid rate limiting (reduced from 500ms to 100ms)
+      if (i > 0) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
 
       const payload = [{
         name: lead.name || "",
@@ -204,7 +207,7 @@ async function processEnrichmentBatch(
     }
   }
 
-  console.log(`[Background] Enrichment batch complete`);
+  console.log(`[Background] Enrichment batch complete: ${leadsToEnrich.length} leads processed`);
 }
 
 serve(async (req) => {
