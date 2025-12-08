@@ -24,6 +24,28 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+// Helper to convert Excel serial dates to ISO strings
+const excelDateToISOString = (excelDate: any): string | null => {
+  if (!excelDate) return null;
+  
+  // If it's already a valid ISO string or date string, return as-is
+  if (typeof excelDate === 'string' && isNaN(Number(excelDate))) {
+    return excelDate;
+  }
+  
+  // If it's a number (Excel serial date), convert it
+  if (typeof excelDate === 'number' || !isNaN(Number(excelDate))) {
+    const numDate = Number(excelDate);
+    // Excel dates start from 1900-01-01 (serial 1)
+    // JavaScript Date epoch adjustment: Dec 30, 1899
+    const excelEpoch = new Date(1899, 11, 30);
+    const jsDate = new Date(excelEpoch.getTime() + numDate * 24 * 60 * 60 * 1000);
+    return jsDate.toISOString();
+  }
+  
+  return null;
+};
+
 const Index = () => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -106,7 +128,7 @@ const Index = () => {
         lead_id: lead.id,
         project_id: projectId,
         crm_data: lead.rawData,
-        latest_revisit_date: lead.rawData?.["Latest Revisit Date"] || null,
+        latest_revisit_date: excelDateToISOString(lead.rawData?.["Latest Revisit Date"]),
       }));
 
       const { error: upsertError } = await supabase
