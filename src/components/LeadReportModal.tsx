@@ -281,8 +281,13 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
             <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
               <DollarSign className="h-5 w-5" />
               Financial Profile
+              {mqlDataAvailable && mql?.mqlCapability && (
+                <Badge variant="outline" className={getCapabilityColor(mql.mqlCapability)}>
+                  {mql.mqlCapability}
+                </Badge>
+              )}
             </h3>
-            <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div className="grid md:grid-cols-3 gap-4">
               <div className="p-3 bg-muted rounded-lg">
                 <p className="text-xs text-muted-foreground mb-1">Budget</p>
                 <p className="font-semibold">
@@ -305,26 +310,6 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
                 <p className="text-xs text-muted-foreground mb-1">Funding Source</p>
                 <p className="font-semibold">{lead.fundingSource || 'N/A'}</p>
               </div>
-              
-              {/* MQL Capability */}
-              {mqlDataAvailable && mql?.mqlCapability && (
-                <div className="p-3 bg-muted rounded-lg">
-                  <p className="text-xs text-muted-foreground mb-1">MQL Capability</p>
-                  <Badge variant="outline" className={getCapabilityColor(mql.mqlCapability)}>
-                    {mql.mqlCapability}
-                  </Badge>
-                </div>
-              )}
-
-              {/* Credit Rating (LLM derived) */}
-              {analysis?.mql_credit_rating && (
-                <div className="p-3 bg-muted rounded-lg">
-                  <p className="text-xs text-muted-foreground mb-1">Credit Rating</p>
-                  <Badge variant="outline" className={getCreditRatingColor(analysis.mql_credit_rating)}>
-                    {analysis.mql_credit_rating}
-                  </Badge>
-                </div>
-              )}
             </div>
           </div>
 

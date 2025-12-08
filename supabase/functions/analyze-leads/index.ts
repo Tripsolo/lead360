@@ -607,7 +607,17 @@ ${
 6. NEVER mention GST numbers or business names
 7. Use these values ONLY for internal scoring calculations
 8. Output only derived ratings: mql_credit_rating (High/Medium/Low), mql_capability
-9. For Business Owners: Describe scale abstractly (e.g., "established manufacturing business" not "turnover 5Cr-25Cr")`;
+9. For Business Owners: Describe scale abstractly (e.g., "established manufacturing business" not "turnover 5Cr-25Cr")
+
+## OUTPUT FIELD RESTRICTIONS (NON-NEGOTIABLE - ABSOLUTE REQUIREMENT):
+The following output fields MUST NEVER contain ANY mention of credit, loans, EMI, borrowing, debt, or credit-related information:
+- rating_rationale: NO credit scores, NO loan counts, NO EMI burden, NO credit rating, NO loan history, NO borrowing capacity
+- persona_description: NO credit information, NO loan history, NO EMI references, NO debt profile
+- summary: NO credit data, NO loan details, NO EMI or borrowing information, NO financial obligations
+
+This restriction is ABSOLUTE and NON-NEGOTIABLE. Credit/loan/EMI data may ONLY be used for internal PPS scoring calculations.
+The output text must NEVER reveal that credit, loan, or EMI data was considered or analyzed.
+Violations of this rule are unacceptable under any circumstances.`;
 
       const outputConstraints = `# OUTPUT CONSTRAINTS (CRITICAL - STRICTLY ENFORCE):
 - Rating rationale should start with "**PPS Score: X/100.**" in bold, followed by key scoring factors. Do NOT include rating label like "(Hot)" or "(Warm)" in the rationale - that's shown separately
