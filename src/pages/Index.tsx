@@ -36,6 +36,8 @@ const Index = () => {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [showEnrichPrompt, setShowEnrichPrompt] = useState(false);
+  const [showClearCacheConfirm, setShowClearCacheConfirm] = useState(false);
+  const [isClearingCache, setIsClearingCache] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -450,6 +452,56 @@ const Index = () => {
     navigate('/auth');
   };
 
+  const handleClearCache = async () => {
+    if (!selectedProjectId) {
+      toast({
+        title: 'No project selected',
+        description: 'Please upload a file first.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsClearingCache(true);
+    try {
+      // Delete enrichments for this project
+      await supabase
+        .from('lead_enrichments')
+        .delete()
+        .eq('project_id', selectedProjectId);
+      
+      // Delete analyses for this project
+      await supabase
+        .from('lead_analyses')
+        .delete()
+        .eq('project_id', selectedProjectId);
+      
+      // Delete leads for this project
+      await supabase
+        .from('leads')
+        .delete()
+        .eq('project_id', selectedProjectId);
+
+      // Reset UI state
+      handleReset();
+      setShowClearCacheConfirm(false);
+      
+      toast({
+        title: 'Cache cleared',
+        description: 'All lead data for this project has been cleared.',
+      });
+    } catch (error) {
+      console.error('Clear cache error:', error);
+      toast({
+        title: 'Error clearing cache',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsClearingCache(false);
+    }
+  };
+
   if (!user) {
     return null;
   }
@@ -516,6 +568,9 @@ const Index = () => {
               onLeadClick={handleLeadClick}
               ratingFilter={ratingFilter}
               onExport={handleExport}
+              userEmail={user?.email}
+              onClearCache={() => setShowClearCacheConfirm(true)}
+              isClearingCache={isClearingCache}
             />
 
             {/* Lead Report Modal */}
@@ -549,6 +604,27 @@ const Index = () => {
               handleEnrichLeads();
             }}>
               Enrich First
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Clear Cache Confirmation Dialog */}
+      <AlertDialog open={showClearCacheConfirm} onOpenChange={setShowClearCacheConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear all cached data?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete all CRM data, MQL enrichments, and AI analyses for this project. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleClearCache}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isClearingCache ? 'Clearing...' : 'Clear Cache'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

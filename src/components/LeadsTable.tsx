@@ -12,19 +12,22 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, ArrowUpDown, ArrowUp, ArrowDown, Download } from 'lucide-react';
+import { Search, ArrowUpDown, ArrowUp, ArrowDown, Download, Trash2 } from 'lucide-react';
 
 interface LeadsTableProps {
   leads: Lead[];
   onLeadClick: (lead: Lead) => void;
   ratingFilter: string | null;
   onExport: () => void;
+  userEmail?: string;
+  onClearCache?: () => void;
+  isClearingCache?: boolean;
 }
 
 type SortField = 'name' | 'date' | 'rating' | 'phone' | 'mqlRating' | 'ppsScore';
 type SortDirection = 'asc' | 'desc' | null;
 
-export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: LeadsTableProps) => {
+export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport, userEmail, onClearCache, isClearingCache }: LeadsTableProps) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [ownerFilter, setOwnerFilter] = useState<string>('all');
   const [projectFilter, setProjectFilter] = useState<string>('all');
@@ -172,6 +175,17 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: Leads
             ))}
           </SelectContent>
         </Select>
+        {userEmail?.endsWith('@raisn.ai') && onClearCache && (
+          <Button 
+            variant="outline" 
+            onClick={onClearCache} 
+            size="sm" 
+            className="md:w-auto text-destructive border-destructive hover:bg-destructive/10"
+            disabled={isClearingCache}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        )}
         <Button variant="outline" onClick={onExport} size="sm" className="md:w-auto">
           <Download className="h-4 w-4" />
         </Button>
