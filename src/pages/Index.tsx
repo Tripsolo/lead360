@@ -222,7 +222,7 @@ const Index = () => {
   };
 
   // Poll for enrichment results
-  const pollForEnrichmentResults = async (leadIdsToCheck: string[], maxAttempts = 20) => {
+  const pollForEnrichmentResults = async (leadIdsToCheck: string[], maxAttempts = 30) => {
     let attempts = 0;
     const pollInterval = 5000; // 5 seconds
 
@@ -245,17 +245,18 @@ const Index = () => {
         
         toast({
           title: 'Enrichment complete',
-          description: `${successCount} leads enriched successfully, ${failedCount} failed.`,
+          description: `100% complete - ${successCount} leads enriched successfully, ${failedCount} failed.`,
         });
         return true;
       }
 
-      // Update UI with partial results
+      // Update UI with partial results (show percentage)
       if (enrichments && enrichments.length > 0) {
         updateLeadsWithEnrichments(enrichments);
+        const percentComplete = Math.round((enrichments.length / leadIdsToCheck.length) * 100);
         toast({
           title: 'Enrichment in progress',
-          description: `${enrichments.length}/${leadIdsToCheck.length} leads processed...`,
+          description: `${percentComplete}% complete (${enrichments.length}/${leadIdsToCheck.length} leads)...`,
         });
       }
 
@@ -273,9 +274,10 @@ const Index = () => {
       updateLeadsWithEnrichments(finalEnrichments);
     }
 
+    const finalPercentComplete = Math.round(((finalEnrichments?.length || 0) / leadIdsToCheck.length) * 100);
     toast({
       title: 'Enrichment partially complete',
-      description: `Processed ${finalEnrichments?.length || 0}/${leadIdsToCheck.length} leads. Some leads may still be processing.`,
+      description: `${finalPercentComplete}% complete (${finalEnrichments?.length || 0}/${leadIdsToCheck.length} leads). Some leads may still be processing.`,
     });
     return false;
   };
@@ -283,37 +285,55 @@ const Index = () => {
   const handleEnrichLeads = async () => {
     setIsEnriching(true);
     try {
-      const { data, error } = await supabase.functions.invoke('enrich-leads', {
-        body: { 
-          leads: leads.map(l => ({ id: l.id, name: l.name, phone: l.phone })),
-          projectId: selectedProjectId
-        },
+      // Split leads into smaller batches (max 3 per batch) to avoid timeout
+      const BATCH_SIZE = 3;
+      const allLeads = leads.map(l => ({ id: l.id, name: l.name, phone: l.phone }));
+      const batches: typeof allLeads[] = [];
+      
+      for (let i = 0; i < allLeads.length; i += BATCH_SIZE) {
+        batches.push(allLeads.slice(i, i + BATCH_SIZE));
+      }
+
+      const leadIdsToCheck = allLeads.map(l => l.id);
+      
+      toast({
+        title: 'Starting enrichment',
+        description: `Processing ${allLeads.length} leads in ${batches.length} batches...`,
       });
 
-      if (error) {
-        throw new Error(error.message || 'Failed to enrich leads');
-      }
-
-      // Handle async processing response
-      if (data?.status === 'processing') {
-        toast({
-          title: 'Enrichment started',
-          description: data.message || 'Processing leads in background...',
-        });
-
-        // Poll for results
-        const leadIdsToCheck = data.meta?.leadsToEnrichIds || leads.map(l => l.id);
-        await pollForEnrichmentResults(leadIdsToCheck);
-      } else if (data?.enrichments) {
-        // Synchronous response with enrichments
-        updateLeadsWithEnrichments(data.enrichments);
+      // Start all batch function calls sequentially (they process in background)
+      for (let i = 0; i < batches.length; i++) {
+        const batch = batches[i];
+        const percentInitiated = Math.round(((i + 1) / batches.length) * 100);
         
-        const meta = data.meta || {};
-        toast({
-          title: 'Enrichment complete',
-          description: `${meta.enriched || 0} leads enriched, ${meta.cached || 0} from cache, ${meta.failed || 0} failed.`,
+        console.log(`Starting enrichment batch ${i + 1}/${batches.length} with ${batch.length} leads`);
+        
+        const { error } = await supabase.functions.invoke('enrich-leads', {
+          body: { 
+            leads: batch,
+            projectId: selectedProjectId
+          },
         });
+
+        if (error) {
+          console.error(`Batch ${i + 1} error:`, error);
+        }
+
+        // Show batch initiation progress
+        toast({
+          title: 'Batches initiated',
+          description: `${percentInitiated}% of batches started (${i + 1}/${batches.length})...`,
+        });
+
+        // Small delay between batch initiations to avoid overwhelming the API
+        if (i < batches.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
       }
+
+      // Poll for all results
+      await pollForEnrichmentResults(leadIdsToCheck);
+
     } catch (error) {
       console.error('Enrichment error:', error);
       toast({
