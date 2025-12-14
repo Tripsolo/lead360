@@ -6,6 +6,349 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ============= STAGE 1: Signal Extraction =============
+function buildStage1Prompt(
+  leadDataJson: string,
+  mqlSection: string,
+  mqlAvailable: boolean,
+  crmFieldExplainer: string,
+  mqlFieldExplainer: string
+): string {
+  const extractionSystemPrompt = `You are a data extraction specialist for real estate CRM and lead enrichment data. Your task is to extract structured signals from raw CRM and MQL data accurately and completely.
+
+Focus on:
+- Extracting factual information from structured fields
+- Parsing unstructured visit comments for key data points
+- Transforming raw values into categorical signals for privacy
+- Identifying all relevant signals for lead scoring`;
+
+  const extractionInstructions = `# EXTRACTION TASK
+
+Extract structured signals from the CRM and MQL data provided. Transform raw values into categorical signals where specified.
+
+## CRITICAL TRANSFORMATIONS:
+1. credit_score → credit_rating: 750+ = "High", 650-749 = "Medium", <650 = "Low", null = null
+2. emi_to_income_ratio → emi_burden_level: <30% = "Low", 30-50% = "Moderate", >50% = "High", null = null
+3. home_loan_active >= 2 → investor_signal: true
+4. Parse visit_comments for: budget, in-hand funds %, finalization timeline, spot closure response, sample feedback, core motivation
+5. Summarize all visit notes into a concise 30-word summary
+
+## FIELD PRECEDENCE RULES:
+- Employer Name: Use MQL value if available, else CRM
+- Designation: Use MQL value if available, else CRM
+- Location/Residence: ALWAYS use CRM value
+- Age/Gender: Use MQL value if available`;
+
+  const extractionOutputSchema = `# EXTRACTION OUTPUT STRUCTURE
+Return a JSON object with this EXACT structure:
+{
+  "demographics": {
+    "age": number | null,
+    "gender": "Male" | "Female" | null,
+    "family_stage": "Single" | "Young Couple" | "Growing Family" | "Mature Family" | "Empty Nest" | "Retired" | null,
+    "nri_status": boolean,
+    "residence_location": "string",
+    "building_name": "string | null",
+    "locality_grade": "Premium" | "Popular" | "Affordable" | null
+  },
+  "professional_profile": {
+    "occupation_type": "Salaried" | "Business" | "Self-Employed" | "Professional" | "Retired" | "Homemaker" | null,
+    "designation": "string | null",
+    "employer": "string | null",
+    "industry": "string | null",
+    "business_type": "string | null",
+    "turnover_tier": "0-40L" | "40L-1.5Cr" | "1.5Cr-5Cr" | "5Cr-25Cr" | "25Cr+" | null
+  },
+  "financial_signals": {
+    "budget_stated_cr": number | null,
+    "in_hand_funds_pct": number | null,
+    "funding_source": "Self-Funding" | "Loan" | "Sale of Asset" | "Subvention Loan" | null,
+    "income_tier": "Elite" | "High" | "Mid-Senior" | "Entry-Mid" | null,
+    "credit_rating": "High" | "Medium" | "Low" | null,
+    "emi_burden_level": "Low" | "Moderate" | "High" | null,
+    "mql_capability": "high" | "medium" | "low" | null,
+    "mql_lifestyle": "luxury" | "aspirational" | "value_for_money" | null,
+    "investor_signal": boolean,
+    "home_loan_recency": "Within 3 years" | "3-5 years ago" | "5+ years ago" | "No loans" | null,
+    "home_loan_count": number | null,
+    "home_loan_active": number | null,
+    "home_loan_paid_off": number | null,
+    "guarantor_loan_count": number | null
+  },
+  "property_preferences": {
+    "config_interested": "string",
+    "carpet_area_desired": "string | null",
+    "floor_preference": "string | null",
+    "stage_preference": "Launch" | "Under Construction" | "Nearing Completion" | "RTMI" | null,
+    "facing_preference": "string | null"
+  },
+  "engagement_signals": {
+    "visit_count": number,
+    "days_since_last_visit": number | null,
+    "is_duplicate_lead": boolean,
+    "sample_feedback": "positive" | "negative" | "neutral" | "not_seen",
+    "decision_makers_present": "All" | "Partial" | "Proxy" | null,
+    "spot_closure_asked": boolean,
+    "finalization_timeline": "string | null",
+    "searching_since": "string | null"
+  },
+  "concerns_extracted": [
+    { "topic": "Price" | "Location" | "Possession" | "Config" | "Amenities" | "Trust" | "Others", "detail": "string" }
+  ],
+  "competitor_mentions": [
+    { "name": "string", "project": "string | null", "visit_status": "Yet to Visit" | "Already Visited" | null }
+  ],
+  "core_motivation": "string describing primary buying motivation",
+  "visit_notes_summary": "30-word summary of visit experience and feedback",
+  "brand_loyalty": boolean,
+  "mql_data_available": ${mqlAvailable}
+}`;
+
+  return `${extractionSystemPrompt}
+
+${crmFieldExplainer}
+
+${mqlAvailable ? mqlFieldExplainer : ""}
+
+${mqlSection}
+
+# LEAD DATA TO EXTRACT FROM
+${leadDataJson}
+
+${extractionInstructions}
+
+${extractionOutputSchema}`;
+}
+
+// ============= STAGE 2: Scoring & Generation =============
+function buildStage2Prompt(
+  extractedSignalsJson: string,
+  systemPrompt: string,
+  brandContext: string,
+  projectContext: string,
+  leadScoringModel: string,
+  personaDefinitions: string,
+  privacyRules: string,
+  outputConstraints: string,
+  concernGeneration: string,
+  talkingpointsGeneration: string,
+  outputStructure: string
+): string {
+  const stage2Instructions = `# ANALYSIS INSTRUCTIONS
+
+You are provided with PRE-EXTRACTED SIGNALS from CRM and MQL data (not raw data). Use these signals to:
+
+1. Calculate the PPS Score using the 5-dimension framework:
+   - Financial Capability (max 30 pts): Use income_tier, turnover_tier, budget gap, funding_source, credit_rating, emi_burden_level
+   - Intent & Engagement (max 25 pts): Use visit_count, is_duplicate_lead, sample_feedback, competitor_mentions
+   - Urgency & Timeline (max 20 pts): Use stage_preference, core_motivation, home_loan_recency, investor_signal
+   - Product-Market Fit (max 15 pts): Use config match, location fit, mql_lifestyle alignment
+   - Authority & Decision Dynamics (max 10 pts): Use decision_makers_present, age-based adjustments, guarantor_loan_count
+
+2. Apply scoring adjustments from extracted signals:
+   - If investor_signal is true: +5 pts to Urgency
+   - If home_loan_recency is "Within 3 years" AND investor_signal is false: -3 pts to Urgency
+   - If emi_burden_level is "High": -5 pts to Financial. If "Moderate": -2 pts
+   - If guarantor_loan_count > 0: +1 pt to Authority
+
+3. Derive final rating from PPS: >= 85 = Hot, >= 65 = Warm, < 65 = Cold
+
+4. Identify persona using detection rules in priority order (NRI > Retirement > Business Owner > Investor > Upgrade Seeker > First-Time Buyer > Custom)
+
+5. Generate outputs using ONLY the extracted signals - do NOT hallucinate additional information
+
+6. For competitor talking points: Use COMPETITOR PRICING REFERENCE with quantitative comparisons`;
+
+  return `${systemPrompt}
+
+${brandContext}
+
+${projectContext}
+
+${leadScoringModel}
+
+${personaDefinitions}
+
+${privacyRules}
+
+${outputConstraints}
+
+${concernGeneration}
+
+${talkingpointsGeneration}
+
+# PRE-EXTRACTED SIGNALS (Use these for analysis - NOT raw data)
+${extractedSignalsJson}
+
+${stage2Instructions}
+
+${outputStructure}`;
+}
+
+// ============= Gemini API Call Helper =============
+async function callGeminiAPI(
+  prompt: string,
+  googleApiKey: string,
+  useJsonMode: boolean = true,
+  maxRetries: number = 3
+): Promise<string> {
+  let lastError: Error | null = null;
+  let response: Response | null = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const generationConfig: any = {
+        temperature: 0.2,
+        topK: 40,
+        topP: 0.95,
+        maxOutputTokens: 8192,
+      };
+      
+      if (useJsonMode) {
+        generationConfig.responseMimeType = "application/json";
+      }
+
+      response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent?key=${googleApiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            tools: [{ google_search: {} }],
+            generationConfig,
+          }),
+        },
+      );
+
+      if (response.ok) {
+        break;
+      }
+
+      const errorText = await response.text();
+
+      if (response.status === 503 && attempt < maxRetries) {
+        const backoffMs = Math.pow(2, attempt) * 1000;
+        console.warn(`Google AI API overloaded (attempt ${attempt}/${maxRetries}), retrying in ${backoffMs}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+        continue;
+      }
+
+      console.error("Google AI API error:", errorText);
+      lastError = new Error(`API call failed: ${errorText}`);
+    } catch (fetchError) {
+      lastError = fetchError instanceof Error ? fetchError : new Error(String(fetchError));
+      if (attempt < maxRetries) {
+        const backoffMs = Math.pow(2, attempt) * 1000;
+        console.warn(`Fetch error (attempt ${attempt}/${maxRetries}), retrying in ${backoffMs}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+      }
+    }
+  }
+
+  if (!response?.ok) {
+    throw lastError || new Error("API call failed after retries");
+  }
+
+  const data = await response.json();
+  const candidate = data?.candidates?.[0];
+  const part = candidate?.content?.parts?.[0];
+  return typeof part?.text === "string" ? part.text : JSON.stringify(candidate ?? data);
+}
+
+// ============= Fallback Extraction =============
+function createFallbackExtraction(lead: any, mqlEnrichment: any): any {
+  const rawData = lead.rawData || {};
+  const mqlAvailable = mqlEnrichment && mqlEnrichment.mql_rating && mqlEnrichment.mql_rating !== "N/A";
+  
+  // Calculate credit rating from MQL
+  let creditRating = null;
+  if (mqlEnrichment?.credit_score) {
+    if (mqlEnrichment.credit_score >= 750) creditRating = "High";
+    else if (mqlEnrichment.credit_score >= 650) creditRating = "Medium";
+    else creditRating = "Low";
+  }
+
+  // Calculate EMI burden level
+  let emiBurdenLevel = null;
+  if (mqlEnrichment?.emi_to_income_ratio !== null && mqlEnrichment?.emi_to_income_ratio !== undefined) {
+    if (mqlEnrichment.emi_to_income_ratio < 30) emiBurdenLevel = "Low";
+    else if (mqlEnrichment.emi_to_income_ratio <= 50) emiBurdenLevel = "Moderate";
+    else emiBurdenLevel = "High";
+  }
+
+  // Calculate home loan recency
+  let homeLoanRecency = null;
+  if (mqlEnrichment?.latest_home_loan_date) {
+    const loanDate = new Date(mqlEnrichment.latest_home_loan_date);
+    const yearsSinceLoan = (Date.now() - loanDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+    homeLoanRecency = yearsSinceLoan < 3 ? "Within 3 years" : yearsSinceLoan < 5 ? "3-5 years ago" : "5+ years ago";
+  }
+
+  return {
+    demographics: {
+      age: mqlEnrichment?.age || null,
+      gender: mqlEnrichment?.gender || null,
+      family_stage: null,
+      nri_status: rawData["Correspondence Country"] && rawData["Correspondence Country"] !== "India",
+      residence_location: rawData["Location of Residence"] || null,
+      building_name: rawData["Building Name"] || null,
+      locality_grade: mqlEnrichment?.locality_grade || null,
+    },
+    professional_profile: {
+      occupation_type: rawData["Occupation"] || null,
+      designation: mqlEnrichment?.designation || rawData["Designation"] || null,
+      employer: mqlEnrichment?.employer_name || rawData["Place of Work"] || null,
+      industry: mqlEnrichment?.industry || rawData["Industry / Sector"] || null,
+      business_type: mqlEnrichment?.business_type || null,
+      turnover_tier: mqlEnrichment?.turnover_slab || null,
+    },
+    financial_signals: {
+      budget_stated_cr: null,
+      in_hand_funds_pct: null,
+      funding_source: rawData["Source of Funding"] || null,
+      income_tier: null,
+      credit_rating: creditRating,
+      emi_burden_level: emiBurdenLevel,
+      mql_capability: mqlEnrichment?.mql_capability || null,
+      mql_lifestyle: mqlEnrichment?.mql_lifestyle || mqlEnrichment?.lifestyle || null,
+      investor_signal: (mqlEnrichment?.home_loan_active || 0) >= 2,
+      home_loan_recency: homeLoanRecency,
+      home_loan_count: mqlEnrichment?.home_loan_count || null,
+      home_loan_active: mqlEnrichment?.home_loan_active || null,
+      home_loan_paid_off: mqlEnrichment?.home_loan_paid_off || null,
+      guarantor_loan_count: mqlEnrichment?.guarantor_loan_count || null,
+    },
+    property_preferences: {
+      config_interested: rawData["Interested Unit"] || null,
+      carpet_area_desired: rawData["Desired Carpet Area"] || null,
+      floor_preference: rawData["Desired Floor Band"] || null,
+      stage_preference: rawData["Stage of Construction"] || null,
+      facing_preference: null,
+    },
+    engagement_signals: {
+      visit_count: parseInt(rawData["No. of Site Re-Visits"] || "0") + 1,
+      days_since_last_visit: null,
+      is_duplicate_lead: rawData["Duplicate check"] === "Duplicate",
+      sample_feedback: "not_seen",
+      decision_makers_present: null,
+      spot_closure_asked: false,
+      finalization_timeline: null,
+      searching_since: rawData["Searching Property since"] || null,
+    },
+    concerns_extracted: [],
+    competitor_mentions: rawData["Competitor Name"] ? [{
+      name: rawData["Competitor Name"],
+      project: rawData["Competition Project Name"] || null,
+      visit_status: rawData["Competition Visit Status"] || null,
+    }] : [],
+    core_motivation: "Property purchase",
+    visit_notes_summary: rawData["Visit Comments"]?.substring(0, 100) || "No visit notes available",
+    brand_loyalty: rawData["Owned/Stay in Kalpataru Property"] === "Yes",
+    mql_data_available: mqlAvailable,
+  };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -112,6 +455,8 @@ serve(async (req) => {
     }
 
     console.log(`${leadsToAnalyze.length} leads need fresh analysis, ${cachedResults.length} from cache`);
+
+    // ============= PROMPT SECTIONS (Preserved from original) =============
 
     const systemPrompt = `You are an expert real estate sales analyst specializing in lead qualification and conversion optimization for premium residential projects in India.
 
@@ -462,7 +807,180 @@ These belong in the Summary section, not here.`;
       competitorPricingMatrix += `- ${config.type}: ${config.carpet_sqft_range?.[0]}-${config.carpet_sqft_range?.[1]} sqft, ₹${config.price_range_cr?.[0]}-${config.price_range_cr?.[1]} Cr, Target: ${config.target_persona || "N/A"}\n`;
     }
 
-    // Process leads that need analysis
+    const brandContext = `# BRAND CONTEXT
+Developer: ${brandMetadata?.developer?.name || "Unknown"}
+Legacy: ${brandMetadata?.developer?.legacy || "N/A"}
+Reputation: ${brandMetadata?.developer?.reputation || "N/A"}
+Trust Signals: ${brandMetadata?.developer?.trust_signals?.join(", ") || "N/A"}`;
+
+    const projectContext = `# PROJECT CONTEXT: ${projectMetadata?.project_name || project.name}
+
+## Location
+${projectMetadata?.location?.address || "N/A"}
+Micro-market: ${projectMetadata?.location?.micro_market || "N/A"}
+Positioning: ${projectMetadata?.location?.positioning || "N/A"}
+Walk-to-Work Employers: ${projectMetadata?.location?.walk_to_work_employers?.join(", ") || "N/A"}
+Medical Hub: ${projectMetadata?.location?.medical_hub?.join(", ") || "N/A"}
+
+## Township Features
+${
+  projectMetadata?.township
+    ? `Name: ${projectMetadata.township.name || "N/A"}
+Total Area: ${projectMetadata.township.total_area_acres || "N/A"} acres
+Grand Central Park: ${projectMetadata.township.grand_central_park?.area_acres || "N/A"} acres with ${projectMetadata.township.grand_central_park?.trees || "N/A"} trees
+Open Space: ${projectMetadata.township.open_space_percent || "N/A"}%
+Vehicle-Free Podium: ${projectMetadata.township.podium_acres || "N/A"} acres`
+    : "N/A"
+}
+
+## USPs
+Primary: ${projectMetadata?.usps?.primary?.map((usp: string) => `\n- ${usp}`).join("") || "N/A"}
+Construction Quality: ${projectMetadata?.usps?.construction_quality?.map((qual: string) => `\n- ${qual}`).join("") || "N/A"}
+
+## Project DNA
+Architectural Partner: ${projectMetadata?.project_dna?.architect || "N/A"}
+Landscape Partner: ${projectMetadata?.project_dna?.landscape || "N/A"}
+Layout Philosophy: ${projectMetadata?.project_dna?.layout_philosophy || "N/A"}
+
+## Inventory Configurations
+${
+  projectMetadata?.inventory?.configurations
+    ?.map(
+      (config: any) =>
+        `- ${config.type}: ${config.carpet_sqft_range?.[0] || "N/A"}-${config.carpet_sqft_range?.[1] || "N/A"} sqft, ₹${config.price_range_cr?.[0]}-${config.price_range_cr?.[1]} Cr
+  Target: ${config.target_persona || "N/A"}
+  Notes: ${config.notes || "N/A"}`,
+    )
+    .join("\n") || "N/A"
+}
+
+## Common Objections & Rebuttals
+${
+  projectMetadata?.common_objections
+    ? Object.entries(projectMetadata.common_objections)
+        .map(([key, obj]: [string, any]) => `- ${key}: ${obj.objection || "N/A"}\n  Rebuttal: ${obj.rebuttal}`)
+        .join("\n")
+    : "N/A"
+}`;
+
+    const privacyRules = `# PRIVACY RULES (CRITICAL - NEVER VIOLATE):
+1. NEVER mention credit score numbers in any output field
+2. NEVER mention specific loan amounts, EMI values, or emi_to_income_ratio percentages
+3. NEVER mention card usage percentages or card limits
+4. NEVER mention income figures (final_income_lacs, pre_tax_income)
+5. NEVER mention turnover slab numbers directly (use abstract descriptions like "mid-size business")
+6. NEVER mention GST numbers or business names
+7. Use these values ONLY for internal scoring calculations
+8. Output only derived ratings: mql_credit_rating (High/Medium/Low), mql_capability
+9. For Business Owners: Describe scale abstractly (e.g., "established manufacturing business" not "turnover 5Cr-25Cr")
+
+## OUTPUT FIELD RESTRICTIONS (NON-NEGOTIABLE - ABSOLUTE REQUIREMENT):
+The following output fields MUST NEVER contain ANY mention of credit, loans, EMI, borrowing, debt, or credit-related information:
+- rating_rationale: NO credit scores, NO loan counts, NO EMI burden, NO credit rating, NO loan history, NO borrowing capacity
+- persona_description: NO credit information, NO loan history, NO EMI references, NO debt profile
+- summary: NO credit data, NO loan details, NO EMI or borrowing information, NO financial obligations
+
+This restriction is ABSOLUTE and NON-NEGOTIABLE. Credit/loan/EMI data may ONLY be used for internal PPS scoring calculations.
+The output text must NEVER reveal that credit, loan, or EMI data was considered or analyzed.
+Violations of this rule are unacceptable under any circumstances.`;
+
+    const outputConstraints = `# OUTPUT CONSTRAINTS (CRITICAL - STRICTLY ENFORCE):
+- Rating rationale should start with "**PPS Score: X/100.**" in bold, followed by key scoring factors. Do NOT include rating label like "(Hot)" or "(Warm)" in the rationale - that's shown separately
+- Summary: Maximum 30 words. Be concise and focused.
+- Next Best Action: Maximum 15 words. Keep it actionable and specific.`;
+
+    const concernGeneration = `#Key Concerns: These must be the CUSTOMER'S concerns about the project or specific unit they are considering. Focus on: price/budget gap, location/connectivity issues, possession date/timeline, unit configuration/size, amenities/facilities. DO NOT include generic sales concerns.
+- Concern Categories: For EACH key_concern, classify it into ONE of these categories (same order as key_concerns array):
+  1. "Price" - Budget gaps, pricing issues, financing concerns, EMI issues
+  2. "Location" - Connectivity, infrastructure, surroundings, pollution, traffic, facilities nearby
+  3. "Possession" - Delivery timeline, construction delays, handover dates
+  4. "Config" - Unit configuration, layout issues, view concerns, floor preference, carpet area
+  5. "Amenities" - Amenities in home or complex, facilities
+  6. "Trust" - Builder reputation, track record concerns
+  7. "Others" - Anything else
+- Primary Concern Category: The SINGLE most important concern category. If multiple concerns exist, pick the one that appears FIRST in the priority order above ( Location > Config > Price > Possession > Amenities > Trust > Others)`;
+
+    const talkingpointsGeneration = `# TALKING POINTS GENERATION (CRITICAL - FOLLOW PRIORITY RULES):
+Generate 2-3 talking points TOTAL following these strict priority rules:
+
+PRIORITY 1: Competitor Handling (Max 2 points)
+- Only include if any competitor is mentioned in CRM data (competitor name, competition project, or visit comments)
+- Use BOTH qualitative AND quantitative comparisons when data is available
+- Include specific metrics from the COMPETITOR PRICING REFERENCE: price-per-sqft, carpet area comparison, possession timeline
+- Format examples:
+  - "Eternia 3BHK offers 20% more carpet area (1100 vs 918 sqft) at competitive ₹/sqft"
+  - "Amara possession is 2026; Eternia Phase 1 matches with added 250-acre park premium"
+  - "Godrej Ascend 3BHK at 855 sqft vs Eternia Large 3BHK at 1100+ sqft - 30% more space"
+- Each point max 15 words
+- Topic type: "Competitor handling"
+
+FOR RTMI (Ready-to-Move-In) SEEKERS:
+- Check which competitors offer earlier possession from COMPETITOR PRICING REFERENCE
+- Acknowledge the timeline gap honestly
+- Highlight why Eternia is worth the wait: park ecosystem, township moat, layout efficiency, construction quality
+- Example: "Amara is RTMI but Eternia's 250-acre park ecosystem adds long-term value premium"
+
+PRIORITY 2: Objection Handling (Max 1 point)
+- Only include if customer has specific concerns or objections from notes or CRM fields
+- Maximum 1 talking point for objection handling
+- Max 15 words
+- Topic type: "Objection handling"
+
+PRIORITY 3: What to Highlight (Max 2 points)
+- Pick the project USPs/value propositions most relevant to the customer's persona and profile
+- Maximum 2 talking points for highlighting features
+- Each point max 15 words
+- Topic type: "What to highlight"
+
+DISTRIBUTION RULES:
+- Minimum 2 talking points, maximum 3 talking points total
+- If competitor mentioned: Include 1-2 competitor handling points first
+- If customer has concerns/objections: Include 1 objection handling point second
+- Fill remaining slots (up to 3 total) with "What to highlight" points
+- Each talking point must be max 15 words
+
+${competitorPricingMatrix}`;
+
+    const outputStructure = `# OUTPUT STRUCTURE
+Return a JSON object with this EXACT structure:
+{
+  "ai_rating": "Hot" | "Warm" | "Cold",
+  "rating_confidence": "High" | "Medium" | "Low",
+  "pps_score": 0-100,
+  "pps_breakdown": {
+    "financial_capability": 0-30,
+    "intent_engagement": 0-25,
+    "urgency_timeline": 0-20,
+    "product_market_fit": 0-15,
+    "authority_dynamics": 0-10
+  },
+  "rating_rationale": "**PPS Score: X/100.** Brief explanation of key scoring factors without rating label",
+  "persona": "Persona label",
+  "persona_description": "2-line description focusing on: (1) demographics - age, gender, family composition; (2) financial/professional profile - occupation, designation, income capability; (3) primary buying motivation. For business owners, mention scale abstractly (e.g., 'established manufacturing business') without specific turnover figures. DO NOT include visit details, property preferences, or concerns here.",
+  "summary": "Summarize the lead's visit notes: what they are looking for, visit experience/feedback, decision factors and timelines mentioned. DO NOT repeat demographic or professional details. Max 30 words.",
+  "key_concerns": ["concern1", "concern2"],
+  "concern_categories": ["Price", "Location"],
+  "primary_concern_category": "Price",
+  "next_best_action": "Specific action (max 15 words)",
+  "talking_points": [{"type": "What to highlight", "point": "max 15 words"}],
+  "extracted_signals": {
+    "budget_stated": number | null,
+    "in_hand_funds": number | null,
+    "finalization_timeline": "string",
+    "decision_maker_present": boolean,
+    "spot_closure_asked": boolean,
+    "sample_feedback": "positive" | "negative" | "neutral" | "not_seen",
+    "core_motivation": "string"
+  },
+  "mql_credit_rating": "High" | "Medium" | "Low" | null,
+  "mql_emi_burden": "Low" | "Moderate" | "High" | null,
+  "mql_investor_signal": boolean,
+  "overridden_fields": [],
+  "mql_data_available": boolean
+}`;
+
+    // ============= TWO-STAGE ANALYSIS PIPELINE =============
+
     const analysisPromises = leadsToAnalyze.map(async (leadWithMql: any, index: number) => {
       await new Promise((resolve) => setTimeout(resolve, index * 100));
 
@@ -542,314 +1060,63 @@ IMPORTANT SCORING RULES:
         mqlSection = `# MQL DATA: Not available for this lead. Score using CRM data only. Set mql_data_available to false.`;
       }
 
-      const brandContext = `# BRAND CONTEXT
-Developer: ${brandMetadata?.developer?.name || "Unknown"}
-Legacy: ${brandMetadata?.developer?.legacy || "N/A"}
-Reputation: ${brandMetadata?.developer?.reputation || "N/A"}
-Trust Signals: ${brandMetadata?.developer?.trust_signals?.join(", ") || "N/A"}`;
+      // ===== STAGE 1: Extract Signals =====
+      console.log(`Stage 1 (Extraction) starting for lead ${lead.id}`);
+      
+      const stage1Prompt = buildStage1Prompt(
+        leadDataJson,
+        mqlSection,
+        mqlAvailable,
+        crmFieldExplainer,
+        mqlFieldExplainer
+      );
 
-      const projectContext = `# PROJECT CONTEXT: ${projectMetadata?.project_name || project.name}
-
-## Location
-${projectMetadata?.location?.address || "N/A"}
-Micro-market: ${projectMetadata?.location?.micro_market || "N/A"}
-Positioning: ${projectMetadata?.location?.positioning || "N/A"}
-Walk-to-Work Employers: ${projectMetadata?.location?.walk_to_work_employers?.join(", ") || "N/A"}
-Medical Hub: ${projectMetadata?.location?.medical_hub?.join(", ") || "N/A"}
-
-## Township Features
-${
-  projectMetadata?.township
-    ? `Name: ${projectMetadata.township.name || "N/A"}
-Total Area: ${projectMetadata.township.total_area_acres || "N/A"} acres
-Grand Central Park: ${projectMetadata.township.grand_central_park?.area_acres || "N/A"} acres with ${projectMetadata.township.grand_central_park?.trees || "N/A"} trees
-Open Space: ${projectMetadata.township.open_space_percent || "N/A"}%
-Vehicle-Free Podium: ${projectMetadata.township.podium_acres || "N/A"} acres`
-    : "N/A"
-}
-
-## USPs
-Primary: ${projectMetadata?.usps?.primary?.map((usp: string) => `\n- ${usp}`).join("") || "N/A"}
-Construction Quality: ${projectMetadata?.usps?.construction_quality?.map((qual: string) => `\n- ${qual}`).join("") || "N/A"}
-
-## Project DNA
-Architectural Partner: ${projectMetadata?.project_dna?.architect || "N/A"}
-Landscape Partner: ${projectMetadata?.project_dna?.landscape || "N/A"}
-Layout Philosophy: ${projectMetadata?.project_dna?.layout_philosophy || "N/A"}
-
-## Inventory Configurations
-${
-  projectMetadata?.inventory?.configurations
-    ?.map(
-      (config: any) =>
-        `- ${config.type}: ${config.carpet_sqft_range?.[0] || "N/A"}-${config.carpet_sqft_range?.[1] || "N/A"} sqft, ₹${config.price_range_cr?.[0]}-${config.price_range_cr?.[1]} Cr
-  Target: ${config.target_persona || "N/A"}
-  Notes: ${config.notes || "N/A"}`,
-    )
-    .join("\n") || "N/A"
-}
-
-## Common Objections & Rebuttals
-${
-  projectMetadata?.common_objections
-    ? Object.entries(projectMetadata.common_objections)
-        .map(([key, obj]: [string, any]) => `- ${key}: ${obj.objection || "N/A"}\n  Rebuttal: ${obj.rebuttal}`)
-        .join("\n")
-    : "N/A"
-}`;
-
-      const privacyRules = `# PRIVACY RULES (CRITICAL - NEVER VIOLATE):
-1. NEVER mention credit score numbers in any output field
-2. NEVER mention specific loan amounts, EMI values, or emi_to_income_ratio percentages
-3. NEVER mention card usage percentages or card limits
-4. NEVER mention income figures (final_income_lacs, pre_tax_income)
-5. NEVER mention turnover slab numbers directly (use abstract descriptions like "mid-size business")
-6. NEVER mention GST numbers or business names
-7. Use these values ONLY for internal scoring calculations
-8. Output only derived ratings: mql_credit_rating (High/Medium/Low), mql_capability
-9. For Business Owners: Describe scale abstractly (e.g., "established manufacturing business" not "turnover 5Cr-25Cr")
-
-## OUTPUT FIELD RESTRICTIONS (NON-NEGOTIABLE - ABSOLUTE REQUIREMENT):
-The following output fields MUST NEVER contain ANY mention of credit, loans, EMI, borrowing, debt, or credit-related information:
-- rating_rationale: NO credit scores, NO loan counts, NO EMI burden, NO credit rating, NO loan history, NO borrowing capacity
-- persona_description: NO credit information, NO loan history, NO EMI references, NO debt profile
-- summary: NO credit data, NO loan details, NO EMI or borrowing information, NO financial obligations
-
-This restriction is ABSOLUTE and NON-NEGOTIABLE. Credit/loan/EMI data may ONLY be used for internal PPS scoring calculations.
-The output text must NEVER reveal that credit, loan, or EMI data was considered or analyzed.
-Violations of this rule are unacceptable under any circumstances.`;
-
-      const outputConstraints = `# OUTPUT CONSTRAINTS (CRITICAL - STRICTLY ENFORCE):
-- Rating rationale should start with "**PPS Score: X/100.**" in bold, followed by key scoring factors. Do NOT include rating label like "(Hot)" or "(Warm)" in the rationale - that's shown separately
-- Summary: Maximum 30 words. Be concise and focused.
-- Next Best Action: Maximum 15 words. Keep it actionable and specific.`;
-
-      const concernGeneration = `#Key Concerns: These must be the CUSTOMER'S concerns about the project or specific unit they are considering. Focus on: price/budget gap, location/connectivity issues, possession date/timeline, unit configuration/size, amenities/facilities. DO NOT include generic sales concerns.
-- Concern Categories: For EACH key_concern, classify it into ONE of these categories (same order as key_concerns array):
-  1. "Price" - Budget gaps, pricing issues, financing concerns, EMI issues
-  2. "Location" - Connectivity, infrastructure, surroundings, pollution, traffic, facilities nearby
-  3. "Possession" - Delivery timeline, construction delays, handover dates
-  4. "Config" - Unit configuration, layout issues, view concerns, floor preference, carpet area
-  5. "Amenities" - Amenities in home or complex, facilities
-  6. "Trust" - Builder reputation, track record concerns
-  7. "Others" - Anything else
-- Primary Concern Category: The SINGLE most important concern category. If multiple concerns exist, pick the one that appears FIRST in the priority order above ( Location > Config > Price > Possession > Amenities > Trust > Others)`;
-
-      const talkingpointsGeneration = `# TALKING POINTS GENERATION (CRITICAL - FOLLOW PRIORITY RULES):
-Generate 2-3 talking points TOTAL following these strict priority rules:
-
-PRIORITY 1: Competitor Handling (Max 2 points)
-- Only include if any competitor is mentioned in CRM data (competitor name, competition project, or visit comments)
-- Use BOTH qualitative AND quantitative comparisons when data is available
-- Include specific metrics from the COMPETITOR PRICING REFERENCE: price-per-sqft, carpet area comparison, possession timeline
-- Format examples:
-  - "Eternia 3BHK offers 20% more carpet area (1100 vs 918 sqft) at competitive ₹/sqft"
-  - "Amara possession is 2026; Eternia Phase 1 matches with added 250-acre park premium"
-  - "Godrej Ascend 3BHK at 855 sqft vs Eternia Large 3BHK at 1100+ sqft - 30% more space"
-- Each point max 15 words
-- Topic type: "Competitor handling"
-
-FOR RTMI (Ready-to-Move-In) SEEKERS:
-- Check which competitors offer earlier possession from COMPETITOR PRICING REFERENCE
-- Acknowledge the timeline gap honestly
-- Highlight why Eternia is worth the wait: park ecosystem, township moat, layout efficiency, construction quality
-- Example: "Amara is RTMI but Eternia's 250-acre park ecosystem adds long-term value premium"
-
-PRIORITY 2: Objection Handling (Max 1 point)
-- Only include if customer has specific concerns or objections from notes or CRM fields
-- Maximum 1 talking point for objection handling
-- Max 15 words
-- Topic type: "Objection handling"
-
-PRIORITY 3: What to Highlight (Max 2 points)
-- Pick the project USPs/value propositions most relevant to the customer's persona and profile
-- Maximum 2 talking points for highlighting features
-- Each point max 15 words
-- Topic type: "What to highlight"
-
-DISTRIBUTION RULES:
-- Minimum 2 talking points, maximum 3 talking points total
-- If competitor mentioned: Include 1-2 competitor handling points first
-- If customer has concerns/objections: Include 1 objection handling point second
-- Fill remaining slots (up to 3 total) with "What to highlight" points
-- Each talking point must be max 15 words
-
-${competitorPricingMatrix}`;
-
-      const outputStructure = `# OUTPUT STRUCTURE
-Return a JSON object with this EXACT structure:
-{
-  "ai_rating": "Hot" | "Warm" | "Cold",
-  "rating_confidence": "High" | "Medium" | "Low",
-  "pps_score": 0-100,
-  "pps_breakdown": {
-    "financial_capability": 0-30,
-    "intent_engagement": 0-25,
-    "urgency_timeline": 0-20,
-    "product_market_fit": 0-15,
-    "authority_dynamics": 0-10
-  },
-  "rating_rationale": "**PPS Score: X/100.** Brief explanation of key scoring factors without rating label",
-  "persona": "Persona label",
-  "persona_description": "2-line description focusing on: (1) demographics - age, gender, family composition; (2) financial/professional profile - occupation, designation, income capability; (3) primary buying motivation. For business owners, mention scale abstractly (e.g., 'established manufacturing business') without specific turnover figures. DO NOT include visit details, property preferences, or concerns here.",
-  "summary": "Summarize the lead's visit notes: what they are looking for, visit experience/feedback, decision factors and timelines mentioned. DO NOT repeat demographic or professional details. Max 30 words.",
-  "key_concerns": ["concern1", "concern2"],
-  "concern_categories": ["Price", "Location"],
-  "primary_concern_category": "Price",
-  "next_best_action": "Specific action (max 15 words)",
-  "talking_points": [{"type": "What to highlight", "point": "max 15 words"}],
-  "extracted_signals": {
-    "budget_stated": number | null,
-    "in_hand_funds": number | null,
-    "finalization_timeline": "string",
-    "decision_maker_present": boolean,
-    "spot_closure_asked": boolean,
-    "sample_feedback": "positive" | "negative" | "neutral" | "not_seen",
-    "core_motivation": "string"
-  },
-  "mql_credit_rating": "High" | "Medium" | "Low" | null,
-  "mql_emi_burden": "Low" | "Moderate" | "High" | null,
-  "mql_investor_signal": boolean,
-  "overridden_fields": [],
-  "mql_data_available": ${mqlAvailable}
-}`;
-
-      const fullPrompt = `${systemPrompt}
-
-${brandContext}
-
-${projectContext}
-
-${crmFieldExplainer}
-
-${mqlAvailable ? mqlFieldExplainer : ""}
-
-${mqlSection}
-
-${leadScoringModel}
-
-${personaDefinitions}
-
-${privacyRules}
-
-${outputConstraints}
-
-${concernGeneration}
-
-${talkingpointsGeneration}
-
-# LEAD DATA TO ANALYZE
-${leadDataJson}
-
-# ANALYSIS INSTRUCTIONS
-1. Read all fields carefully - especially visit comments which contain the richest data.
-2. Extract structured information (Budget, In-hand funds, Finalization time, etc.)
-3. Calculate the PPS Score using the 5-dimension framework:
-   - Score Financial Capability (A1 + A2 + A3, max 30)
-     - For Business Owners: Use TURNOVER TIER scoring table
-     - Apply margin-aware income adjustment if GST-implied income > MQL income by 50%+
-   - Score Intent & Engagement (B1 + B2 + B3, max 25)
-   - Score Urgency & Timeline (C1 + C2, max 20)
-     - Apply home loan timeline rules: recent active loan = -3 pts (unless 2+ active = investor +5 pts)
-   - Score Product-Market Fit (D1 + D2, max 15)
-   - Score Authority & Decision Dynamics (max 10)
-     - Add +1 pt if guarantor_loan_count > 0
-   - Apply EMI burden penalty to A3: >50% = -5 pts, 30-50% = -2 pts
-   - Apply special multipliers if applicable
-   - Sum all dimensions for total PPS (0-100)
-4. If MQL data available, use it to enhance scoring per the field precedence rules
-5. Derive credit_rating from credit_score if available: 750+ = High, 650-749 = Medium, <650 = Low
-6. Derive mql_emi_burden: <30% = Low, 30-50% = Moderate, >50% = High
-7. Set mql_investor_signal = true if home_loan_active >= 2
-8. If CRM location differs from MQL locality_grade context, add "locality_grade" to overridden_fields
-9. Identify persona using the Persona Identification Guide - check detection rules in priority order (NRI > Retirement > Business Owner > Investor > Upgrade Seeker > First-Time Buyer > Fallback Custom)
-10. Generate a 2-line persona_description that captures occupation, lifestyle, family situation, and buying motivation - must align with selected persona. For Business Owners, describe scale abstractly without specific figures.
-11. Concerns, talking points, competitor handling: Use CRM data ONLY
-12. For competitor talking points: Use BOTH qualitative AND quantitative comparisons from COMPETITOR PRICING REFERENCE
-13. Create actionable next steps and talking points
-
-${outputStructure}`;
-
-      // Retry logic for transient API errors (503 overloaded)
-      const maxRetries = 3;
-      let lastError: Error | null = null;
-      let response: Response | null = null;
-
-      for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-          response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent?key=${googleApiKey}`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                contents: [{ parts: [{ text: fullPrompt }] }],
-                tools: [{ google_search: {} }],
-                generationConfig: {
-                  temperature: 0.2,
-                  topK: 40,
-                  topP: 0.95,
-                  maxOutputTokens: 8192,
-                  responseMimeType: "application/json",
-                },
-              }),
-            },
-          );
-
-          if (response.ok) {
-            break; // Success, exit retry loop
-          }
-
-          const errorText = await response.text();
-
-          // Check if it's a retryable error (503 overloaded)
-          if (response.status === 503 && attempt < maxRetries) {
-            const backoffMs = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
-            console.warn(`Google AI API overloaded (attempt ${attempt}/${maxRetries}), retrying in ${backoffMs}ms...`);
-            await new Promise((resolve) => setTimeout(resolve, backoffMs));
-            continue;
-          }
-
-          console.error("Google AI API error:", errorText);
-          lastError = new Error(`Failed to analyze lead: ${errorText}`);
-        } catch (fetchError) {
-          lastError = fetchError instanceof Error ? fetchError : new Error(String(fetchError));
-          if (attempt < maxRetries) {
-            const backoffMs = Math.pow(2, attempt) * 1000;
-            console.warn(`Fetch error (attempt ${attempt}/${maxRetries}), retrying in ${backoffMs}ms...`);
-            await new Promise((resolve) => setTimeout(resolve, backoffMs));
-          }
-        }
+      let extractedSignals;
+      try {
+        const stage1Response = await callGeminiAPI(stage1Prompt, googleApiKey, true);
+        extractedSignals = JSON.parse(stage1Response);
+        console.log(`Stage 1 complete for lead ${lead.id}`);
+      } catch (stage1Error) {
+        console.error(`Stage 1 failed for lead ${lead.id}:`, stage1Error);
+        // Fallback: Create basic extracted signals from available data
+        extractedSignals = createFallbackExtraction(lead, mqlEnrichment);
+        console.log(`Using fallback extraction for lead ${lead.id}`);
       }
 
-      if (!response?.ok) {
-        throw lastError || new Error("Failed to analyze lead after retries");
-      }
+      // ===== STAGE 2: Score & Generate =====
+      console.log(`Stage 2 (Generation) starting for lead ${lead.id}`);
 
-      const data = await response.json();
-      const candidate = data?.candidates?.[0];
-      const part = candidate?.content?.parts?.[0];
-      const analysisText = typeof part?.text === "string" ? part.text : JSON.stringify(candidate ?? data);
+      const stage2Prompt = buildStage2Prompt(
+        JSON.stringify(extractedSignals, null, 2),
+        systemPrompt,
+        brandContext,
+        projectContext,
+        leadScoringModel,
+        personaDefinitions,
+        privacyRules,
+        outputConstraints,
+        concernGeneration,
+        talkingpointsGeneration,
+        outputStructure
+      );
 
       let analysisResult;
       let parseSuccess = true;
 
       try {
-        analysisResult = JSON.parse(analysisText);
-      } catch (parseError) {
+        const stage2Response = await callGeminiAPI(stage2Prompt, googleApiKey, true);
+        analysisResult = JSON.parse(stage2Response);
+        console.log(`Stage 2 complete for lead ${lead.id}`);
+      } catch (stage2Error) {
         parseSuccess = false;
-        console.error("Failed to parse AI response for lead:", lead.id);
+        console.error(`Stage 2 failed for lead ${lead.id}:`, stage2Error);
 
-        const lower = analysisText.toLowerCase();
-        let rating: "Hot" | "Warm" | "Cold" = "Warm";
-        if (lower.includes("hot")) rating = "Hot";
-        else if (lower.includes("cold")) rating = "Cold";
-
+        // Create fallback analysis result
         analysisResult = {
-          ai_rating: rating,
+          ai_rating: "Warm",
           rating_confidence: "Low",
           rating_rationale: "Analysis completed with limited structure",
-          summary: analysisText.substring(0, 200),
+          summary: extractedSignals.visit_notes_summary || "Unable to analyze lead",
           mql_data_available: mqlAvailable,
         };
       }
@@ -924,7 +1191,7 @@ ${outputStructure}`;
     const allResults = [...cachedResults, ...freshResults];
     const successCount = allResults.filter((r) => r.parseSuccess).length;
 
-    console.log(`Analysis complete: ${successCount}/${allResults.length} successful`);
+    console.log(`Analysis complete: ${successCount}/${allResults.length} successful (2-stage pipeline)`);
 
     return new Response(
       JSON.stringify({
