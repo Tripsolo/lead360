@@ -711,7 +711,7 @@ serve(async (req) => {
   }
 
   try {
-    const { leads, projectId } = await req.json();
+    const { leads, projectId, chunkIndex: reqChunkIndex, totalChunks: reqTotalChunks } = await req.json();
     const googleApiKey = Deno.env.get("GOOGLE_AI_API_KEY");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -1545,62 +1545,13 @@ IMPORTANT SCORING RULES:
       }
     }
 
-    // Background processing function for large batches
-    async function processLeadsBatchSequentially(
-      leadsToAnalyze: any[],
-      projectId: string,
-      cachedResults: any[]
-    ): Promise<void> {
-      console.log(`Background processing started for ${leadsToAnalyze.length} leads`);
-      
-      for (let index = 0; index < leadsToAnalyze.length; index++) {
-        const leadWithMql = leadsToAnalyze[index];
-        
-        // Add 2500ms delay between leads (not before first one)
-        if (index > 0) {
-          await new Promise((resolve) => setTimeout(resolve, 2500));
-        }
-        
-        console.log(`Processing lead ${index + 1}/${leadsToAnalyze.length}: ${leadWithMql.id}`);
-        
-        try {
-          const result = await processLeadAnalysis(leadWithMql);
-          await storeAnalysisResult(result, projectId, leadsToAnalyze);
-          console.log(`Lead ${leadWithMql.id} processed and stored successfully`);
-        } catch (error) {
-          console.error(`Failed to process lead ${leadWithMql.id}:`, error);
-        }
-      }
-      
-      console.log(`Background processing complete for ${leadsToAnalyze.length} leads`);
-    }
+    // Extract chunk info from request (for progress logging)
+    const chunkIndex = reqChunkIndex || 1;
+    const totalChunks = reqTotalChunks || 1;
 
-    // Check if batch is too large for synchronous processing (>20 leads)
-    const BATCH_THRESHOLD = 20;
-    
-    if (leadsToAnalyze.length > BATCH_THRESHOLD) {
-      // Use background processing for large batches
-      console.log(`Large batch detected (${leadsToAnalyze.length} leads > ${BATCH_THRESHOLD}). Starting background processing...`);
-      
-      EdgeRuntime.waitUntil(processLeadsBatchSequentially(leadsToAnalyze, projectId, cachedResults));
-      
-      return new Response(
-        JSON.stringify({
-          status: "processing",
-          message: `Started background analysis for ${leadsToAnalyze.length} leads`,
-          estimatedTime: `${Math.ceil(leadsToAnalyze.length * 5 / 60)} minutes`,
-          cachedResults: cachedResults,
-          meta: {
-            total: leadsToAnalyze.length + cachedResults.length,
-            cached: cachedResults.length,
-            processing: leadsToAnalyze.length,
-          },
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
+    console.log(`Processing chunk ${chunkIndex}/${totalChunks} with ${leadsToAnalyze.length} leads`);
 
-    // Sequential processing for smaller batches (<=20 leads)
+    // Sequential processing (chunks are small by design - max 2 leads per chunk)
     const freshResults: any[] = [];
     
     for (let index = 0; index < leadsToAnalyze.length; index++) {
