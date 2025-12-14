@@ -40,11 +40,11 @@ All colors MUST be HSL.
     --ring: 155 65% 45%;
 
     /* Status Colors */
-    --status-hot: 0 85% 60%;
+    --status-hot: 155 65% 45%;
     --status-hot-foreground: 0 0% 100%;
     --status-warm: 35 95% 55%;
-    --status-warm-foreground: 215 25% 15%;
-    --status-cold: 210 50% 55%;
+    --status-warm-foreground: 0 0% 100%;
+    --status-cold: 0 85% 60%;
     --status-cold-foreground: 0 0% 100%;
 
     /* Gradients */
@@ -92,11 +92,11 @@ All colors MUST be HSL.
     --input: 215 25% 22%;
     --ring: 155 65% 45%;
 
-    --status-hot: 0 85% 60%;
+    --status-hot: 155 65% 45%;
     --status-hot-foreground: 0 0% 100%;
     --status-warm: 35 95% 55%;
-    --status-warm-foreground: 215 25% 15%;
-    --status-cold: 210 50% 55%;
+    --status-warm-foreground: 0 0% 100%;
+    --status-cold: 0 85% 60%;
     --status-cold-foreground: 0 0% 100%;
 
     --sidebar-background: 215 30% 15%;
