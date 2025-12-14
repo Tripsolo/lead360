@@ -1445,6 +1445,10 @@ IMPORTANT SCORING RULES:
         console.log(`Using fallback extraction for lead ${lead.id}`);
       }
 
+      // Rate limit delay: Wait 2500ms before Stage 2 API call
+      console.log(`Waiting 2500ms before Stage 2 for lead ${lead.id}...`);
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+
       // ===== STAGE 2: Score & Generate =====
       console.log(`Stage 2 (Generation) starting for lead ${lead.id}`);
 
