@@ -20,7 +20,8 @@ Focus on:
 - Extracting factual information from structured fields
 - Parsing unstructured visit comments for key data points
 - Transforming raw values into categorical signals for privacy
-- Identifying all relevant signals for lead scoring`;
+- Identifying all relevant signals for lead scoring
+- Capturing DIRECT QUOTES and SPECIFIC FACTS as evidence for downstream analysis`;
 
   const extractionInstructions = `# EXTRACTION TASK
 
@@ -37,7 +38,28 @@ Extract structured signals from the CRM and MQL data provided. Transform raw val
 - Employer Name: Use MQL value if available, else CRM
 - Designation: Use MQL value if available, else CRM
 - Location/Residence: ALWAYS use CRM value
-- Age/Gender: Use MQL value if available`;
+- Age/Gender: Use MQL value if available
+
+## NEW FIELD EXTRACTION RULES:
+1. income_earners: Count earning members mentioned ("both working" = 2, "single income" = 1, "wife also working" = 2)
+2. years_at_current_residence: Parse from comments if mentioned ("staying here for 5 years" = 5)
+3. current_carpet_sqft: Parse from "current flat is X sqft" or "current 2BHK is X sqft" patterns
+4. upgrade_ratio: Calculate as carpet_area_desired / current_carpet_sqft (if both available)
+5. specific_unit_interest: Extract unit numbers like "A-1502", "B-2304", "Tower A 15th floor"
+6. expected_closure_days: Parse timelines ("next week" = 7, "this month" = 30, "within 2-3 months" = 75)
+7. possession_urgency: Extract possession expectations ("need by Dec 2026", "want RTMI", "can wait 2 years")
+8. negotiation_asks: Extract discount/freebie requests ("asking for 5L discount", "wants free parking")
+9. card_portfolio_strength: "Premium" if Amex/Diners or has_premium_cards=true, "Standard" if 2+ cards, "Basic" otherwise
+10. roots_feedback: Extract specific feedback about the park/township ("loved the park", "roots seems too far")
+
+## EVIDENCE EXTRACTION RULES (CRITICAL):
+- Use DIRECT QUOTES from Visit Comments where possible (wrap in quotes)
+- Include SPECIFIC NUMBERS mentioned (budget figures, carpet areas, price comparisons)
+- Capture CUSTOMER'S OWN WORDS for motivations and objections
+- For sample_response_quote, capture exact feedback about sample flat visit
+- For competitor_comparison_quote, capture exact price/feature comparisons stated by customer
+- If no evidence available for a field, set to null (NEVER fabricate quotes or facts)
+- Evidence sections ground the Stage 2 outputs in real data, preventing hallucination`;
 
   const extractionOutputSchema = `# EXTRACTION OUTPUT STRUCTURE
 Return a JSON object with this EXACT structure:
@@ -49,7 +71,9 @@ Return a JSON object with this EXACT structure:
     "nri_status": boolean,
     "residence_location": "string",
     "building_name": "string | null",
-    "locality_grade": "Premium" | "Popular" | "Affordable" | null
+    "locality_grade": "Premium" | "Popular" | "Affordable" | null,
+    "income_earners": number | null,
+    "years_at_current_residence": number | null
   },
   "professional_profile": {
     "occupation_type": "Salaried" | "Business" | "Self-Employed" | "Professional" | "Retired" | "Homemaker" | null,
@@ -57,12 +81,14 @@ Return a JSON object with this EXACT structure:
     "employer": "string | null",
     "industry": "string | null",
     "business_type": "string | null",
-    "turnover_tier": "0-40L" | "40L-1.5Cr" | "1.5Cr-5Cr" | "5Cr-25Cr" | "25Cr+" | null
+    "turnover_tier": "0-40L" | "40L-1.5Cr" | "1.5Cr-5Cr" | "5Cr-25Cr" | "25Cr+" | null,
+    "work_location": "string | null",
+    "company_type": "MNC" | "Indian Corporate" | "SME" | "Startup" | "Government" | "PSU" | null
   },
   "financial_signals": {
     "budget_stated_cr": number | null,
     "in_hand_funds_pct": number | null,
-    "funding_source": "Self-Funding" | "Loan" | "Sale of Asset" | "Subvention Loan" | null,
+    "funding_source": "Self-Funding" | "Loan" | "Sale of Asset" | "Subvention Loan" | "Mixed" | null,
     "income_tier": "Elite" | "High" | "Mid-Senior" | "Entry-Mid" | null,
     "credit_rating": "High" | "Medium" | "Low" | null,
     "emi_burden_level": "Low" | "Moderate" | "High" | null,
@@ -73,14 +99,23 @@ Return a JSON object with this EXACT structure:
     "home_loan_count": number | null,
     "home_loan_active": number | null,
     "home_loan_paid_off": number | null,
-    "guarantor_loan_count": number | null
+    "guarantor_loan_count": number | null,
+    "stated_family_income_lpa": number | null,
+    "card_portfolio_strength": "Premium" | "Standard" | "Basic" | null,
+    "auto_loan_count": number | null,
+    "consumer_loan_count": number | null,
+    "credit_history_years": number | null
   },
   "property_preferences": {
     "config_interested": "string",
     "carpet_area_desired": "string | null",
     "floor_preference": "string | null",
     "stage_preference": "Launch" | "Under Construction" | "Nearing Completion" | "RTMI" | null,
-    "facing_preference": "string | null"
+    "facing_preference": "string | null",
+    "current_carpet_sqft": number | null,
+    "upgrade_ratio": number | null,
+    "specific_unit_interest": ["string"] | null,
+    "alternative_shown": "string | null"
   },
   "engagement_signals": {
     "visit_count": number,
@@ -90,18 +125,72 @@ Return a JSON object with this EXACT structure:
     "decision_makers_present": "All" | "Partial" | "Proxy" | null,
     "spot_closure_asked": boolean,
     "finalization_timeline": "string | null",
-    "searching_since": "string | null"
+    "searching_since": "string | null",
+    "possession_urgency": "string | null",
+    "expected_closure_days": number | null,
+    "non_booking_reason": "string | null",
+    "roots_feedback": "string | null",
+    "negotiation_asks": ["string"] | null
   },
   "concerns_extracted": [
     { "topic": "Price" | "Location" | "Possession" | "Config" | "Amenities" | "Trust" | "Others", "detail": "string" }
   ],
-  "competitor_mentions": [
-    { "name": "string", "project": "string | null", "visit_status": "Yet to Visit" | "Already Visited" | null }
-  ],
+  "competitor_intelligence": {
+    "competitors_mentioned": [
+      { "name": "string", "project": "string | null", "visit_status": "Yet to Visit" | "Already Visited" | "Booked" | null, "price_stated": "string | null", "advantage_stated": "string | null" }
+    ],
+    "alternative_if_not_kl": "string | null",
+    "lost_to_competitor": "string | null"
+  },
+  "historical_signals": {
+    "existing_kalpataru_property": "string | null",
+    "referral_source": "string | null",
+    "previous_enquiry_project": "string | null"
+  },
+  "lifestyle_signals": {
+    "lifestyle_activities": ["string"] | null,
+    "car_ownership": "string | null",
+    "travel_profile": "string | null"
+  },
   "core_motivation": "string describing primary buying motivation",
   "visit_notes_summary": "30-word summary of visit experience and feedback",
   "brand_loyalty": boolean,
-  "mql_data_available": ${mqlAvailable}
+  "mql_data_available": ${mqlAvailable},
+  
+  "demographics_evidence": {
+    "family_composition": "string | null",
+    "current_home_details": "string | null",
+    "lifestyle_context": "string | null"
+  },
+  "professional_evidence": {
+    "role_context": "string | null",
+    "work_location_detail": "string | null"
+  },
+  "financial_evidence": {
+    "stated_budget_quote": "string | null",
+    "funding_plan_detail": "string | null",
+    "income_context": "string | null"
+  },
+  "preferences_evidence": {
+    "sample_response_quote": "string | null",
+    "comparison_to_current": "string | null",
+    "unit_discussion": "string | null"
+  },
+  "engagement_evidence": {
+    "first_visit_summary": "string | null",
+    "latest_visit_summary": "string | null",
+    "objection_stated": "string | null",
+    "next_steps_stated": "string | null"
+  },
+  "competitor_evidence": {
+    "competitor_comparison_quote": "string | null",
+    "preference_reasoning": "string | null"
+  },
+  "motivation_evidence": {
+    "stated_motivation_quote": "string | null",
+    "upgrade_drivers": "string | null",
+    "location_pull": "string | null"
+  }
 }`;
 
   return `${extractionSystemPrompt}
@@ -139,17 +228,19 @@ function buildStage2Prompt(
 You are provided with PRE-EXTRACTED SIGNALS from CRM and MQL data (not raw data). Use these signals to:
 
 1. Calculate the PPS Score using the 5-dimension framework:
-   - Financial Capability (max 30 pts): Use income_tier, turnover_tier, budget gap, funding_source, credit_rating, emi_burden_level
-   - Intent & Engagement (max 25 pts): Use visit_count, is_duplicate_lead, sample_feedback, competitor_mentions
-   - Urgency & Timeline (max 20 pts): Use stage_preference, core_motivation, home_loan_recency, investor_signal
-   - Product-Market Fit (max 15 pts): Use config match, location fit, mql_lifestyle alignment
-   - Authority & Decision Dynamics (max 10 pts): Use decision_makers_present, age-based adjustments, guarantor_loan_count
+   - Financial Capability (max 30 pts): Use income_tier, turnover_tier, budget gap, funding_source, credit_rating, emi_burden_level, card_portfolio_strength
+   - Intent & Engagement (max 25 pts): Use visit_count, is_duplicate_lead, sample_feedback, competitor_intelligence, roots_feedback
+   - Urgency & Timeline (max 20 pts): Use stage_preference, core_motivation, home_loan_recency, investor_signal, possession_urgency, expected_closure_days
+   - Product-Market Fit (max 15 pts): Use config match, location fit, mql_lifestyle alignment, upgrade_ratio
+   - Authority & Decision Dynamics (max 10 pts): Use decision_makers_present, age-based adjustments, guarantor_loan_count, income_earners
 
 2. Apply scoring adjustments from extracted signals:
    - If investor_signal is true: +5 pts to Urgency
    - If home_loan_recency is "Within 3 years" AND investor_signal is false: -3 pts to Urgency
    - If emi_burden_level is "High": -5 pts to Financial. If "Moderate": -2 pts
    - If guarantor_loan_count > 0: +1 pt to Authority
+   - If card_portfolio_strength is "Premium": +2 pts to Financial
+   - If upgrade_ratio > 1.5: +2 pts to Product-Market Fit (significant upgrade)
 
 3. Derive final rating from PPS: >= 85 = Hot, >= 65 = Warm, < 65 = Cold
 
@@ -157,7 +248,34 @@ You are provided with PRE-EXTRACTED SIGNALS from CRM and MQL data (not raw data)
 
 5. Generate outputs using ONLY the extracted signals - do NOT hallucinate additional information
 
-6. For competitor talking points: Use COMPETITOR PRICING REFERENCE with quantitative comparisons`;
+6. For competitor talking points: Use COMPETITOR PRICING REFERENCE with quantitative comparisons
+
+## USING EXTRACTED EVIDENCE IN OUTPUTS (CRITICAL)
+
+When generating persona_description, summary, and talking_points, reference the evidence sections:
+
+1. **PERSONA DESCRIPTION**: Reference demographics_evidence and professional_evidence
+   - Use family_composition for family stage context (e.g., "Couple with two school-going kids")
+   - Use role_context for professional credibility (e.g., "Senior Manager at TCS with 15+ years experience")
+   - Use lifestyle_context for lifestyle tier
+
+2. **SUMMARY**: Reference engagement_evidence and motivation_evidence
+   - Use first_visit_summary and latest_visit_summary for visit chronology
+   - Use stated_motivation_quote for core intent (use customer's own words when available)
+   - Use next_steps_stated for follow-up context
+
+3. **TALKING POINTS**: Reference preferences_evidence and competitor_evidence
+   - Use sample_response_quote for positive reinforcement points
+   - Use competitor_comparison_quote for specific counter-comparisons
+   - Use comparison_to_current for upgrade value proposition
+
+4. **CONCERNS**: Reference engagement_evidence.objection_stated
+   - Use direct customer words when available for accurate concern capture
+
+5. **NEXT BEST ACTION**: Reference engagement_evidence.next_steps_stated and negotiation_asks
+   - Tailor action based on stated next steps and any negotiation requests
+
+CRITICAL: Do not fabricate quotes or facts. Only use evidence that is present (not null). If evidence is null, generate based on signals only.`;
 
   return `${systemPrompt}
 
@@ -285,6 +403,16 @@ function createFallbackExtraction(lead: any, mqlEnrichment: any): any {
     homeLoanRecency = yearsSinceLoan < 3 ? "Within 3 years" : yearsSinceLoan < 5 ? "3-5 years ago" : "5+ years ago";
   }
 
+  // Calculate card portfolio strength
+  let cardPortfolioStrength = null;
+  if (mqlEnrichment?.has_premium_cards) {
+    cardPortfolioStrength = "Premium";
+  } else if (mqlEnrichment?.credit_card_count && mqlEnrichment.credit_card_count >= 2) {
+    cardPortfolioStrength = "Standard";
+  } else if (mqlEnrichment?.credit_card_count) {
+    cardPortfolioStrength = "Basic";
+  }
+
   return {
     demographics: {
       age: mqlEnrichment?.age || null,
@@ -294,6 +422,8 @@ function createFallbackExtraction(lead: any, mqlEnrichment: any): any {
       residence_location: rawData["Location of Residence"] || null,
       building_name: rawData["Building Name"] || null,
       locality_grade: mqlEnrichment?.locality_grade || null,
+      income_earners: null,
+      years_at_current_residence: null,
     },
     professional_profile: {
       occupation_type: rawData["Occupation"] || null,
@@ -302,6 +432,8 @@ function createFallbackExtraction(lead: any, mqlEnrichment: any): any {
       industry: mqlEnrichment?.industry || rawData["Industry / Sector"] || null,
       business_type: mqlEnrichment?.business_type || null,
       turnover_tier: mqlEnrichment?.turnover_slab || null,
+      work_location: rawData["Place of Work"] || null,
+      company_type: null,
     },
     financial_signals: {
       budget_stated_cr: null,
@@ -318,6 +450,11 @@ function createFallbackExtraction(lead: any, mqlEnrichment: any): any {
       home_loan_active: mqlEnrichment?.home_loan_active || null,
       home_loan_paid_off: mqlEnrichment?.home_loan_paid_off || null,
       guarantor_loan_count: mqlEnrichment?.guarantor_loan_count || null,
+      stated_family_income_lpa: null,
+      card_portfolio_strength: cardPortfolioStrength,
+      auto_loan_count: mqlEnrichment?.auto_loan_count || null,
+      consumer_loan_count: mqlEnrichment?.consumer_loan_count || null,
+      credit_history_years: null,
     },
     property_preferences: {
       config_interested: rawData["Interested Unit"] || null,
@@ -325,6 +462,10 @@ function createFallbackExtraction(lead: any, mqlEnrichment: any): any {
       floor_preference: rawData["Desired Floor Band"] || null,
       stage_preference: rawData["Stage of Construction"] || null,
       facing_preference: null,
+      current_carpet_sqft: null,
+      upgrade_ratio: null,
+      specific_unit_interest: null,
+      alternative_shown: null,
     },
     engagement_signals: {
       visit_count: parseInt(rawData["No. of Site Re-Visits"] || "0") + 1,
@@ -335,17 +476,74 @@ function createFallbackExtraction(lead: any, mqlEnrichment: any): any {
       spot_closure_asked: false,
       finalization_timeline: null,
       searching_since: rawData["Searching Property since"] || null,
+      possession_urgency: null,
+      expected_closure_days: null,
+      non_booking_reason: null,
+      roots_feedback: null,
+      negotiation_asks: null,
     },
     concerns_extracted: [],
-    competitor_mentions: rawData["Competitor Name"] ? [{
-      name: rawData["Competitor Name"],
-      project: rawData["Competition Project Name"] || null,
-      visit_status: rawData["Competition Visit Status"] || null,
-    }] : [],
+    competitor_intelligence: {
+      competitors_mentioned: rawData["Competitor Name"] ? [{
+        name: rawData["Competitor Name"],
+        project: rawData["Competition Project Name"] || null,
+        visit_status: rawData["Competition Visit Status"] || null,
+        price_stated: null,
+        advantage_stated: null,
+      }] : [],
+      alternative_if_not_kl: null,
+      lost_to_competitor: rawData["Lost Reason"] || null,
+    },
+    historical_signals: {
+      existing_kalpataru_property: rawData["Owned/Stay in Kalpataru Property"] || null,
+      referral_source: rawData["Sub Source 2"] || null,
+      previous_enquiry_project: null,
+    },
+    lifestyle_signals: {
+      lifestyle_activities: null,
+      car_ownership: null,
+      travel_profile: null,
+    },
     core_motivation: "Property purchase",
     visit_notes_summary: rawData["Visit Comments"]?.substring(0, 100) || "No visit notes available",
     brand_loyalty: rawData["Owned/Stay in Kalpataru Property"] === "Yes",
     mql_data_available: mqlAvailable,
+    
+    // Evidence sections (empty for fallback)
+    demographics_evidence: {
+      family_composition: null,
+      current_home_details: null,
+      lifestyle_context: null,
+    },
+    professional_evidence: {
+      role_context: null,
+      work_location_detail: null,
+    },
+    financial_evidence: {
+      stated_budget_quote: null,
+      funding_plan_detail: null,
+      income_context: null,
+    },
+    preferences_evidence: {
+      sample_response_quote: null,
+      comparison_to_current: null,
+      unit_discussion: null,
+    },
+    engagement_evidence: {
+      first_visit_summary: rawData["Visit Comments"]?.substring(0, 150) || null,
+      latest_visit_summary: rawData["Site Re-Visit Comment"]?.substring(0, 150) || null,
+      objection_stated: null,
+      next_steps_stated: null,
+    },
+    competitor_evidence: {
+      competitor_comparison_quote: null,
+      preference_reasoning: null,
+    },
+    motivation_evidence: {
+      stated_motivation_quote: null,
+      upgrade_drivers: null,
+      location_pull: null,
+    },
   };
 }
 
