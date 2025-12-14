@@ -359,7 +359,10 @@ When generating persona_description, summary, and talking_points, reference the 
    - Use comparison_to_current for upgrade value proposition
 
 4. **CONCERNS**: Reference engagement_evidence.objection_stated
+   - ONLY include concerns the customer has stated about the PRODUCT (price, location, possession, config, amenities, trust)
+   - EXCLUDE sales obstacles (family consultation, financing pending, comparing options, decision maker absent, loan approval pending)
    - Use direct customer words when available for accurate concern capture
+   - If no product concerns stated, return empty array for key_concerns
 
 5. **NEXT BEST ACTION**: Reference engagement_evidence.next_steps_stated and negotiation_asks
    - Tailor action based on stated next steps and any negotiation requests
@@ -1245,16 +1248,46 @@ Violations of this rule are unacceptable under any circumstances.`;
 - Summary: Maximum 30 words. Be concise and focused.
 - Next Best Action: Maximum 15 words. Keep it actionable and specific.`;
 
-    const concernGeneration = `#Key Concerns: These must be the CUSTOMER'S concerns about the project or specific unit they are considering. Focus on: price/budget gap, location/connectivity issues, possession date/timeline, unit configuration/size, amenities/facilities. DO NOT include generic sales concerns.
-- Concern Categories: For EACH key_concern, classify it into ONE of these categories (same order as key_concerns array):
-  1. "Price" - Budget gaps, pricing issues, financing concerns, EMI issues
+    const concernGeneration = `# KEY CONCERNS GENERATION RULES
+
+## DEFINITION (CRITICAL)
+Key concerns are ONLY the **CUSTOMER'S stated concerns about the PRODUCT or PROJECT** - issues they have raised about what they are buying.
+
+## INCLUDE (Customer Product Concerns):
+- Price/budget gap ("too expensive", "out of budget by 20L", "price is high")
+- Location issues ("too far from work", "connectivity problems", "area is remote")
+- Possession timeline ("need earlier possession", "2027 is too late", "want RTMI")
+- Configuration mismatch ("want bigger bedrooms", "kitchen is too small", "need 4BHK")
+- Amenities gaps ("no swimming pool", "clubhouse seems small", "want covered parking")
+- Trust/reputation ("heard about delays in other projects", "worried about construction quality")
+
+## EXCLUDE (Salesman Observations - NEVER include these):
+- "Needs family consultation" ❌
+- "Financing pending" ❌
+- "Still comparing options" ❌
+- "Decision maker not present" ❌
+- "Budget not finalized" ❌
+- "Looking at other projects" ❌
+- "Needs to sell current property" ❌
+- "Waiting for loan approval" ❌
+
+These are SALES PIPELINE obstacles, NOT customer concerns about the product.
+
+## Concern Categories:
+For EACH key_concern, classify into ONE category:
+  1. "Price" - Budget gaps, pricing issues, financing concerns, EMI burden
   2. "Location" - Connectivity, infrastructure, surroundings, pollution, traffic, facilities nearby
   3. "Possession" - Delivery timeline, construction delays, handover dates
   4. "Config" - Unit configuration, layout issues, view concerns, floor preference, carpet area
   5. "Amenities" - Amenities in home or complex, facilities
   6. "Trust" - Builder reputation, track record concerns
-  7. "Others" - Anything else
-- Primary Concern Category: The SINGLE most important concern category. If multiple concerns exist, pick the one that appears FIRST in the priority order above ( Location > Config > Price > Possession > Amenities > Trust > Others)`;
+  7. "Others" - Any other PRODUCT-RELATED concern
+
+## Primary Concern Category:
+The SINGLE most important concern. Priority order: Price > Location > Possession > Config > Amenities > Trust > Others
+
+## If No Product Concerns:
+If the customer has NOT stated any concerns about the product/project, return an empty array for key_concerns.`;
 
     const talkingpointsGeneration = `# TALKING POINTS GENERATION (CRITICAL - FOLLOW PRIORITY RULES):
 Generate 2-3 talking points TOTAL following these strict priority rules:
