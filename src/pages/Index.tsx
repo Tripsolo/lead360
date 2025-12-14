@@ -661,18 +661,18 @@ const Index = () => {
                 <Sparkles className="mr-2 h-5 w-5" />
                 {isAnalyzing ? 'Analyzing...' : 'Analyze with AI'}
               </Button>
-              <Button 
-                variant="ghost" 
-                size="lg"
-                onClick={() => navigate('/project-analytics')}
-                title="Project Analytics"
-              >
-                <BarChart3 className="h-5 w-5" />
-              </Button>
               <div className="flex-1" />
               <Button variant="outline" onClick={handleReset} size="lg">
                 <Upload className="mr-2 h-5 w-5" />
                 Upload New File
+              </Button>
+              <Button 
+                variant="outline" 
+                size="icon"
+                onClick={() => navigate('/project-analytics')}
+                title="Project Analytics"
+              >
+                <BarChart3 className="h-5 w-5" />
               </Button>
             </div>
 
