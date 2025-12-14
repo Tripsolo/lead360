@@ -1,6 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// Declare EdgeRuntime for background task processing
+declare const EdgeRuntime: {
+  waitUntil(promise: Promise<any>): void;
+};
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -1337,11 +1342,10 @@ Return a JSON object with this EXACT structure:
   "mql_data_available": boolean
 }`;
 
-    // ============= TWO-STAGE ANALYSIS PIPELINE =============
+    // ============= TWO-STAGE ANALYSIS PIPELINE (SEQUENTIAL) =============
 
-    const analysisPromises = leadsToAnalyze.map(async (leadWithMql: any, index: number) => {
-      await new Promise((resolve) => setTimeout(resolve, index * 100));
-
+    // Helper function to process a single lead
+    async function processLeadAnalysis(leadWithMql: any): Promise<any> {
       const { mqlEnrichment, ...lead } = leadWithMql;
       const leadDataJson = JSON.stringify(lead, null, 2);
 
@@ -1431,7 +1435,7 @@ IMPORTANT SCORING RULES:
 
       let extractedSignals;
       try {
-        const stage1Response = await callGeminiAPI(stage1Prompt, googleApiKey, true);
+        const stage1Response = await callGeminiAPI(stage1Prompt, googleApiKey!, true);
         extractedSignals = JSON.parse(stage1Response);
         console.log(`Stage 1 complete for lead ${lead.id}`);
       } catch (stage1Error) {
@@ -1462,7 +1466,7 @@ IMPORTANT SCORING RULES:
       let parseSuccess = true;
 
       try {
-        const stage2Response = await callGeminiAPI(stage2Prompt, googleApiKey, true);
+        const stage2Response = await callGeminiAPI(stage2Prompt, googleApiKey!, true);
         analysisResult = JSON.parse(stage2Response);
         console.log(`Stage 2 complete for lead ${lead.id}`);
       } catch (stage2Error) {
@@ -1522,15 +1526,13 @@ IMPORTANT SCORING RULES:
         fromCache: false,
         revisitDate: lead.rawData?.["Latest Revisit Date"] || null,
       };
-    });
+    }
 
-    const freshResults = await Promise.all(analysisPromises);
-
-    // Store analysis results (leads are already stored during file upload)
-    for (const result of freshResults) {
+    // Helper function to store analysis result
+    async function storeAnalysisResult(result: any, projectId: string, leadsToAnalyze: any[]) {
       if (result.parseSuccess) {
         const lead = leadsToAnalyze.find((l) => l.id === result.leadId);
-        if (!lead) continue;
+        if (!lead) return;
 
         await supabase.from("lead_analyses").upsert(
           {
@@ -1546,10 +1548,98 @@ IMPORTANT SCORING RULES:
       }
     }
 
+    // Background processing function for large batches
+    async function processLeadsBatchSequentially(
+      leadsToAnalyze: any[],
+      projectId: string,
+      cachedResults: any[]
+    ): Promise<void> {
+      console.log(`Background processing started for ${leadsToAnalyze.length} leads`);
+      
+      for (let index = 0; index < leadsToAnalyze.length; index++) {
+        const leadWithMql = leadsToAnalyze[index];
+        
+        // Add 2500ms delay between leads (not before first one)
+        if (index > 0) {
+          await new Promise((resolve) => setTimeout(resolve, 2500));
+        }
+        
+        console.log(`Processing lead ${index + 1}/${leadsToAnalyze.length}: ${leadWithMql.id}`);
+        
+        try {
+          const result = await processLeadAnalysis(leadWithMql);
+          await storeAnalysisResult(result, projectId, leadsToAnalyze);
+          console.log(`Lead ${leadWithMql.id} processed and stored successfully`);
+        } catch (error) {
+          console.error(`Failed to process lead ${leadWithMql.id}:`, error);
+        }
+      }
+      
+      console.log(`Background processing complete for ${leadsToAnalyze.length} leads`);
+    }
+
+    // Check if batch is too large for synchronous processing (>20 leads)
+    const BATCH_THRESHOLD = 20;
+    
+    if (leadsToAnalyze.length > BATCH_THRESHOLD) {
+      // Use background processing for large batches
+      console.log(`Large batch detected (${leadsToAnalyze.length} leads > ${BATCH_THRESHOLD}). Starting background processing...`);
+      
+      EdgeRuntime.waitUntil(processLeadsBatchSequentially(leadsToAnalyze, projectId, cachedResults));
+      
+      return new Response(
+        JSON.stringify({
+          status: "processing",
+          message: `Started background analysis for ${leadsToAnalyze.length} leads`,
+          estimatedTime: `${Math.ceil(leadsToAnalyze.length * 5 / 60)} minutes`,
+          cachedResults: cachedResults,
+          meta: {
+            total: leadsToAnalyze.length + cachedResults.length,
+            cached: cachedResults.length,
+            processing: leadsToAnalyze.length,
+          },
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Sequential processing for smaller batches (<=20 leads)
+    const freshResults: any[] = [];
+    
+    for (let index = 0; index < leadsToAnalyze.length; index++) {
+      const leadWithMql = leadsToAnalyze[index];
+      
+      // Add 2500ms delay between leads (not before first one)
+      if (index > 0) {
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+      }
+      
+      console.log(`Processing lead ${index + 1}/${leadsToAnalyze.length}: ${leadWithMql.id}`);
+      
+      try {
+        const result = await processLeadAnalysis(leadWithMql);
+        freshResults.push(result);
+        
+        // Store result immediately (enables partial progress)
+        await storeAnalysisResult(result, projectId, leadsToAnalyze);
+      } catch (error) {
+        console.error(`Failed to process lead ${leadWithMql.id}:`, error);
+        freshResults.push({
+          leadId: leadWithMql.id,
+          rating: "Warm",
+          insights: "Analysis failed",
+          fullAnalysis: {},
+          parseSuccess: false,
+          fromCache: false,
+          revisitDate: null,
+        });
+      }
+    }
+
     const allResults = [...cachedResults, ...freshResults];
     const successCount = allResults.filter((r) => r.parseSuccess).length;
 
-    console.log(`Analysis complete: ${successCount}/${allResults.length} successful (2-stage pipeline)`);
+    console.log(`Analysis complete: ${successCount}/${allResults.length} successful (sequential 2-stage pipeline)`);
 
     return new Response(
       JSON.stringify({
