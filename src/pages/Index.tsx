@@ -424,49 +424,110 @@ const Index = () => {
     }
 
     setIsAnalyzing(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('analyze-leads', {
-        body: { 
-          leads,
-          projectId: selectedProjectId
-        },
-      });
-
-      if (error) {
-        throw new Error(error.message || 'Failed to analyze leads');
+    
+    // Chunk size for analysis (max 2 leads per API call to stay within timeout)
+    const CHUNK_SIZE = 2;
+    
+    const chunkArray = <T,>(array: T[], size: number): T[][] => {
+      const chunks: T[][] = [];
+      for (let i = 0; i < array.length; i += size) {
+        chunks.push(array.slice(i, i + size));
       }
-
-      if (data?.results) {
-        const updatedLeads = leads.map(lead => {
-          const analysis = data.results.find((r: AnalysisResult) => r.leadId === lead.id);
-          if (analysis) {
-            return {
-              ...lead,
-              rating: analysis.rating,
-              aiInsights: analysis.insights,
-              fullAnalysis: analysis.fullAnalysis,
-            };
-          }
-          return lead;
-        });
-        setLeads(updatedLeads);
-        
-        const meta = data.meta || {};
-        const cachedCount = meta.cached || 0;
-        const freshCount = meta.fresh || 0;
-        
-        let description = `Successfully analyzed ${data.results.length} leads.`;
-        if (cachedCount > 0 && freshCount > 0) {
-          description = `Analyzed ${data.results.length} leads (${cachedCount} from cache, ${freshCount} fresh analysis).`;
-        } else if (cachedCount > 0 && freshCount === 0) {
-          description = `Retrieved ${cachedCount} leads from cache (no fresh analysis needed).`;
-        }
-        
+      return chunks;
+    };
+    
+    try {
+      // Separate leads that need fresh analysis vs cached
+      const leadsWithoutAnalysis = leads.filter(l => !l.fullAnalysis);
+      const leadsWithAnalysis = leads.filter(l => l.fullAnalysis);
+      
+      // If all leads already have analysis, skip chunking
+      if (leadsWithoutAnalysis.length === 0) {
         toast({
           title: 'Analysis complete',
-          description,
+          description: `All ${leads.length} leads already have cached analysis.`,
         });
+        setIsAnalyzing(false);
+        return;
       }
+      
+      // Chunk the leads that need analysis
+      const chunks = chunkArray(leadsWithoutAnalysis, CHUNK_SIZE);
+      const totalChunks = chunks.length;
+      let totalCached = leadsWithAnalysis.length;
+      let totalFresh = 0;
+      
+      toast({
+        title: 'Analysis started',
+        description: `Processing ${leadsWithoutAnalysis.length} leads in ${totalChunks} batches...`,
+      });
+      
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        const percentComplete = Math.round((i / totalChunks) * 100);
+        
+        toast({
+          title: 'Analysis in progress',
+          description: `${percentComplete}% complete (batch ${i + 1}/${totalChunks})...`,
+        });
+        
+        const { data, error } = await supabase.functions.invoke('analyze-leads', {
+          body: { 
+            leads: chunk,
+            projectId: selectedProjectId,
+            chunkIndex: i + 1,
+            totalChunks,
+          },
+        });
+        
+        if (error) {
+          console.error(`Batch ${i + 1} failed:`, error);
+          toast({
+            title: `Batch ${i + 1} failed`,
+            description: error.message || 'Failed to analyze batch',
+            variant: 'destructive',
+          });
+          continue; // Continue with next batch instead of failing completely
+        }
+        
+        if (data?.results) {
+          totalCached += data.meta?.cached || 0;
+          totalFresh += data.meta?.fresh || 0;
+          
+          // Update leads state with partial results
+          setLeads(currentLeads => 
+            currentLeads.map(lead => {
+              const analysis = data.results.find((r: AnalysisResult) => r.leadId === lead.id);
+              if (analysis) {
+                return {
+                  ...lead,
+                  rating: analysis.rating,
+                  aiInsights: analysis.insights,
+                  fullAnalysis: analysis.fullAnalysis,
+                };
+              }
+              return lead;
+            })
+          );
+        }
+        
+        // Add small delay between chunks
+        if (i < chunks.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+      
+      let description = `Successfully analyzed ${leads.length} leads.`;
+      if (totalCached > 0 && totalFresh > 0) {
+        description = `Analyzed ${leads.length} leads (${totalCached} from cache, ${totalFresh} fresh analysis).`;
+      } else if (totalCached > 0 && totalFresh === 0) {
+        description = `Retrieved ${totalCached} leads from cache (no fresh analysis needed).`;
+      }
+      
+      toast({
+        title: 'Analysis complete',
+        description,
+      });
     } catch (error) {
       console.error('Analysis error:', error);
       toast({
