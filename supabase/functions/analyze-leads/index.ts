@@ -40,17 +40,72 @@ Extract structured signals from the CRM and MQL data provided. Transform raw val
 - Location/Residence: ALWAYS use CRM value
 - Age/Gender: Use MQL value if available
 
-## NEW FIELD EXTRACTION RULES:
+## FIELD EXTRACTION RULES:
+
+### Demographics & Family:
 1. income_earners: Count earning members mentioned ("both working" = 2, "single income" = 1, "wife also working" = 2)
 2. years_at_current_residence: Parse from comments if mentioned ("staying here for 5 years" = 5)
-3. current_carpet_sqft: Parse from "current flat is X sqft" or "current 2BHK is X sqft" patterns
-4. upgrade_ratio: Calculate as carpet_area_desired / current_carpet_sqft (if both available)
-5. specific_unit_interest: Extract unit numbers like "A-1502", "B-2304", "Tower A 15th floor"
-6. expected_closure_days: Parse timelines ("next week" = 7, "this month" = 30, "within 2-3 months" = 75)
-7. possession_urgency: Extract possession expectations ("need by Dec 2026", "want RTMI", "can wait 2 years")
-8. negotiation_asks: Extract discount/freebie requests ("asking for 5L discount", "wants free parking")
-9. card_portfolio_strength: "Premium" if Amex/Diners or has_premium_cards=true, "Standard" if 2+ cards, "Basic" otherwise
-10. roots_feedback: Extract specific feedback about the park/township ("loved the park", "roots seems too far")
+3. family_size: Extract total family members ("family of 4" = 4, "couple with 2 kids" = 4, "nuclear family" = 4, "joint family" = 6)
+4. children_count: Extract from comments ("2 kids" = 2, "son and daughter" = 2, "school-going" implies children)
+5. children_ages: Extract age references as array ("kids 8 and 12" = ["8", "12"], "teenager" = ["13-19"], "toddler" = ["1-3"])
+
+### Property & Current Residence:
+6. current_carpet_sqft: Parse from these patterns (prioritize in order):
+   - "current flat is X sqft" or "current X sqft"
+   - "currently living in X carpet"
+   - "X sqft 2BHK/3BHK" in context of current residence
+   - "currently owns X sqft"
+   - If rented, extract landlord flat size if mentioned
+   - Convert to carpet: if "built-up" mentioned, multiply by 0.75
+7. upgrade_ratio: Calculate as carpet_area_desired / current_carpet_sqft (if both available, round to 1 decimal)
+8. specific_unit_interest: Extract from:
+   - CRM field "Interested Tower" + "Floor" (e.g., "Tower A, 15th floor" → "A-15")
+   - CRM field "Interested Unit" if contains unit number
+   - Visit comments: patterns like "A-1502", "B-2304", "unit 1502", "flat 15-02"
+   - Comments like "liked 15th floor unit", "showed B wing 23rd floor"
+   Return as array: ["A-1502", "B-2304"] or null if none found
+
+### Engagement & Timeline:
+9. expected_closure_days: Parse timelines ("next week" = 7, "this month" = 30, "within 2-3 months" = 75, "by end of year" = 180)
+10. possession_urgency: Extract possession expectations ("need by Dec 2026", "want RTMI", "can wait 2 years")
+11. search_duration_months: Calculate from "Searching Property since" CRM field:
+    - "1 - 6 Months" → 3 (midpoint)
+    - "6 Months - 1 Year" → 9
+    - "More Than 1 Year" → 15
+    - "Blank" or null → null
+12. visit_quality: Assess from visit comments:
+    - "Thorough": Saw sample flat, discussed pricing, met decision-makers
+    - "Standard": Normal site visit without issues
+    - "Rushed": "in a hurry", "didn't have time", "quick visit"
+    - "Issues": "lift wasn't working", "sample not ready", "site messy"
+13. revisit_promised: Extract explicit revisit commitment ("will come back" = true, "revisit next week" = true, "coming with family" = true)
+
+### Financial (from MQL banking_loans):
+14. joint_loan_count: Count loans from MQL banking_loans where ownership_type = "Joint Account"
+15. guarantor_loan_count: Count loans from MQL banking_loans where ownership_type = "Guarantor"
+16. total_collateral_value_cr: Sum collateral_value from MQL banking_loans where loan is secured, convert to Crores
+17. total_active_emi_monthly: Sum installment_amount from MQL banking_loans where loan is active
+18. education_loan_present: Check if any loan in MQL banking_loans has account_type containing "education" or "student"
+
+### Negotiation & Objections:
+19. negotiation_asks: Extract discount/freebie requests as array ("asking for 5L discount", "wants free parking", "needs stamp duty waiver")
+20. non_booking_reason: Extract from (first available wins):
+    - CRM field "Why Not Booked Today"
+    - CRM field "Reason for not booking on SPOT"
+    - Visit comments containing "didn't book because", "not booked as", "couldn't book due to"
+    Categorize as: "Price Negotiation" | "Family Consultation" | "Financing Pending" | "Competitor Comparison" | "Configuration Mismatch" | "Possession Timeline" | "Other"
+
+### Cards & Lifestyle:
+21. card_portfolio_strength: "Premium" if Amex/Diners or has_premium_cards=true, "Standard" if 2+ cards, "Basic" otherwise
+22. roots_feedback: Extract specific feedback about the park/township ("loved the park", "roots seems too far")
+
+### Competitor Intelligence (Enhanced):
+23. competitors_mentioned: Parse competitor details with pricing:
+    - Pattern: "Runwal Land Ends/1100sq ft/270 lacs" → carpet_stated: 1100, price_stated_cr: 2.7
+    - Calculate price_per_sqft: (price_stated_cr * 10000000) / carpet_stated
+    - Pattern: "L&T quoted 18000/sqft" → price_per_sqft: 18000
+    - Pattern: "Rustomjee 2.1Cr for similar" → price_stated_cr: 2.1
+    - advantage_stated: What customer said is better ("better possession", "more carpet")
 
 ## EVIDENCE EXTRACTION RULES (CRITICAL):
 - Use DIRECT QUOTES from Visit Comments where possible (wrap in quotes)
@@ -73,7 +128,10 @@ Return a JSON object with this EXACT structure:
     "building_name": "string | null",
     "locality_grade": "Premium" | "Popular" | "Affordable" | null,
     "income_earners": number | null,
-    "years_at_current_residence": number | null
+    "years_at_current_residence": number | null,
+    "family_size": number | null,
+    "children_count": number | null,
+    "children_ages": ["string"] | null
   },
   "professional_profile": {
     "occupation_type": "Salaried" | "Business" | "Self-Employed" | "Professional" | "Retired" | "Homemaker" | null,
@@ -100,6 +158,10 @@ Return a JSON object with this EXACT structure:
     "home_loan_active": number | null,
     "home_loan_paid_off": number | null,
     "guarantor_loan_count": number | null,
+    "joint_loan_count": number | null,
+    "total_collateral_value_cr": number | null,
+    "total_active_emi_monthly": number | null,
+    "education_loan_present": boolean,
     "stated_family_income_lpa": number | null,
     "card_portfolio_strength": "Premium" | "Standard" | "Basic" | null,
     "auto_loan_count": number | null,
@@ -128,6 +190,9 @@ Return a JSON object with this EXACT structure:
     "searching_since": "string | null",
     "possession_urgency": "string | null",
     "expected_closure_days": number | null,
+    "search_duration_months": number | null,
+    "visit_quality": "Thorough" | "Standard" | "Rushed" | "Issues" | null,
+    "revisit_promised": boolean,
     "non_booking_reason": "string | null",
     "roots_feedback": "string | null",
     "negotiation_asks": ["string"] | null
@@ -137,7 +202,15 @@ Return a JSON object with this EXACT structure:
   ],
   "competitor_intelligence": {
     "competitors_mentioned": [
-      { "name": "string", "project": "string | null", "visit_status": "Yet to Visit" | "Already Visited" | "Booked" | null, "price_stated": "string | null", "advantage_stated": "string | null" }
+      { 
+        "name": "string", 
+        "project": "string | null", 
+        "visit_status": "Yet to Visit" | "Already Visited" | "Booked" | null, 
+        "carpet_stated": number | null,
+        "price_stated_cr": number | null,
+        "price_per_sqft": number | null,
+        "advantage_stated": "string | null" 
+      }
     ],
     "alternative_if_not_kl": "string | null",
     "lost_to_competitor": "string | null"
@@ -228,19 +301,28 @@ function buildStage2Prompt(
 You are provided with PRE-EXTRACTED SIGNALS from CRM and MQL data (not raw data). Use these signals to:
 
 1. Calculate the PPS Score using the 5-dimension framework:
-   - Financial Capability (max 30 pts): Use income_tier, turnover_tier, budget gap, funding_source, credit_rating, emi_burden_level, card_portfolio_strength
-   - Intent & Engagement (max 25 pts): Use visit_count, is_duplicate_lead, sample_feedback, competitor_intelligence, roots_feedback
-   - Urgency & Timeline (max 20 pts): Use stage_preference, core_motivation, home_loan_recency, investor_signal, possession_urgency, expected_closure_days
-   - Product-Market Fit (max 15 pts): Use config match, location fit, mql_lifestyle alignment, upgrade_ratio
-   - Authority & Decision Dynamics (max 10 pts): Use decision_makers_present, age-based adjustments, guarantor_loan_count, income_earners
+   - Financial Capability (max 30 pts): Use income_tier, turnover_tier, budget gap, funding_source, credit_rating, emi_burden_level, card_portfolio_strength, total_collateral_value_cr
+   - Intent & Engagement (max 25 pts): Use visit_count, is_duplicate_lead, sample_feedback, competitor_intelligence, roots_feedback, visit_quality, revisit_promised
+   - Urgency & Timeline (max 20 pts): Use stage_preference, core_motivation, home_loan_recency, investor_signal, possession_urgency, expected_closure_days, search_duration_months
+   - Product-Market Fit (max 15 pts): Use config match, location fit, mql_lifestyle alignment, upgrade_ratio, family_size, children_count
+   - Authority & Decision Dynamics (max 10 pts): Use decision_makers_present, age-based adjustments, guarantor_loan_count, joint_loan_count, income_earners
 
 2. Apply scoring adjustments from extracted signals:
    - If investor_signal is true: +5 pts to Urgency
    - If home_loan_recency is "Within 3 years" AND investor_signal is false: -3 pts to Urgency
    - If emi_burden_level is "High": -5 pts to Financial. If "Moderate": -2 pts
-   - If guarantor_loan_count > 0: +1 pt to Authority
+   - If guarantor_loan_count > 0: +1 pt to Authority (family network signal)
+   - If joint_loan_count > 0: +1 pt to Authority (family decision-making)
    - If card_portfolio_strength is "Premium": +2 pts to Financial
    - If upgrade_ratio > 1.5: +2 pts to Product-Market Fit (significant upgrade)
+   - If total_collateral_value_cr >= 1: +2 pts to Financial (asset-backed strength)
+   - If children_count > 0 AND project has school proximity: +2 pts to PMF
+   - If family_size >= 5 AND config is 3BHK+: +1 pt to PMF (config match)
+   - If search_duration_months > 12: +3 pts to Urgency (serious buyer, extended search)
+   - If search_duration_months 6-12: +1 pt to Urgency (active search)
+   - If visit_quality is "Thorough": +2 pts to Intent
+   - If visit_quality is "Rushed" or "Issues": -2 pts to Intent
+   - If revisit_promised is true: +2 pts to Intent
 
 3. Derive final rating from PPS: >= 85 = Hot, >= 65 = Warm, < 65 = Cold
 
@@ -249,6 +331,8 @@ You are provided with PRE-EXTRACTED SIGNALS from CRM and MQL data (not raw data)
 5. Generate outputs using ONLY the extracted signals - do NOT hallucinate additional information
 
 6. For competitor talking points: Use COMPETITOR PRICING REFERENCE with quantitative comparisons
+   - Use competitor carpet_stated, price_stated_cr, and price_per_sqft for specific comparisons
+   - Calculate differentials: "X% more carpet area at competitive pricing"
 
 ## USING EXTRACTED EVIDENCE IN OUTPUTS (CRITICAL)
 
@@ -413,6 +497,63 @@ function createFallbackExtraction(lead: any, mqlEnrichment: any): any {
     cardPortfolioStrength = "Basic";
   }
 
+  // NEW: Parse loan counts from MQL raw_response
+  let guarantorLoanCount = mqlEnrichment?.guarantor_loan_count || null;
+  let jointLoanCount = null;
+  let totalCollateralValueCr = null;
+  let totalActiveEmiMonthly = null;
+  let educationLoanPresent = false;
+
+  if (mqlEnrichment?.raw_response?.leads?.[0]?.banking?.banking_loans) {
+    const loans = mqlEnrichment.raw_response.leads[0].banking.banking_loans;
+    guarantorLoanCount = loans.filter((l: any) => l.ownership_type === "Guarantor").length || null;
+    jointLoanCount = loans.filter((l: any) => l.ownership_type === "Joint Account").length || null;
+    
+    // Calculate total collateral value
+    let collateralSum = 0;
+    for (const loan of loans) {
+      if (loan.collateral_value && loan.collateral_value > 0) {
+        collateralSum += loan.collateral_value;
+      }
+    }
+    totalCollateralValueCr = collateralSum > 0 ? Math.round(collateralSum / 10000000 * 100) / 100 : null;
+
+    // Calculate total active EMI
+    let emiSum = 0;
+    for (const loan of loans) {
+      if (loan.installment_amount && loan.account_status === "Active") {
+        emiSum += loan.installment_amount;
+      }
+    }
+    totalActiveEmiMonthly = emiSum > 0 ? emiSum : null;
+
+    // Check for education loans
+    educationLoanPresent = loans.some((l: any) => 
+      l.account_type?.toLowerCase().includes("education") || 
+      l.account_type?.toLowerCase().includes("student")
+    );
+  }
+
+  // NEW: Calculate search_duration_months
+  let searchDurationMonths = null;
+  const searchingSince = rawData["Searching Property since"];
+  if (searchingSince === "1 - 6 Months") searchDurationMonths = 3;
+  else if (searchingSince === "6 Months - 1 Year") searchDurationMonths = 9;
+  else if (searchingSince === "More Than 1 Year") searchDurationMonths = 15;
+
+  // NEW: Extract specific_unit_interest from CRM fields
+  let specificUnitInterest = null;
+  const tower = rawData["Interested Tower"];
+  const floor = rawData["Floor"] || rawData["Desired Floor Band"];
+  if (tower && floor) {
+    specificUnitInterest = [`${tower}-${floor}`];
+  } else if (rawData["Interested Unit"]) {
+    specificUnitInterest = [rawData["Interested Unit"]];
+  }
+
+  // NEW: Extract non_booking_reason
+  const nonBookingReason = rawData["Why Not Booked Today"] || rawData["Reason for not booking on SPOT"] || null;
+
   return {
     demographics: {
       age: mqlEnrichment?.age || null,
@@ -424,6 +565,9 @@ function createFallbackExtraction(lead: any, mqlEnrichment: any): any {
       locality_grade: mqlEnrichment?.locality_grade || null,
       income_earners: null,
       years_at_current_residence: null,
+      family_size: null,
+      children_count: null,
+      children_ages: null,
     },
     professional_profile: {
       occupation_type: rawData["Occupation"] || null,
@@ -449,7 +593,11 @@ function createFallbackExtraction(lead: any, mqlEnrichment: any): any {
       home_loan_count: mqlEnrichment?.home_loan_count || null,
       home_loan_active: mqlEnrichment?.home_loan_active || null,
       home_loan_paid_off: mqlEnrichment?.home_loan_paid_off || null,
-      guarantor_loan_count: mqlEnrichment?.guarantor_loan_count || null,
+      guarantor_loan_count: guarantorLoanCount,
+      joint_loan_count: jointLoanCount,
+      total_collateral_value_cr: totalCollateralValueCr,
+      total_active_emi_monthly: totalActiveEmiMonthly,
+      education_loan_present: educationLoanPresent,
       stated_family_income_lpa: null,
       card_portfolio_strength: cardPortfolioStrength,
       auto_loan_count: mqlEnrichment?.auto_loan_count || null,
@@ -464,7 +612,7 @@ function createFallbackExtraction(lead: any, mqlEnrichment: any): any {
       facing_preference: null,
       current_carpet_sqft: null,
       upgrade_ratio: null,
-      specific_unit_interest: null,
+      specific_unit_interest: specificUnitInterest,
       alternative_shown: null,
     },
     engagement_signals: {
@@ -478,7 +626,10 @@ function createFallbackExtraction(lead: any, mqlEnrichment: any): any {
       searching_since: rawData["Searching Property since"] || null,
       possession_urgency: null,
       expected_closure_days: null,
-      non_booking_reason: null,
+      search_duration_months: searchDurationMonths,
+      visit_quality: null,
+      revisit_promised: false,
+      non_booking_reason: nonBookingReason,
       roots_feedback: null,
       negotiation_asks: null,
     },
@@ -488,7 +639,9 @@ function createFallbackExtraction(lead: any, mqlEnrichment: any): any {
         name: rawData["Competitor Name"],
         project: rawData["Competition Project Name"] || null,
         visit_status: rawData["Competition Visit Status"] || null,
-        price_stated: null,
+        carpet_stated: null,
+        price_stated_cr: null,
+        price_per_sqft: null,
         advantage_stated: null,
       }] : [],
       alternative_if_not_kl: null,
