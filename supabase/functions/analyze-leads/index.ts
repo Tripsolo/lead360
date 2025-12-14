@@ -1438,9 +1438,9 @@ IMPORTANT SCORING RULES:
         console.log(`Using fallback extraction for lead ${lead.id}`);
       }
 
-      // Rate limit delay: Wait 2500ms before Stage 2 API call
-      console.log(`Waiting 2500ms before Stage 2 for lead ${lead.id}...`);
-      await new Promise((resolve) => setTimeout(resolve, 2500));
+      // Rate limit delay: Wait 500ms before Stage 2 API call
+      console.log(`Waiting 500ms before Stage 2 for lead ${lead.id}...`);
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       // ===== STAGE 2: Score & Generate =====
       console.log(`Stage 2 (Generation) starting for lead ${lead.id}`);
@@ -1557,9 +1557,9 @@ IMPORTANT SCORING RULES:
     for (let index = 0; index < leadsToAnalyze.length; index++) {
       const leadWithMql = leadsToAnalyze[index];
       
-      // Add 2500ms delay between leads (not before first one)
+      // Add 500ms delay between leads (not before first one)
       if (index > 0) {
-        await new Promise((resolve) => setTimeout(resolve, 2500));
+        await new Promise((resolve) => setTimeout(resolve, 500));
       }
       
       console.log(`Processing lead ${index + 1}/${leadsToAnalyze.length}: ${leadWithMql.id}`);
