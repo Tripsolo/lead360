@@ -415,11 +415,18 @@ async function callGeminiAPI(
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            tools: [{ google_search: {} }],
-            generationConfig,
-          }),
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        tools: [{ 
+          google_search_retrieval: { 
+            dynamic_retrieval_config: { 
+              mode: "MODE_DYNAMIC", 
+              dynamic_threshold: 0.7 
+            } 
+          } 
+        }],
+        generationConfig,
+      }),
         },
       );
 
