@@ -292,7 +292,7 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
                 <p className="text-xs text-muted-foreground mb-1">Budget</p>
                 <p className="font-semibold">
                   {analysis?.extracted_signals?.budget_stated 
-                    ? `₹${(analysis.extracted_signals.budget_stated / 10000000).toFixed(2)}Cr`
+                    ? `₹${analysis.extracted_signals.budget_stated}Cr`
                     : 'N/A'
                   }
                 </p>
@@ -300,8 +300,10 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
               <div className="p-3 bg-muted rounded-lg">
                 <p className="text-xs text-muted-foreground mb-1">In-Hand Funds</p>
                 <p className="font-semibold">
-                  {analysis?.extracted_signals?.in_hand_funds 
-                    ? `₹${(analysis.extracted_signals.in_hand_funds / 100000).toFixed(2)}L`
+                  {analysis?.extracted_signals?.in_hand_funds != null
+                    ? analysis.extracted_signals.in_hand_funds > 100
+                      ? `₹${(analysis.extracted_signals.in_hand_funds / 100000).toFixed(2)}L`
+                      : `${analysis.extracted_signals.in_hand_funds}%`
                     : 'N/A'
                   }
                 </p>
