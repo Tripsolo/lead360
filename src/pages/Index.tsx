@@ -9,7 +9,7 @@ import { exportLeadsToExcel } from '@/utils/excelExport';
 import { Lead, AnalysisResult, MqlEnrichment } from '@/types/lead';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Sparkles, Upload, LogOut, Database } from 'lucide-react';
+import { Sparkles, Upload, LogOut, Database, BarChart3 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { ExcelSchema } from '@/config/projects';
 import type { User, Session } from '@supabase/supabase-js';
@@ -625,18 +625,15 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-12">
-        <div className="flex justify-end mb-4">
+        <div className="flex justify-between items-start mb-8">
+          <div>
+            <h1 className="text-3xl font-bold">Customer360</h1>
+            <p className="text-sm text-muted-foreground">Powered by Raisn.ai</p>
+          </div>
           <Button variant="outline" onClick={handleLogout} size="sm">
             <LogOut className="mr-2 h-4 w-4" />
             Logout
           </Button>
-        </div>
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold mb-2">Customer360</h1>
-          <p className="text-sm text-muted-foreground mb-4">Powered by Raisn.ai</p>
-          <p className="text-lg text-muted-foreground">
-            Upload your CRM file to analyze and rate your customer visits
-          </p>
         </div>
 
         {leads.length === 0 ? (
@@ -663,6 +660,14 @@ const Index = () => {
               >
                 <Sparkles className="mr-2 h-5 w-5" />
                 {isAnalyzing ? 'Analyzing...' : 'Analyze with AI'}
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="lg"
+                onClick={() => navigate('/project-analytics')}
+                title="Project Analytics"
+              >
+                <BarChart3 className="h-5 w-5" />
               </Button>
               <div className="flex-1" />
               <Button variant="outline" onClick={handleReset} size="lg">
