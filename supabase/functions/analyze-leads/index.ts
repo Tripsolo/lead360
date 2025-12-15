@@ -1461,9 +1461,9 @@ IMPORTANT SCORING RULES:
         console.log(`Using fallback extraction for lead ${lead.id}`);
       }
 
-      // Rate limit delay: Wait 2500ms before Stage 2 API call
-      console.log(`Waiting 2500ms before Stage 2 for lead ${lead.id}...`);
-      await new Promise((resolve) => setTimeout(resolve, 2500));
+      // Rate limit delay: Wait 300ms before Stage 2 API call
+      console.log(`Waiting 300ms before Stage 2 for lead ${lead.id}...`);
+      await new Promise((resolve) => setTimeout(resolve, 300));
 
       // ===== STAGE 2: Score & Generate =====
       console.log(`Stage 2 (Generation) starting for lead ${lead.id}`);
@@ -1574,43 +1574,221 @@ IMPORTANT SCORING RULES:
 
     console.log(`Processing chunk ${chunkIndex}/${totalChunks} with ${leadsToAnalyze.length} leads`);
 
-    // Sequential processing (chunks are small by design - max 2 leads per chunk)
+    // ===== PARALLEL STAGE 1 EXTRACTION =====
+    console.log(`Starting parallel Stage 1 extraction for ${leadsToAnalyze.length} leads...`);
+    
+    // Helper function to build MQL section
+    function buildMqlSection(mqlEnrichment: any): { mqlSection: string; mqlAvailable: boolean } {
+      const mqlAvailable = mqlEnrichment && mqlEnrichment.mql_rating && mqlEnrichment.mql_rating !== "N/A";
+      
+      if (!mqlAvailable) {
+        return { mqlSection: `# MQL DATA: Not available for this lead. Score using CRM data only. Set mql_data_available to false.`, mqlAvailable: false };
+      }
+      
+      // Calculate years since latest home loan
+      let homeLoanRecency = "N/A";
+      if (mqlEnrichment.latest_home_loan_date) {
+        const loanDate = new Date(mqlEnrichment.latest_home_loan_date);
+        const yearsSinceLoan = (Date.now() - loanDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+        homeLoanRecency = yearsSinceLoan < 3 ? "Within 3 years" : yearsSinceLoan < 5 ? "3-5 years ago" : "5+ years ago";
+      }
+      
+      // Extract employment status from raw response if available
+      const rawLeadData = mqlEnrichment.raw_response?.leads?.[0] || {};
+      const employmentDetails = rawLeadData.employment_details || [];
+      const primaryEmployment = employmentDetails[0] || {};
+      const employmentStatus = primaryEmployment.employment_status || primaryEmployment.status || "N/A";
+      
+      const mqlSection = `# MQL ENRICHMENT DATA (Verified External Data)
+
+## Basic Profile
+Rating: ${mqlEnrichment.mql_rating || "N/A"}
+Capability: ${mqlEnrichment.mql_capability || "N/A"}
+Lifestyle: ${mqlEnrichment.mql_lifestyle || mqlEnrichment.lifestyle || "N/A"}
+Locality Grade: ${mqlEnrichment.locality_grade || "N/A"}
+Age: ${mqlEnrichment.age || "N/A"}
+Gender: ${mqlEnrichment.gender || "N/A"}
+
+## Employment Details (For Salaried Users)
+Employer Name: ${mqlEnrichment.employer_name || "N/A"}
+Designation: ${mqlEnrichment.designation || "N/A"}
+Employment Status: ${employmentStatus}
+
+## Income (For Scoring Only - NEVER Mention in Output)
+Annual Income (Lacs): ${mqlEnrichment.final_income_lacs || "N/A"}
+
+## Business Details (For Self-Employed - For Scoring Only - NEVER Mention Specific Values)
+Business Type: ${mqlEnrichment.business_type || "N/A"}
+Industry: ${mqlEnrichment.industry || "N/A"}
+Turnover Slab: ${mqlEnrichment.turnover_slab || "N/A"}
+
+## Credit Profile (For Scoring Only - NEVER Mention in Output)
+Credit Score: ${mqlEnrichment.credit_score || "N/A"}
+Credit Behavior: ${mqlEnrichment.credit_behavior_signal || "N/A"}
+
+## Loan History (For Scoring Only - NEVER Mention Specific Values)
+Home Loans - Total: ${mqlEnrichment.home_loan_count ?? "N/A"}, Active: ${mqlEnrichment.home_loan_active ?? "N/A"}, Paid Off: ${mqlEnrichment.home_loan_paid_off ?? "N/A"}
+Latest Home Loan: ${homeLoanRecency}
+Auto Loans: ${mqlEnrichment.auto_loan_count ?? "N/A"}
+Consumer/Personal Loans: ${mqlEnrichment.consumer_loan_count ?? "N/A"}
+Guarantor Loans: ${mqlEnrichment.guarantor_loan_count ?? "N/A"}
+
+## EMI Burden (For Scoring Only - NEVER Mention Specific Values)
+Active EMI Burden (Monthly): ${mqlEnrichment.active_emi_burden ? `₹${mqlEnrichment.active_emi_burden}` : "N/A"}
+EMI-to-Income Ratio: ${mqlEnrichment.emi_to_income_ratio ? `${mqlEnrichment.emi_to_income_ratio.toFixed(1)}%` : "N/A"}
+
+## Credit Cards
+Card Count: ${mqlEnrichment.credit_card_count ?? "N/A"}
+Has Premium Cards (Amex/Platinum): ${mqlEnrichment.has_premium_cards ? "Yes" : "No"}
+
+IMPORTANT SCORING RULES:
+1. Derive credit_rating from credit_score: 750+ = "High", 650-749 = "Medium", <650 = "Low"
+2. For Business Owners: Use turnover_slab for A1 scoring (see BUSINESS OWNER SCORING table)
+3. If GST-implied income (based on turnover tier) > MQL income by 50%+: Apply +2-3 pts capability uplift
+4. EMI Burden Penalty: If emi_to_income_ratio > 50%: -5 pts to A3. If 30-50%: -2 pts to A3
+5. Home Loan Timeline: If latest_home_loan within 3 years AND active: -3 pts to C2 UNLESS home_loan_active >= 2 (Investor: +5 pts instead)
+6. Guarantor Signal: If guarantor_loan_count > 0: +1 pt to E`;
+      
+      return { mqlSection, mqlAvailable: true };
+    }
+
+    // Run Stage 1 for all leads in parallel
+    const stage1Results = await Promise.all(
+      leadsToAnalyze.map(async (leadWithMql, index) => {
+        // Small stagger to avoid burst requests
+        if (index > 0) {
+          await new Promise((resolve) => setTimeout(resolve, 100 * index));
+        }
+        
+        const { mqlEnrichment, ...lead } = leadWithMql;
+        const leadDataJson = JSON.stringify(lead, null, 2);
+        const { mqlSection, mqlAvailable } = buildMqlSection(mqlEnrichment);
+        
+        console.log(`Stage 1 (Extraction) starting for lead ${lead.id}`);
+        
+        const stage1Prompt = buildStage1Prompt(
+          leadDataJson,
+          mqlSection,
+          mqlAvailable,
+          crmFieldExplainer,
+          mqlFieldExplainer,
+        );
+        
+        let extractedSignals;
+        try {
+          const stage1Response = await callGeminiAPI(stage1Prompt, googleApiKey!, true);
+          extractedSignals = JSON.parse(stage1Response);
+          console.log(`Stage 1 complete for lead ${lead.id}`);
+        } catch (stage1Error) {
+          console.error(`Stage 1 failed for lead ${lead.id}:`, stage1Error);
+          extractedSignals = createFallbackExtraction(lead, mqlEnrichment);
+          console.log(`Using fallback extraction for lead ${lead.id}`);
+        }
+        
+        return { lead, mqlEnrichment, mqlAvailable, extractedSignals };
+      })
+    );
+    
+    console.log(`Parallel Stage 1 complete for all ${leadsToAnalyze.length} leads`);
+
+    // ===== SEQUENTIAL STAGE 2 SCORING =====
     const freshResults: any[] = [];
 
-    for (let index = 0; index < leadsToAnalyze.length; index++) {
-      const leadWithMql = leadsToAnalyze[index];
+    for (let index = 0; index < stage1Results.length; index++) {
+      const { lead, mqlEnrichment, mqlAvailable, extractedSignals } = stage1Results[index];
 
-      // Add 2500ms delay between leads (not before first one)
+      // Add 300ms delay between Stage 2 calls (not before first one)
       if (index > 0) {
-        await new Promise((resolve) => setTimeout(resolve, 2500));
+        await new Promise((resolve) => setTimeout(resolve, 300));
       }
 
-      console.log(`Processing lead ${index + 1}/${leadsToAnalyze.length}: ${leadWithMql.id}`);
+      console.log(`Stage 2 (Generation) starting for lead ${lead.id} (${index + 1}/${stage1Results.length})`);
+
+      const stage2Prompt = buildStage2Prompt(
+        JSON.stringify(extractedSignals, null, 2),
+        systemPrompt,
+        brandContext,
+        projectContext,
+        leadScoringModel,
+        personaDefinitions,
+        privacyRules,
+        outputConstraints,
+        concernGeneration,
+        talkingpointsGeneration,
+        outputStructure,
+      );
+
+      let analysisResult;
+      let parseSuccess = true;
 
       try {
-        const result = await processLeadAnalysis(leadWithMql);
-        freshResults.push(result);
-
-        // Store result immediately (enables partial progress)
-        await storeAnalysisResult(result, projectId, leadsToAnalyze);
-      } catch (error) {
-        console.error(`Failed to process lead ${leadWithMql.id}:`, error);
-        freshResults.push({
-          leadId: leadWithMql.id,
-          rating: "Warm",
-          insights: "Analysis failed",
-          fullAnalysis: {},
-          parseSuccess: false,
-          fromCache: false,
-          revisitDate: null,
-        });
+        const stage2Response = await callGeminiAPI(stage2Prompt, googleApiKey!, true);
+        analysisResult = JSON.parse(stage2Response);
+        console.log(`Stage 2 complete for lead ${lead.id}`);
+      } catch (stage2Error) {
+        parseSuccess = false;
+        console.error(`Stage 2 failed for lead ${lead.id}:`, stage2Error);
+        analysisResult = {
+          ai_rating: "Warm",
+          rating_confidence: "Low",
+          rating_rationale: "Analysis completed with limited structure",
+          summary: extractedSignals.visit_notes_summary || "Unable to analyze lead",
+          mql_data_available: mqlAvailable,
+        };
       }
+
+      // Apply MQL-based final score adjustment (internal calibration)
+      if (parseSuccess && analysisResult.pps_score !== undefined) {
+        const mqlRating = mqlEnrichment?.mql_rating || "N/A";
+        let adjustedPpsScore = analysisResult.pps_score;
+
+        switch (mqlRating) {
+          case "P0":
+            break;
+          case "P1":
+            adjustedPpsScore = Math.round(adjustedPpsScore * 0.9);
+            break;
+          case "P2":
+            adjustedPpsScore = Math.round(adjustedPpsScore * 0.8);
+            break;
+          default:
+            adjustedPpsScore = Math.round(adjustedPpsScore * 0.95);
+            break;
+        }
+
+        let adjustedRating: "Hot" | "Warm" | "Cold";
+        if (adjustedPpsScore >= 85) {
+          adjustedRating = "Hot";
+        } else if (adjustedPpsScore >= 65) {
+          adjustedRating = "Warm";
+        } else {
+          adjustedRating = "Cold";
+        }
+
+        analysisResult.pps_score = adjustedPpsScore;
+        analysisResult.ai_rating = adjustedRating;
+      }
+
+      const result = {
+        leadId: lead.id,
+        rating: analysisResult.ai_rating,
+        insights: analysisResult.summary || analysisResult.rating_rationale,
+        fullAnalysis: analysisResult,
+        parseSuccess,
+        fromCache: false,
+        revisitDate: lead.rawData?.["Latest Revisit Date"] || null,
+      };
+
+      freshResults.push(result);
+
+      // Store result immediately (enables partial progress)
+      await storeAnalysisResult(result, projectId, leadsToAnalyze);
     }
 
     const allResults = [...cachedResults, ...freshResults];
     const successCount = allResults.filter((r) => r.parseSuccess).length;
 
-    console.log(`Analysis complete: ${successCount}/${allResults.length} successful (sequential 2-stage pipeline)`);
+    console.log(`Analysis complete: ${successCount}/${allResults.length} successful (parallel Stage 1 + sequential Stage 2)`);
 
     return new Response(
       JSON.stringify({
