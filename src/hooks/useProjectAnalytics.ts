@@ -64,7 +64,17 @@ const isUpgraded = (manualRating: string | null | undefined, aiRating: string | 
   return ai > manual;
 };
 
-export function useProjectAnalytics(selectedProjectId: string | null) {
+// Convert Excel serial number to JavaScript Date
+const excelDateToJSDate = (excelSerial: number): Date => {
+  const excelEpoch = new Date(1899, 11, 30);
+  return new Date(excelEpoch.getTime() + excelSerial * 86400000);
+};
+
+export function useProjectAnalytics(
+  selectedProjectId: string | null,
+  startDate?: Date | null,
+  endDate?: Date | null
+) {
   const [leads, setLeads] = useState<LeadWithAnalysis[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -137,6 +147,29 @@ export function useProjectAnalytics(selectedProjectId: string | null) {
   }, [selectedProjectId]);
 
   const analytics = useMemo((): ProjectAnalyticsData => {
+    // Filter leads by date range if provided
+    const filteredLeads = leads.filter(lead => {
+      if (!startDate && !endDate) return true;
+      
+      const walkinDateRaw = lead.crm_data?.['Walkin Date'];
+      if (!walkinDateRaw) return false;
+      
+      // Convert Excel serial to JS Date
+      const walkinDate = typeof walkinDateRaw === 'number' 
+        ? excelDateToJSDate(walkinDateRaw)
+        : new Date(walkinDateRaw as string);
+      
+      if (isNaN(walkinDate.getTime())) return false;
+      
+      if (startDate && walkinDate < startDate) return false;
+      if (endDate) {
+        const endOfDay = new Date(endDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        if (walkinDate > endOfDay) return false;
+      }
+      return true;
+    });
+
     // All leads in the list are already AI-rated (filtered at fetch time)
     let hotLeads = 0;
     let warmLeads = 0;
@@ -151,7 +184,7 @@ export function useProjectAnalytics(selectedProjectId: string | null) {
       professions: Map<string, number>;
     }>();
 
-    leads.forEach(lead => {
+    filteredLeads.forEach(lead => {
       const latestAnalysis = lead.lead_analyses.sort(
         (a, b) => new Date(b.analyzed_at).getTime() - new Date(a.analyzed_at).getTime()
       )[0];
@@ -282,17 +315,17 @@ export function useProjectAnalytics(selectedProjectId: string | null) {
       .sort((a, b) => b.percentage - a.percentage);
 
     return {
-      totalLeads: leads.length,
-      analyzedLeads: leads.length, // All leads are AI-rated
+      totalLeads: filteredLeads.length,
+      analyzedLeads: filteredLeads.length, // All leads are AI-rated
       hotLeads,
       warmLeads,
       coldLeads,
-      upgradePercentage: leads.length > 0 ? Math.round((upgradedCount / leads.length) * 100) : 0,
+      upgradePercentage: filteredLeads.length > 0 ? Math.round((upgradedCount / filteredLeads.length) * 100) : 0,
       managerPerformance,
       sourcePerformance,
       concernAnalysis
     };
-  }, [leads]);
+  }, [leads, startDate, endDate]);
 
   return { analytics, loading, error };
 }
