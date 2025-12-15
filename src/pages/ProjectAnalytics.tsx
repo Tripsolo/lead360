@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Users, Flame, Sun, Snowflake, TrendingUp, Loader2 } from "lucide-react";
+import { ArrowLeft, Users, Flame, Sun, Snowflake, TrendingUp, Loader2, Eye } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useProjectAnalytics } from "@/hooks/useProjectAnalytics";
@@ -42,6 +42,15 @@ const ProjectAnalytics = () => {
     fetchProjects();
   }, []);
 
+  const handleViewLeads = () => {
+    const params = new URLSearchParams();
+    if (selectedProjectId && selectedProjectId !== 'all') {
+      params.set('project', selectedProjectId);
+    }
+    params.set('view', 'ai-rated');
+    navigate(`/?${params.toString()}`);
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8">
@@ -53,9 +62,19 @@ const ProjectAnalytics = () => {
           </Button>
         </div>
 
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold">Project Analytics</h1>
-          <p className="text-sm text-muted-foreground">Powered by Raisn.ai</p>
+        <div className="flex justify-between items-start mb-8">
+          <div>
+            <h1 className="text-3xl font-bold">Project Analytics</h1>
+            <p className="text-sm text-muted-foreground">Powered by Raisn.ai · Showing AI-rated leads only</p>
+          </div>
+          <Button 
+            onClick={handleViewLeads}
+            disabled={analytics.totalLeads === 0}
+            className="bg-primary"
+          >
+            <Eye className="mr-2 h-4 w-4" />
+            View AI Rated Leads
+          </Button>
         </div>
 
         {/* Project Filter */}
@@ -94,12 +113,11 @@ const ProjectAnalytics = () => {
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                     <Users className="h-4 w-4" />
-                    Total Leads
+                    AI Rated Leads
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <p className="text-3xl font-bold">{analytics.totalLeads}</p>
-                  <p className="text-xs text-muted-foreground">{analytics.analyzedLeads} analyzed</p>
                 </CardContent>
               </Card>
 

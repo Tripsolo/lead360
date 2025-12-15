@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { UploadWizard } from '@/components/UploadWizard';
 import { SummaryCards } from '@/components/SummaryCards';
 import { LeadsTable } from '@/components/LeadsTable';
@@ -61,8 +61,131 @@ const Index = () => {
   const [showClearCacheConfirm, setShowClearCacheConfirm] = useState(false);
   const [isClearingCache, setIsClearingCache] = useState(false);
   const [isReanalyzing, setIsReanalyzing] = useState(false);
+  const [isViewingAiRated, setIsViewingAiRated] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // Load AI-rated leads from URL params
+  useEffect(() => {
+    const view = searchParams.get('view');
+    const projectId = searchParams.get('project');
+    
+    if (view === 'ai-rated') {
+      loadAiRatedLeads(projectId);
+    }
+  }, [searchParams]);
+
+  const loadAiRatedLeads = async (projectId: string | null) => {
+    setIsLoading(true);
+    setIsViewingAiRated(true);
+    try {
+      // Fetch all AI-rated leads (leads with analyses)
+      let analysesQuery = supabase
+        .from('lead_analyses')
+        .select('lead_id, project_id, rating, insights, full_analysis');
+      
+      if (projectId) {
+        analysesQuery = analysesQuery.eq('project_id', projectId);
+        setSelectedProjectId(projectId);
+      }
+
+      const { data: analysesData, error: analysesError } = await analysesQuery;
+      if (analysesError) throw analysesError;
+
+      if (!analysesData || analysesData.length === 0) {
+        setLeads([]);
+        toast({
+          title: 'No AI-rated leads found',
+          description: projectId ? 'No leads have been analyzed for this project.' : 'No leads have been analyzed yet.',
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // Get unique lead IDs
+      const leadIds = [...new Set(analysesData.map(a => a.lead_id))];
+
+      // Fetch lead details
+      const { data: leadsData, error: leadsError } = await supabase
+        .from('leads')
+        .select('lead_id, project_id, crm_data')
+        .in('lead_id', leadIds);
+      if (leadsError) throw leadsError;
+
+      // Fetch enrichments
+      const { data: enrichmentsData } = await supabase
+        .from('lead_enrichments')
+        .select('*')
+        .in('lead_id', leadIds);
+
+      // Build leads array
+      const loadedLeads: Lead[] = (leadsData || []).map(lead => {
+        const analysis = analysesData.find(a => a.lead_id === lead.lead_id);
+        const enrichment = enrichmentsData?.find(e => e.lead_id === lead.lead_id);
+        const crmData = lead.crm_data as Record<string, unknown>;
+
+        let mqlEnrichment: MqlEnrichment | undefined;
+        if (enrichment) {
+          mqlEnrichment = {
+            mqlRating: enrichment.mql_rating || undefined,
+            mqlCapability: enrichment.mql_capability || undefined,
+            mqlLifestyle: enrichment.mql_lifestyle || undefined,
+            creditScore: enrichment.credit_score || undefined,
+            age: enrichment.age || undefined,
+            gender: enrichment.gender || undefined,
+            location: enrichment.location || undefined,
+            localityGrade: enrichment.locality_grade || undefined,
+            lifestyle: enrichment.lifestyle || undefined,
+            finalIncomeLacs: enrichment.final_income_lacs ? Number(enrichment.final_income_lacs) : undefined,
+            employerName: enrichment.employer_name || undefined,
+            designation: enrichment.designation || undefined,
+            totalLoans: enrichment.total_loans || undefined,
+            activeLoans: enrichment.active_loans || undefined,
+            homeLoans: enrichment.home_loans || undefined,
+            autoLoans: enrichment.auto_loans || undefined,
+            highestCardUsagePercent: enrichment.highest_card_usage_percent ? Number(enrichment.highest_card_usage_percent) : undefined,
+            isAmexHolder: enrichment.is_amex_holder || undefined,
+            enrichedAt: enrichment.enriched_at || undefined,
+            rawResponse: enrichment.raw_response as Record<string, any> || undefined,
+          };
+        }
+
+        return {
+          id: lead.lead_id,
+          name: (crmData?.['Customer Name'] as string) || 'Unknown',
+          phone: (crmData?.['Mobile No'] as string) || '',
+          email: (crmData?.['Email Id'] as string) || '',
+          occupation: (crmData?.['Occupation'] as string) || undefined,
+          company: (crmData?.['Company'] as string) || undefined,
+          lastVisit: (crmData?.['Latest Revisit Date'] as string) || (crmData?.['Walkin Date'] as string) || undefined,
+          manualRating: (crmData?.['Walkin Manual Rating'] as string) || undefined,
+          source: (crmData?.['Sales Walkin Source'] as string) || undefined,
+          subSource: (crmData?.['Sales Walkin Sub Source'] as string) || undefined,
+          rawData: crmData,
+          rating: analysis?.rating as Lead['rating'],
+          aiInsights: analysis?.insights || undefined,
+          fullAnalysis: analysis?.full_analysis as Lead['fullAnalysis'],
+          mqlEnrichment,
+        };
+      });
+
+      setLeads(loadedLeads);
+      toast({
+        title: 'AI-rated leads loaded',
+        description: `Loaded ${loadedLeads.length} AI-rated leads from the database.`,
+      });
+    } catch (error) {
+      console.error('Error loading AI-rated leads:', error);
+      toast({
+        title: 'Error loading leads',
+        description: error instanceof Error ? error.message : 'Failed to load AI-rated leads.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -617,6 +740,9 @@ const Index = () => {
     setLeads([]);
     setSelectedProjectId('');
     setRatingFilter(null);
+    setIsViewingAiRated(false);
+    // Clear URL params
+    navigate('/', { replace: true });
   };
 
   const handleExport = () => {

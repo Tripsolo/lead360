@@ -65,23 +65,33 @@ export function useProjectAnalytics(selectedProjectId: string | null) {
       setError(null);
 
       try {
-        // Fetch leads
-        let leadsQuery = supabase
-          .from('leads')
-          .select('lead_id, project_id, crm_data');
-
+        // First fetch all analyses (only AI-rated leads)
+        let analysesQuery = supabase
+          .from('lead_analyses')
+          .select('lead_id, project_id, rating, analyzed_at');
+        
         if (selectedProjectId && selectedProjectId !== 'all') {
-          leadsQuery = leadsQuery.eq('project_id', selectedProjectId);
+          analysesQuery = analysesQuery.eq('project_id', selectedProjectId);
         }
 
-        const { data: leadsData, error: leadsError } = await leadsQuery;
-        if (leadsError) throw leadsError;
-
-        // Fetch all analyses
-        const { data: analysesData, error: analysesError } = await supabase
-          .from('lead_analyses')
-          .select('lead_id, rating, analyzed_at');
+        const { data: analysesData, error: analysesError } = await analysesQuery;
         if (analysesError) throw analysesError;
+
+        if (!analysesData || analysesData.length === 0) {
+          setLeads([]);
+          setLoading(false);
+          return;
+        }
+
+        // Get unique lead IDs from analyses
+        const leadIds = [...new Set(analysesData.map(a => a.lead_id))];
+
+        // Fetch only leads that have AI analyses
+        const { data: leadsData, error: leadsError } = await supabase
+          .from('leads')
+          .select('lead_id, project_id, crm_data')
+          .in('lead_id', leadIds);
+        if (leadsError) throw leadsError;
 
         // Map analyses to leads
         const analysesMap = new Map<string, Array<{ rating: string; analyzed_at: string }>>();
@@ -116,8 +126,7 @@ export function useProjectAnalytics(selectedProjectId: string | null) {
   }, [selectedProjectId]);
 
   const analytics = useMemo((): ProjectAnalyticsData => {
-    const analyzedLeads = leads.filter(l => l.lead_analyses && l.lead_analyses.length > 0);
-    
+    // All leads in the list are already AI-rated (filtered at fetch time)
     let hotLeads = 0;
     let warmLeads = 0;
     let coldLeads = 0;
@@ -126,7 +135,7 @@ export function useProjectAnalytics(selectedProjectId: string | null) {
     const managerMap = new Map<string, { total: number; hot: number; warm: number; cold: number; upgraded: number }>();
     const sourceMap = new Map<string, { total: number; hot: number; warm: number; cold: number; upgraded: number }>();
 
-    analyzedLeads.forEach(lead => {
+    leads.forEach(lead => {
       const latestAnalysis = lead.lead_analyses.sort(
         (a, b) => new Date(b.analyzed_at).getTime() - new Date(a.analyzed_at).getTime()
       )[0];
@@ -198,11 +207,11 @@ export function useProjectAnalytics(selectedProjectId: string | null) {
 
     return {
       totalLeads: leads.length,
-      analyzedLeads: analyzedLeads.length,
+      analyzedLeads: leads.length, // All leads are AI-rated
       hotLeads,
       warmLeads,
       coldLeads,
-      upgradePercentage: analyzedLeads.length > 0 ? Math.round((upgradedCount / analyzedLeads.length) * 100) : 0,
+      upgradePercentage: leads.length > 0 ? Math.round((upgradedCount / leads.length) * 100) : 0,
       managerPerformance,
       sourcePerformance
     };
