@@ -4,10 +4,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Users, Flame, Sun, Snowflake, TrendingUp, Loader2, Eye, ArrowUp, ArrowDown } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ArrowLeft, Users, Flame, Sun, Snowflake, TrendingUp, Loader2, Eye, ArrowUp, ArrowDown, CalendarIcon, X, Calculator } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useProjectAnalytics } from "@/hooks/useProjectAnalytics";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface Project {
   id: string;
@@ -23,6 +28,14 @@ const ProjectAnalytics = () => {
   const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
   const [loadingProjects, setLoadingProjects] = useState(true);
   
+  // Date filter state
+  const [startDate, setStartDate] = useState<Date | null>(null);
+  const [endDate, setEndDate] = useState<Date | null>(null);
+  
+  // CIS calculation state
+  const [calculatingCIS, setCalculatingCIS] = useState(false);
+  const [cisProgress, setCisProgress] = useState({ current: 0, total: 0 });
+  
   // Sorting state for Manager Performance table
   const [managerSortField, setManagerSortField] = useState<SortField>('total');
   const [managerSortDirection, setManagerSortDirection] = useState<SortDirection>('desc');
@@ -31,7 +44,7 @@ const ProjectAnalytics = () => {
   const [sourceSortField, setSourceSortField] = useState<SortField>('total');
   const [sourceSortDirection, setSourceSortDirection] = useState<SortDirection>('desc');
 
-  const { analytics, loading, error } = useProjectAnalytics(selectedProjectId);
+  const { analytics, loading, error } = useProjectAnalytics(selectedProjectId, startDate, endDate);
   
   // Sorted manager performance data
   const sortedManagerPerformance = useMemo(() => {
@@ -94,6 +107,75 @@ const ProjectAnalytics = () => {
     fetchProjects();
   }, []);
 
+  const handleCalculateCIS = async () => {
+    try {
+      setCalculatingCIS(true);
+      
+      // Fetch leads without CIS scores
+      const { data: analyses, error: fetchError } = await supabase
+        .from('lead_analyses')
+        .select('id, lead_id, project_id, full_analysis')
+        .eq(selectedProjectId !== 'all' ? 'project_id' : 'id', selectedProjectId !== 'all' ? selectedProjectId : 'id');
+      
+      if (fetchError) throw fetchError;
+      
+      // Filter to leads without CIS
+      const leadsNeedingCIS = (analyses || []).filter(a => {
+        const signals = (a.full_analysis as Record<string, unknown>)?.extracted_signals as Record<string, unknown> | undefined;
+        return !signals?.crm_compliance_assessment;
+      });
+      
+      if (leadsNeedingCIS.length === 0) {
+        toast.info("All leads already have CIS scores");
+        return;
+      }
+      
+      setCisProgress({ current: 0, total: leadsNeedingCIS.length });
+      
+      // Get CRM data for these leads
+      const leadIds = leadsNeedingCIS.map(a => a.lead_id);
+      const { data: leadsData } = await supabase
+        .from('leads')
+        .select('lead_id, crm_data')
+        .in('lead_id', leadIds);
+      
+      const crmDataMap = new Map((leadsData || []).map(l => [l.lead_id, l.crm_data]));
+      
+      // Process in batches of 5
+      const BATCH_SIZE = 5;
+      for (let i = 0; i < leadsNeedingCIS.length; i += BATCH_SIZE) {
+        const batch = leadsNeedingCIS.slice(i, i + BATCH_SIZE);
+        
+        const { data, error: calcError } = await supabase.functions.invoke('calculate-cis', {
+          body: {
+            leads: batch.map(a => ({
+              analysisId: a.id,
+              leadId: a.lead_id,
+              crmData: crmDataMap.get(a.lead_id),
+              fullAnalysis: a.full_analysis
+            }))
+          }
+        });
+        
+        if (calcError) {
+          console.error('CIS calculation error:', calcError);
+          toast.error(`Error calculating CIS: ${calcError.message}`);
+        }
+        
+        setCisProgress({ current: Math.min(i + BATCH_SIZE, leadsNeedingCIS.length), total: leadsNeedingCIS.length });
+      }
+      
+      toast.success(`CIS scores calculated for ${leadsNeedingCIS.length} leads`);
+      // Refresh the page to show updated scores
+      window.location.reload();
+    } catch (err) {
+      console.error('Error calculating CIS:', err);
+      toast.error('Failed to calculate CIS scores');
+    } finally {
+      setCalculatingCIS(false);
+    }
+  };
+
   const handleViewLeads = () => {
     const params = new URLSearchParams();
     if (selectedProjectId && selectedProjectId !== 'all') {
@@ -129,24 +211,119 @@ const ProjectAnalytics = () => {
           </Button>
         </div>
 
-        {/* Project Filter */}
-        <div className="mb-8">
-          <label className="text-sm font-medium text-muted-foreground mb-2 block">
-            Filter by Project
-          </label>
-          <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
-            <SelectTrigger className="w-64">
-              <SelectValue placeholder="Select a project" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Projects</SelectItem>
-              {projects.map((project) => (
-                <SelectItem key={project.id} value={project.id}>
-                  {project.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        {/* Filters */}
+        <div className="mb-8 flex flex-wrap items-end gap-4">
+          <div>
+            <label className="text-sm font-medium text-muted-foreground mb-2 block">
+              Filter by Project
+            </label>
+            <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
+              <SelectTrigger className="w-64">
+                <SelectValue placeholder="Select a project" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Projects</SelectItem>
+                {projects.map((project) => (
+                  <SelectItem key={project.id} value={project.id}>
+                    {project.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div>
+            <label className="text-sm font-medium text-muted-foreground mb-2 block">
+              From Date
+            </label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-40 justify-start text-left font-normal",
+                    !startDate && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {startDate ? format(startDate, "PPP") : "Pick date"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={startDate || undefined}
+                  onSelect={(date) => setStartDate(date || null)}
+                  initialFocus
+                  className="pointer-events-auto"
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+          
+          <div>
+            <label className="text-sm font-medium text-muted-foreground mb-2 block">
+              To Date
+            </label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-40 justify-start text-left font-normal",
+                    !endDate && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {endDate ? format(endDate, "PPP") : "Pick date"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={endDate || undefined}
+                  onSelect={(date) => setEndDate(date || null)}
+                  initialFocus
+                  className="pointer-events-auto"
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+          
+          {(startDate || endDate) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setStartDate(null);
+                setEndDate(null);
+              }}
+              className="h-10"
+            >
+              <X className="mr-1 h-4 w-4" />
+              Clear Dates
+            </Button>
+          )}
+          
+          <div className="ml-auto">
+            <Button
+              onClick={handleCalculateCIS}
+              disabled={calculatingCIS || analytics.totalLeads === 0}
+              variant="outline"
+            >
+              {calculatingCIS ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {cisProgress.current}/{cisProgress.total}
+                </>
+              ) : (
+                <>
+                  <Calculator className="mr-2 h-4 w-4" />
+                  Calculate CIS Scores
+                </>
+              )}
+            </Button>
+          </div>
         </div>
 
         {loading ? (
