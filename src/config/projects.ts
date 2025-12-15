@@ -90,7 +90,9 @@ const KALPATARU_SCHEMA: ExcelSchema = {
     'Reason for Opportunity Lost',
     'Last Follow Up Comments',
     'Site Re-Visit Comment',
-    'Visit Comments (Not for Reports)'
+    'Visit Comments (Not for Reports)',
+    'Sales Walkin Source',
+    'Sales Walkin Sub Source'
   ],
   columnMappings: {
     'Opportunity Name': 'name',
@@ -115,7 +117,9 @@ const KALPATARU_SCHEMA: ExcelSchema = {
     'Location of Work': 'workLocation',
     'Nearest Railway/Metro Station': 'preferredStation',
     'Project': 'projectInterest',
-    'Last Follow Up Comments': 'notes'
+    'Last Follow Up Comments': 'notes',
+    'Sales Walkin Source': 'source',
+    'Sales Walkin Sub Source': 'subSource'
   }
 };
 
