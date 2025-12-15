@@ -12,6 +12,39 @@ import { Mail, Phone, Briefcase, MapPin, Home, DollarSign, Target, AlertCircle, 
 // Helper to convert snake_case to readable text
 const formatSnakeCase = (text: string) => text.replace(/_/g, ' ');
 
+// Helper to format budget in ₹ X.XX Cr format
+const formatBudget = (value: number | string | null | undefined): string => {
+  if (value == null || value === '' || value === 0) return 'No data available';
+  
+  const numValue = typeof value === 'string' ? parseFloat(value) : value;
+  if (isNaN(numValue) || numValue === 0) return 'No data available';
+  
+  // If value is already in crores format (< 100, like 1.3, 2.5)
+  if (numValue < 100) {
+    return `₹ ${numValue.toFixed(2)} Cr`;
+  }
+  
+  // Convert raw amount to crores (e.g., 30000000 → 3.00 Cr)
+  const croreValue = numValue / 10000000; // 1 Cr = 10,000,000
+  return `₹ ${croreValue.toFixed(2)} Cr`;
+};
+
+// Helper to format in-hand funds as percentage
+const formatInHandFunds = (value: number | string | null | undefined): string => {
+  if (value == null || value === '' || value === 0) return 'No data available';
+  
+  const numValue = typeof value === 'string' ? parseFloat(value) : value;
+  if (isNaN(numValue) || numValue === 0) return 'No data available';
+  
+  // If value is a valid percentage (0-100)
+  if (numValue <= 100) {
+    return `${Math.round(numValue)}%`;
+  }
+  
+  // For raw amounts, we can't reliably convert to percentage
+  return 'No data available';
+};
+
 interface LeadReportModalProps {
   lead: Lead | null;
   open: boolean;
@@ -286,26 +319,18 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
               <div className="p-3 bg-muted rounded-lg">
                 <p className="text-xs text-muted-foreground mb-1">Budget</p>
                 <p className="font-semibold">
-                  {analysis?.extracted_signals?.budget_stated 
-                    ? `₹${analysis.extracted_signals.budget_stated}Cr`
-                    : 'N/A'
-                  }
+                  {formatBudget(analysis?.extracted_signals?.budget_stated)}
                 </p>
               </div>
               <div className="p-3 bg-muted rounded-lg">
                 <p className="text-xs text-muted-foreground mb-1">In-Hand Funds</p>
                 <p className="font-semibold">
-                  {analysis?.extracted_signals?.in_hand_funds != null
-                    ? analysis.extracted_signals.in_hand_funds > 100
-                      ? `₹${(analysis.extracted_signals.in_hand_funds / 100000).toFixed(2)}L`
-                      : `${analysis.extracted_signals.in_hand_funds}%`
-                    : 'N/A'
-                  }
+                  {formatInHandFunds(analysis?.extracted_signals?.in_hand_funds)}
                 </p>
               </div>
               <div className="p-3 bg-muted rounded-lg">
                 <p className="text-xs text-muted-foreground mb-1">Funding Source</p>
-                <p className="font-semibold">{lead.fundingSource || 'N/A'}</p>
+                <p className="font-semibold">{lead.fundingSource || 'No data available'}</p>
               </div>
             </div>
           </div>
