@@ -9,7 +9,7 @@ import { exportLeadsToExcel } from '@/utils/excelExport';
 import { Lead, AnalysisResult, MqlEnrichment } from '@/types/lead';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Sparkles, Upload, LogOut, Database, BarChart3, RefreshCw } from 'lucide-react';
+import { Sparkles, Upload, LogOut, Database, BarChart3, RefreshCw, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { ExcelSchema } from '@/config/projects';
 import type { User, Session } from '@supabase/supabase-js';
@@ -961,8 +961,13 @@ const Index = () => {
           </div>
         </div>
 
-        {leads.length === 0 ? (
+        {leads.length === 0 && !isLoading ? (
           <UploadWizard onFileSelect={handleFileSelect} isLoading={isLoading} />
+        ) : leads.length === 0 && isLoading ? (
+          <div className="flex flex-col items-center justify-center py-24">
+            <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+            <p className="text-muted-foreground">Loading leads...</p>
+          </div>
         ) : (
           <div className="space-y-8">
             {/* Action Buttons */}
