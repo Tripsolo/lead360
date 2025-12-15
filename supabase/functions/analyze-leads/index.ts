@@ -11,34 +11,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Helper to convert Excel serial dates to ISO strings
-const excelDateToISOString = (excelDate: any): string | null => {
-  if (!excelDate) return null;
-  
-  // If it's already a valid ISO string or date string, return as-is
-  if (typeof excelDate === 'string' && isNaN(Number(excelDate))) {
-    return excelDate;
-  }
-  
-  // If it's a number (Excel serial date), convert it
-  if (typeof excelDate === 'number' || !isNaN(Number(excelDate))) {
-    const numDate = Number(excelDate);
-    // Excel dates start from 1900-01-01 (serial 1)
-    const excelEpoch = new Date(1899, 11, 30);
-    const jsDate = new Date(excelEpoch.getTime() + numDate * 24 * 60 * 60 * 1000);
-    return jsDate.toISOString();
-  }
-  
-  return null;
-};
-
 // ============= STAGE 1: Signal Extraction =============
 function buildStage1Prompt(
   leadDataJson: string,
   mqlSection: string,
   mqlAvailable: boolean,
   crmFieldExplainer: string,
-  mqlFieldExplainer: string
+  mqlFieldExplainer: string,
 ): string {
   const extractionSystemPrompt = `You are a data extraction specialist for real estate CRM and lead enrichment data. Your task is to extract structured signals from raw CRM and MQL data accurately and completely.
 
@@ -140,27 +119,7 @@ Extract structured signals from the CRM and MQL data provided. Transform raw val
 - For sample_response_quote, capture exact feedback about sample flat visit
 - For competitor_comparison_quote, capture exact price/feature comparisons stated by customer
 - If no evidence available for a field, set to null (NEVER fabricate quotes or facts)
-- Evidence sections ground the Stage 2 outputs in real data, preventing hallucination
-
-### Employment Stability (from MQL employment_details array):
-30. current_tenure_months: Calculate from current employer's date_of_joining to today
-    - Current employer = entry where date_of_exit is null or empty
-    - If date_of_joining exists: calculate months from that date to today
-    - If no current employer found: null
-
-31. total_work_experience_years: Calculate from earliest date_of_joining to today
-    - Find the earliest date_of_joining across all employment entries
-    - Calculate years from that date to today
-
-32. job_stability: Derive from employment history pattern:
-    - "Stable": current_tenure_months >= 36 OR only 1-2 employers in 10+ years experience
-    - "Moderate": current_tenure_months 12-36 OR 3-4 employers in 10+ years experience
-    - "Frequent": current_tenure_months < 12 AND 4+ employers in 5 years
-    - "New": current_tenure_months < 6 (recently joined current role)
-    - null: if employment_details is empty or unavailable
-
-33. employment_history_summary: Brief summary like "4 years at TCS, previously 2 years at Capgemini"`;
-
+- Evidence sections ground the Stage 2 outputs in real data, preventing hallucination`;
 
   const extractionOutputSchema = `# EXTRACTION OUTPUT STRUCTURE
 Return a JSON object with this EXACT structure:
@@ -187,11 +146,7 @@ Return a JSON object with this EXACT structure:
     "business_type": "string | null",
     "turnover_tier": "0-40L" | "40L-1.5Cr" | "1.5Cr-5Cr" | "5Cr-25Cr" | "25Cr+" | null,
     "work_location": "string | null",
-    "company_type": "MNC" | "Indian Corporate" | "SME" | "Startup" | "Government" | "PSU" | null,
-    "job_stability": "Stable" | "Moderate" | "Frequent" | "New" | null,
-    "current_tenure_months": number | null,
-    "total_work_experience_years": number | null,
-    "employment_history_summary": "string | null"
+    "company_type": "MNC" | "Indian Corporate" | "SME" | "Startup" | "Government" | "PSU" | null
   },
   "financial_signals": {
     "budget_stated_cr": number | null,
@@ -287,8 +242,7 @@ Return a JSON object with this EXACT structure:
   },
   "professional_evidence": {
     "role_context": "string | null",
-    "work_location_detail": "string | null",
-    "employment_history_summary": "string | null"
+    "work_location_detail": "string | null"
   },
   "financial_evidence": {
     "stated_budget_quote": "string | null",
@@ -345,7 +299,7 @@ function buildStage2Prompt(
   outputConstraints: string,
   concernGeneration: string,
   talkingpointsGeneration: string,
-  outputStructure: string
+  outputStructure: string,
 ): string {
   const stage2Instructions = `# ANALYSIS INSTRUCTIONS
 
@@ -361,6 +315,7 @@ You are provided with PRE-EXTRACTED SIGNALS from CRM and MQL data (not raw data)
 2. Apply scoring adjustments from extracted signals:
    - If investor_signal is true: +5 pts to Urgency
    - If home_loan_recency is "Within 3 years" AND investor_signal is false: -3 pts to Urgency
+   - If emi_burden_level is "High": -5 pts to Financial. If "Moderate": -2 pts
    - If guarantor_loan_count > 0: +1 pt to Authority (family network signal)
    - If joint_loan_count > 0: +1 pt to Authority (family decision-making)
    - If card_portfolio_strength is "Premium": +2 pts to Financial
@@ -373,56 +328,6 @@ You are provided with PRE-EXTRACTED SIGNALS from CRM and MQL data (not raw data)
    - If visit_quality is "Thorough": +2 pts to Intent
    - If visit_quality is "Rushed" or "Issues": -2 pts to Intent
    - If revisit_promised is true: +2 pts to Intent
-
-   ### Job Stability Adjustments (for salaried profiles):
-   - If job_stability is "Stable": +2 pts to Financial (income stability, reliable loan servicing)
-   - If job_stability is "Moderate": +1 pt to Financial
-   - If job_stability is "Frequent": -2 pts to Financial (income volatility risk, loan approval concerns)
-   - If job_stability is "New": -1 pt to Financial (probation period, income not established)
-
-## CREDIT BUREAU SCORING GUIDELINES (CRITICAL - Pay Close Attention)
-
-### EMI Burden Impact on Liquidity:
-The emi_burden_level signal DIRECTLY impacts a lead's ability to service a new home loan:
-
-- **"High" (EMI > 50% of income)**: SEVERE liquidity constraint
-  - Banks unlikely to approve additional home loan (FOIR breach risk)
-  - Apply -5 pts to Financial Capability
-  - Flag as Price concern if attempting loan funding
-  - Customer likely needs co-borrower or higher downpayment
-  
-- **"Moderate" (EMI 30-50%)**: Stretched but manageable
-  - May face difficulty with large ticket size
-  - Apply -2 pts to Financial Capability
-  - Consider if budget is realistic given existing obligations
-
-- **"Low" (EMI < 30%)**: Healthy debt profile
-  - Comfortable capacity for new loan servicing
-  - No penalty applied to Financial Capability
-
-### Credit Rating Usage in Scoring:
-- credit_rating "High" (750+): Strong loan eligibility, competitive rates, +2 pts to Financial
-- credit_rating "Medium" (650-749): Loan possible but higher rates, no adjustment
-- credit_rating "Low" (<650): Loan approval uncertain, -3 pts to Financial, flag as concern if loan funding required
-
-### Combined Credit Assessment Rules:
-Apply NET adjustment based on combination of credit_rating and emi_burden_level:
-
-| Credit Rating | EMI Burden Low | EMI Burden Moderate | EMI Burden High |
-|--------------|----------------|---------------------|-----------------|
-| High         | +4 pts         | +2 pts              | -1 pts          |
-| Medium       | +1 pts         | -1 pts              | -4 pts          |
-| Low          | -2 pts         | -5 pts              | -8 pts (cap)    |
-
-### Active Loan Indicators (Additional Adjustments):
-- If total_active_emi_monthly > 50000: Flag liquidity concern regardless of ratio
-- If consumer_loan_count > 3: Credit-dependent behavior signal, -1 pt to Financial
-- If guarantor_loan_count > 0: Positive family network signal, +1 pt to Authority
-- If total_collateral_value_cr >= 1: Asset-backed strength, +2 pts to Financial
-
-### PRIVACY REMINDER:
-NEVER mention credit scores, EMI amounts, loan counts, or income figures in rating_rationale, persona_description, or summary. 
-Use these data points ONLY for internal PPS scoring calculations.
 
 3. Derive final rating from PPS: >= 85 = Hot, >= 65 = Warm, < 65 = Cold
 
@@ -454,10 +359,7 @@ When generating persona_description, summary, and talking_points, reference the 
    - Use comparison_to_current for upgrade value proposition
 
 4. **CONCERNS**: Reference engagement_evidence.objection_stated
-   - ONLY include concerns the customer has stated about the PRODUCT (price, location, possession, config, amenities, trust)
-   - EXCLUDE sales obstacles (family consultation, financing pending, comparing options, decision maker absent, loan approval pending)
    - Use direct customer words when available for accurate concern capture
-   - If no product concerns stated, return empty array for key_concerns
 
 5. **NEXT BEST ACTION**: Reference engagement_evidence.next_steps_stated and negotiation_asks
    - Tailor action based on stated next steps and any negotiation requests
@@ -495,7 +397,7 @@ async function callGeminiAPI(
   prompt: string,
   googleApiKey: string,
   useJsonMode: boolean = true,
-  maxRetries: number = 3
+  maxRetries: number = 3,
 ): Promise<string> {
   let lastError: Error | null = null;
   let response: Response | null = null;
@@ -508,7 +410,7 @@ async function callGeminiAPI(
         topP: 0.95,
         maxOutputTokens: 8192,
       };
-      
+
       if (useJsonMode) {
         generationConfig.responseMimeType = "application/json";
       }
@@ -518,11 +420,11 @@ async function callGeminiAPI(
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        tools: [{ google_search: {} }],
-        generationConfig,
-      }),
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            tools: [{ google_search: {} }],
+            generationConfig,
+          }),
         },
       );
 
@@ -565,7 +467,7 @@ async function callGeminiAPI(
 function createFallbackExtraction(lead: any, mqlEnrichment: any): any {
   const rawData = lead.rawData || {};
   const mqlAvailable = mqlEnrichment && mqlEnrichment.mql_rating && mqlEnrichment.mql_rating !== "N/A";
-  
+
   // Calculate credit rating from MQL
   let creditRating = null;
   if (mqlEnrichment?.credit_score) {
@@ -611,7 +513,7 @@ function createFallbackExtraction(lead: any, mqlEnrichment: any): any {
     const loans = mqlEnrichment.raw_response.leads[0].banking.banking_loans;
     guarantorLoanCount = loans.filter((l: any) => l.ownership_type === "Guarantor").length || null;
     jointLoanCount = loans.filter((l: any) => l.ownership_type === "Joint Account").length || null;
-    
+
     // Calculate total collateral value
     let collateralSum = 0;
     for (const loan of loans) {
@@ -619,7 +521,7 @@ function createFallbackExtraction(lead: any, mqlEnrichment: any): any {
         collateralSum += loan.collateral_value;
       }
     }
-    totalCollateralValueCr = collateralSum > 0 ? Math.round(collateralSum / 10000000 * 100) / 100 : null;
+    totalCollateralValueCr = collateralSum > 0 ? Math.round((collateralSum / 10000000) * 100) / 100 : null;
 
     // Calculate total active EMI
     let emiSum = 0;
@@ -631,9 +533,9 @@ function createFallbackExtraction(lead: any, mqlEnrichment: any): any {
     totalActiveEmiMonthly = emiSum > 0 ? emiSum : null;
 
     // Check for education loans
-    educationLoanPresent = loans.some((l: any) => 
-      l.account_type?.toLowerCase().includes("education") || 
-      l.account_type?.toLowerCase().includes("student")
+    educationLoanPresent = loans.some(
+      (l: any) =>
+        l.account_type?.toLowerCase().includes("education") || l.account_type?.toLowerCase().includes("student"),
     );
   }
 
@@ -672,72 +574,16 @@ function createFallbackExtraction(lead: any, mqlEnrichment: any): any {
       children_count: null,
       children_ages: null,
     },
-    professional_profile: (() => {
-      // NEW: Calculate job stability from employment_details
-      let jobStability: string | null = null;
-      let currentTenureMonths: number | null = null;
-      let totalWorkExperienceYears: number | null = null;
-      let employmentHistorySummary: string | null = null;
-
-      if (mqlEnrichment?.raw_response?.leads?.[0]?.employment_details?.length > 0) {
-        const employments = mqlEnrichment.raw_response.leads[0].employment_details;
-        
-        // Find current employer (no exit date)
-        const currentJob = employments.find((e: any) => !e.date_of_exit && e.date_of_joining);
-        if (currentJob?.date_of_joining) {
-          const joinDate = new Date(currentJob.date_of_joining);
-          currentTenureMonths = Math.floor((Date.now() - joinDate.getTime()) / (30.44 * 24 * 60 * 60 * 1000));
-          const yearsAtCurrent = Math.round(currentTenureMonths / 12);
-          employmentHistorySummary = `${yearsAtCurrent} year${yearsAtCurrent !== 1 ? 's' : ''} at ${currentJob.employer_name || 'current employer'}`;
-          
-          // Add previous employer if available
-          const previousJob = employments.find((e: any) => e.date_of_exit && e.employer_name !== currentJob.employer_name);
-          if (previousJob?.employer_name) {
-            employmentHistorySummary += `, previously at ${previousJob.employer_name}`;
-          }
-        }
-        
-        // Calculate total experience
-        const allJoinDates = employments
-          .filter((e: any) => e.date_of_joining)
-          .map((e: any) => new Date(e.date_of_joining).getTime());
-        if (allJoinDates.length > 0) {
-          const earliest = Math.min(...allJoinDates);
-          totalWorkExperienceYears = Math.floor((Date.now() - earliest) / (365.25 * 24 * 60 * 60 * 1000));
-        }
-        
-        // Derive stability rating
-        const jobCount = employments.length;
-        if (currentTenureMonths !== null) {
-          if (currentTenureMonths >= 36 || (totalWorkExperienceYears && totalWorkExperienceYears >= 10 && jobCount <= 2)) {
-            jobStability = "Stable";
-          } else if (currentTenureMonths >= 12 || (totalWorkExperienceYears && totalWorkExperienceYears >= 10 && jobCount <= 4)) {
-            jobStability = "Moderate";
-          } else if (currentTenureMonths < 12 && jobCount >= 4 && (!totalWorkExperienceYears || totalWorkExperienceYears < 5)) {
-            jobStability = "Frequent";
-          } else if (currentTenureMonths < 6) {
-            jobStability = "New";
-          } else {
-            jobStability = "Moderate"; // Default fallback
-          }
-        }
-      }
-
-      return {
-        occupation_type: rawData["Occupation"] || null,
-        designation: mqlEnrichment?.designation || rawData["Designation"] || null,
-        employer: mqlEnrichment?.employer_name || rawData["Place of Work"] || null,
-        industry: mqlEnrichment?.industry || rawData["Industry / Sector"] || null,
-        business_type: mqlEnrichment?.business_type || null,
-        turnover_tier: mqlEnrichment?.turnover_slab || null,
-        work_location: rawData["Place of Work"] || null,
-        company_type: null,
-        job_stability: jobStability,
-        current_tenure_months: currentTenureMonths,
-        total_work_experience_years: totalWorkExperienceYears,
-        employment_history_summary: employmentHistorySummary,
-      };
-    })(),
+    professional_profile: {
+      occupation_type: rawData["Occupation"] || null,
+      designation: mqlEnrichment?.designation || rawData["Designation"] || null,
+      employer: mqlEnrichment?.employer_name || rawData["Place of Work"] || null,
+      industry: mqlEnrichment?.industry || rawData["Industry / Sector"] || null,
+      business_type: mqlEnrichment?.business_type || null,
+      turnover_tier: mqlEnrichment?.turnover_slab || null,
+      work_location: rawData["Place of Work"] || null,
+      company_type: null,
+    },
     financial_signals: {
       budget_stated_cr: null,
       in_hand_funds_pct: null,
@@ -794,15 +640,19 @@ function createFallbackExtraction(lead: any, mqlEnrichment: any): any {
     },
     concerns_extracted: [],
     competitor_intelligence: {
-      competitors_mentioned: rawData["Competitor Name"] ? [{
-        name: rawData["Competitor Name"],
-        project: rawData["Competition Project Name"] || null,
-        visit_status: rawData["Competition Visit Status"] || null,
-        carpet_stated: null,
-        price_stated_cr: null,
-        price_per_sqft: null,
-        advantage_stated: null,
-      }] : [],
+      competitors_mentioned: rawData["Competitor Name"]
+        ? [
+            {
+              name: rawData["Competitor Name"],
+              project: rawData["Competition Project Name"] || null,
+              visit_status: rawData["Competition Visit Status"] || null,
+              carpet_stated: null,
+              price_stated_cr: null,
+              price_per_sqft: null,
+              advantage_stated: null,
+            },
+          ]
+        : [],
       alternative_if_not_kl: null,
       lost_to_competitor: rawData["Lost Reason"] || null,
     },
@@ -820,7 +670,7 @@ function createFallbackExtraction(lead: any, mqlEnrichment: any): any {
     visit_notes_summary: rawData["Visit Comments"]?.substring(0, 100) || "No visit notes available",
     brand_loyalty: rawData["Owned/Stay in Kalpataru Property"] === "Yes",
     mql_data_available: mqlAvailable,
-    
+
     // Evidence sections (empty for fallback)
     demographics_evidence: {
       family_composition: null,
@@ -830,7 +680,6 @@ function createFallbackExtraction(lead: any, mqlEnrichment: any): any {
     professional_evidence: {
       role_context: null,
       work_location_detail: null,
-      employment_history_summary: null,
     },
     financial_evidence: {
       stated_budget_quote: null,
@@ -1386,60 +1235,30 @@ ${
 9. For Business Owners: Describe scale abstractly (e.g., "established manufacturing business" not "turnover 5Cr-25Cr")
 
 ## OUTPUT FIELD RESTRICTIONS (NON-NEGOTIABLE - ABSOLUTE REQUIREMENT):
-The following output fields MUST NEVER contain ANY mention of credit, loans, EMI, borrowing, debt, PPS score numbers, or credit-related information:
-- rating_rationale: NO credit scores, NO loan counts, NO EMI burden, NO credit rating, NO loan history, NO borrowing capacity, NO PPS Score numbers
-- persona_description: NO credit information, NO loan history, NO EMI references, NO debt profile, NO PPS Score numbers
-- summary: NO credit data, NO loan details, NO EMI or borrowing information, NO financial obligations, NO PPS Score numbers
+The following output fields MUST NEVER contain ANY mention of credit, loans, EMI, borrowing, debt, or credit-related information:
+- rating_rationale: NO credit scores, NO loan counts, NO EMI burden, NO credit rating, NO loan history, NO borrowing capacity
+- persona_description: NO credit information, NO loan history, NO EMI references, NO debt profile
+- summary: NO credit data, NO loan details, NO EMI or borrowing information, NO financial obligations
 
-This restriction is ABSOLUTE and NON-NEGOTIABLE. Credit/loan/EMI/PPS score data may ONLY be used for internal scoring calculations.
-The output text must NEVER reveal credit, loan, EMI data, or PPS score numbers.
+This restriction is ABSOLUTE and NON-NEGOTIABLE. Credit/loan/EMI data may ONLY be used for internal PPS scoring calculations.
+The output text must NEVER reveal that credit, loan, or EMI data was considered or analyzed.
 Violations of this rule are unacceptable under any circumstances.`;
 
     const outputConstraints = `# OUTPUT CONSTRAINTS (CRITICAL - STRICTLY ENFORCE):
-- Rating rationale: Explain key scoring factors and reasoning. Do NOT include the PPS Score number - it is displayed separately in the UI. Do NOT include rating label like "(Hot)" or "(Warm)" in the rationale - that's shown separately.
+- Rating rationale should start with "**PPS Score: X/100.**" in bold, followed by key scoring factors. Do NOT include rating label like "(Hot)" or "(Warm)" in the rationale - that's shown separately
 - Summary: Maximum 30 words. Be concise and focused.
 - Next Best Action: Maximum 15 words. Keep it actionable and specific.`;
 
-    const concernGeneration = `# KEY CONCERNS GENERATION RULES
-
-## DEFINITION (CRITICAL)
-Key concerns are ONLY the **CUSTOMER'S stated concerns about the PRODUCT or PROJECT** - issues they have raised about what they are buying.
-
-## INCLUDE (Customer Product Concerns):
-- Price/budget gap ("too expensive", "out of budget by 20L", "price is high")
-- Location issues ("too far from work", "connectivity problems", "area is remote")
-- Possession timeline ("need earlier possession", "2027 is too late", "want RTMI")
-- Configuration mismatch ("want bigger bedrooms", "kitchen is too small", "need 4BHK")
-- Amenities gaps ("no swimming pool", "clubhouse seems small", "want covered parking")
-- Trust/reputation ("heard about delays in other projects", "worried about construction quality")
-
-## EXCLUDE (Salesman Observations - NEVER include these):
-- "Needs family consultation" ❌
-- "Financing pending" ❌
-- "Still comparing options" ❌
-- "Decision maker not present" ❌
-- "Budget not finalized" ❌
-- "Looking at other projects" ❌
-- "Needs to sell current property" ❌
-- "Waiting for loan approval" ❌
-
-These are SALES PIPELINE obstacles, NOT customer concerns about the product.
-
-## Concern Categories:
-For EACH key_concern, classify into ONE category:
-  1. "Price" - Budget gaps, pricing issues, financing concerns, EMI burden
+    const concernGeneration = `#Key Concerns: These must be the CUSTOMER'S concerns about the project or specific unit they are considering. Focus on: price/budget gap, location/connectivity issues, possession date/timeline, unit configuration/size, amenities/facilities. DO NOT include generic sales concerns.
+- Concern Categories: For EACH key_concern, classify it into ONE of these categories (same order as key_concerns array):
+  1. "Price" - Budget gaps, pricing issues, financing concerns, EMI issues. Only show this as a concern if the customer mentions price being too high or there is abudget gap of more than 20%
   2. "Location" - Connectivity, infrastructure, surroundings, pollution, traffic, facilities nearby
   3. "Possession" - Delivery timeline, construction delays, handover dates
   4. "Config" - Unit configuration, layout issues, view concerns, floor preference, carpet area
   5. "Amenities" - Amenities in home or complex, facilities
   6. "Trust" - Builder reputation, track record concerns
-  7. "Others" - Any other PRODUCT-RELATED concern
-
-## Primary Concern Category:
-The SINGLE most important concern. Priority order: Price > Location > Possession > Config > Amenities > Trust > Others
-
-## If No Product Concerns:
-If the customer has NOT stated any concerns about the product/project, return an empty array for key_concerns.`;
+  7. "Others" - Anything else
+- Primary Concern Category: The SINGLE most important concern category. If multiple concerns exist, pick the one that appears FIRST in the priority order above ( Location > Config > Price > Possession > Amenities > Trust > Others)`;
 
     const talkingpointsGeneration = `# TALKING POINTS GENERATION (CRITICAL - FOLLOW PRIORITY RULES):
 Generate 2-3 talking points TOTAL following these strict priority rules:
@@ -1495,7 +1314,7 @@ Return a JSON object with this EXACT structure:
     "product_market_fit": 0-15,
     "authority_dynamics": 0-10
   },
-  "rating_rationale": "Brief explanation of key scoring factors without PPS score number or rating label. Focus on qualitative reasoning.",
+  "rating_rationale": "**PPS Score: X/100.** Brief explanation of key scoring factors without rating label",
   "persona": "Persona label",
   "persona_description": "2-line description focusing on: (1) demographics - age, gender, family composition; (2) financial/professional profile - occupation, designation, income capability; (3) primary buying motivation. For business owners, mention scale abstractly (e.g., 'established manufacturing business') without specific turnover figures. DO NOT include visit details, property preferences, or concerns here.",
   "summary": "Summarize the lead's visit notes: what they are looking for, visit experience/feedback, decision factors and timelines mentioned. DO NOT repeat demographic or professional details. Max 30 words.",
@@ -1602,13 +1421,13 @@ IMPORTANT SCORING RULES:
 
       // ===== STAGE 1: Extract Signals =====
       console.log(`Stage 1 (Extraction) starting for lead ${lead.id}`);
-      
+
       const stage1Prompt = buildStage1Prompt(
         leadDataJson,
         mqlSection,
         mqlAvailable,
         crmFieldExplainer,
-        mqlFieldExplainer
+        mqlFieldExplainer,
       );
 
       let extractedSignals;
@@ -1623,9 +1442,9 @@ IMPORTANT SCORING RULES:
         console.log(`Using fallback extraction for lead ${lead.id}`);
       }
 
-      // Rate limit delay: Wait 200ms before Stage 2 API call
-      console.log(`Waiting 200ms before Stage 2 for lead ${lead.id}...`);
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      // Rate limit delay: Wait 2500ms before Stage 2 API call
+      console.log(`Waiting 2500ms before Stage 2 for lead ${lead.id}...`);
+      await new Promise((resolve) => setTimeout(resolve, 2500));
 
       // ===== STAGE 2: Score & Generate =====
       console.log(`Stage 2 (Generation) starting for lead ${lead.id}`);
@@ -1641,7 +1460,7 @@ IMPORTANT SCORING RULES:
         outputConstraints,
         concernGeneration,
         talkingpointsGeneration,
-        outputStructure
+        outputStructure,
       );
 
       let analysisResult;
@@ -1675,10 +1494,10 @@ IMPORTANT SCORING RULES:
             // No adjustment
             break;
           case "P1":
-            adjustedPpsScore = Math.round(adjustedPpsScore * 0.90);
+            adjustedPpsScore = Math.round(adjustedPpsScore * 0.9);
             break;
           case "P2":
-            adjustedPpsScore = Math.round(adjustedPpsScore * 0.80);
+            adjustedPpsScore = Math.round(adjustedPpsScore * 0.8);
             break;
           default:
             adjustedPpsScore = Math.round(adjustedPpsScore * 0.95);
@@ -1736,230 +1555,53 @@ IMPORTANT SCORING RULES:
 
     console.log(`Processing chunk ${chunkIndex}/${totalChunks} with ${leadsToAnalyze.length} leads`);
 
-    // Process in background and return immediately
-    EdgeRuntime.waitUntil((async () => {
-      console.log(`Background processing started for chunk ${chunkIndex}/${totalChunks}`);
-      
-      // PARALLEL Stage 1 for all leads in chunk
-      console.log(`Starting parallel Stage 1 extraction for ${leadsToAnalyze.length} leads...`);
-      
-      const stage1Results = await Promise.all(
-        leadsToAnalyze.map(async (leadWithMql) => {
-          const lead = leadWithMql;
-          const mqlEnrichment = leadWithMql.mqlEnrichment;
-          const mqlAvailable = !!(mqlEnrichment && Object.keys(mqlEnrichment).length > 0);
-          
-          // Prepare lead data JSON
-          const leadDataJson = JSON.stringify(lead.rawData || lead, null, 2);
-          
-          // Build MQL section for prompt
-          let mqlSection = "";
-          if (mqlAvailable) {
-            const homeLoanRecency = mqlEnrichment.latest_home_loan_date
-              ? `Within 3 years (${mqlEnrichment.latest_home_loan_date})`
-              : mqlEnrichment.home_loan_count > 0
-              ? "Historical"
-              : "No home loans";
-            const employmentStatus = mqlEnrichment.designation ? "Employed" : "Unknown";
-            
-            mqlSection = `# MQL ENRICHMENT DATA (Verified Financial Profile)
-## Basic Profile
-Rating: ${mqlEnrichment.mql_rating || "N/A"}
-Capability: ${mqlEnrichment.mql_capability || "N/A"}
-Lifestyle: ${mqlEnrichment.mql_lifestyle || mqlEnrichment.lifestyle || "N/A"}
-Locality Grade: ${mqlEnrichment.locality_grade || "N/A"}
-Age: ${mqlEnrichment.age || "N/A"}
-Gender: ${mqlEnrichment.gender || "N/A"}
+    // Sequential processing (chunks are small by design - max 2 leads per chunk)
+    const freshResults: any[] = [];
 
-## Employment Details
-Employer Name: ${mqlEnrichment.employer_name || "N/A"}
-Designation: ${mqlEnrichment.designation || "N/A"}
-Employment Status: ${employmentStatus}
+    for (let index = 0; index < leadsToAnalyze.length; index++) {
+      const leadWithMql = leadsToAnalyze[index];
 
-## Income (For Scoring Only)
-Annual Income (Lacs): ${mqlEnrichment.final_income_lacs || "N/A"}
-
-## Business Details
-Business Type: ${mqlEnrichment.business_type || "N/A"}
-Industry: ${mqlEnrichment.industry || "N/A"}
-Turnover Slab: ${mqlEnrichment.turnover_slab || "N/A"}
-
-## Credit Profile
-Credit Score: ${mqlEnrichment.credit_score || "N/A"}
-Credit Behavior: ${mqlEnrichment.credit_behavior_signal || "N/A"}
-
-## Loan History
-Home Loans - Total: ${mqlEnrichment.home_loan_count ?? "N/A"}, Active: ${mqlEnrichment.home_loan_active ?? "N/A"}, Paid Off: ${mqlEnrichment.home_loan_paid_off ?? "N/A"}
-Latest Home Loan: ${homeLoanRecency}
-Auto Loans: ${mqlEnrichment.auto_loan_count ?? "N/A"}
-Consumer/Personal Loans: ${mqlEnrichment.consumer_loan_count ?? "N/A"}
-Guarantor Loans: ${mqlEnrichment.guarantor_loan_count ?? "N/A"}
-
-## EMI Burden
-Active EMI Burden (Monthly): ${mqlEnrichment.active_emi_burden ? `₹${mqlEnrichment.active_emi_burden}` : "N/A"}
-EMI-to-Income Ratio: ${mqlEnrichment.emi_to_income_ratio ? `${mqlEnrichment.emi_to_income_ratio.toFixed(1)}%` : "N/A"}
-
-## Credit Cards
-Card Count: ${mqlEnrichment.credit_card_count ?? "N/A"}
-Has Premium Cards: ${mqlEnrichment.has_premium_cards ? "Yes" : "No"}`;
-          } else {
-            mqlSection = `# MQL DATA: Not available for this lead. Score using CRM data only.`;
-          }
-          
-          const stage1Prompt = buildStage1Prompt(
-            leadDataJson,
-            mqlSection,
-            mqlAvailable,
-            crmFieldExplainer,
-            mqlFieldExplainer
-          );
-          
-          try {
-            console.log(`Stage 1 (parallel) starting for lead ${lead.id}`);
-            const stage1Response = await callGeminiAPI(stage1Prompt, googleApiKey!, true);
-            const extractedSignals = JSON.parse(stage1Response);
-            console.log(`Stage 1 (parallel) complete for lead ${lead.id}`);
-            return { leadWithMql, extractedSignals, mqlAvailable, success: true };
-          } catch (stage1Error) {
-            console.error(`Stage 1 (parallel) failed for lead ${lead.id}:`, stage1Error);
-            const extractedSignals = createFallbackExtraction(lead, mqlEnrichment);
-            return { leadWithMql, extractedSignals, mqlAvailable, success: false };
-          }
-        })
-      );
-      
-      console.log(`Parallel Stage 1 complete. Starting sequential Stage 2 for ${stage1Results.length} leads...`);
-      
-      // SEQUENTIAL Stage 2 with delays and immediate storage
-      for (let index = 0; index < stage1Results.length; index++) {
-        const { leadWithMql, extractedSignals, mqlAvailable } = stage1Results[index];
-        const lead = leadWithMql;
-        const mqlEnrichment = leadWithMql.mqlEnrichment;
-        
-        // Add 200ms delay between Stage 2 calls (not before first one)
-        if (index > 0) {
-          await new Promise((resolve) => setTimeout(resolve, 200));
-        }
-        
-        console.log(`Stage 2 starting for lead ${lead.id} (${index + 1}/${stage1Results.length})`);
-        
-        try {
-          const stage2Prompt = buildStage2Prompt(
-            JSON.stringify(extractedSignals, null, 2),
-            systemPrompt,
-            brandContext,
-            projectContext,
-            leadScoringModel,
-            personaDefinitions,
-            privacyRules,
-            outputConstraints,
-            concernGeneration,
-            talkingpointsGeneration,
-            outputStructure
-          );
-          
-          let analysisResult;
-          let parseSuccess = true;
-          
-          try {
-            const stage2Response = await callGeminiAPI(stage2Prompt, googleApiKey!, true);
-            analysisResult = JSON.parse(stage2Response);
-            console.log(`Stage 2 complete for lead ${lead.id}`);
-          } catch (stage2Error) {
-            parseSuccess = false;
-            console.error(`Stage 2 failed for lead ${lead.id}:`, stage2Error);
-            analysisResult = {
-              ai_rating: "Warm",
-              rating_confidence: "Low",
-              rating_rationale: "Analysis completed with limited structure",
-              summary: extractedSignals.visit_notes_summary || "Unable to analyze lead",
-              mql_data_available: mqlAvailable,
-            };
-          }
-          
-          // Apply MQL-based final score adjustment
-          if (parseSuccess && analysisResult.pps_score !== undefined) {
-            const mqlRating = mqlEnrichment?.mql_rating || "N/A";
-            let adjustedPpsScore = analysisResult.pps_score;
-            
-            switch (mqlRating) {
-              case "P0":
-                break;
-              case "P1":
-                adjustedPpsScore = Math.round(adjustedPpsScore * 0.90);
-                break;
-              case "P2":
-                adjustedPpsScore = Math.round(adjustedPpsScore * 0.80);
-                break;
-              default:
-                adjustedPpsScore = Math.round(adjustedPpsScore * 0.95);
-                break;
-            }
-            
-            let adjustedRating: "Hot" | "Warm" | "Cold";
-            if (adjustedPpsScore >= 85) {
-              adjustedRating = "Hot";
-            } else if (adjustedPpsScore >= 65) {
-              adjustedRating = "Warm";
-            } else {
-              adjustedRating = "Cold";
-            }
-            
-            analysisResult.pps_score = adjustedPpsScore;
-            analysisResult.ai_rating = adjustedRating;
-          }
-          
-          // Store result immediately to database
-          const { error: upsertError } = await supabase.from("lead_analyses").upsert(
-            {
-              lead_id: lead.id,
-              project_id: projectId,
-              rating: analysisResult.ai_rating,
-              insights: analysisResult.summary || analysisResult.rating_rationale,
-              full_analysis: analysisResult,
-              revisit_date_at_analysis: excelDateToISOString(lead.rawData?.["Latest Revisit Date"]),
-            },
-            { onConflict: "lead_id,project_id" },
-          );
-          
-          if (upsertError) {
-            console.error(`Failed to store analysis for lead ${lead.id}:`, upsertError);
-          } else {
-            console.log(`Lead ${lead.id} analysis stored to database`);
-          }
-        } catch (error) {
-          console.error(`Failed to process Stage 2 for lead ${lead.id}:`, error);
-          // Store fallback result
-          const { error: fallbackError } = await supabase.from("lead_analyses").upsert(
-            {
-              lead_id: lead.id,
-              project_id: projectId,
-              rating: "Warm",
-              insights: "Analysis failed",
-              full_analysis: {},
-              revisit_date_at_analysis: excelDateToISOString(lead.rawData?.["Latest Revisit Date"]),
-            },
-            { onConflict: "lead_id,project_id" },
-          );
-          if (fallbackError) {
-            console.error(`Failed to store fallback for lead ${lead.id}:`, fallbackError);
-          }
-        }
+      // Add 2500ms delay between leads (not before first one)
+      if (index > 0) {
+        await new Promise((resolve) => setTimeout(resolve, 2500));
       }
-      
-      console.log(`Background processing complete for chunk ${chunkIndex}/${totalChunks}`);
-    })());
-    
-    // Return immediately with processing status
+
+      console.log(`Processing lead ${index + 1}/${leadsToAnalyze.length}: ${leadWithMql.id}`);
+
+      try {
+        const result = await processLeadAnalysis(leadWithMql);
+        freshResults.push(result);
+
+        // Store result immediately (enables partial progress)
+        await storeAnalysisResult(result, projectId, leadsToAnalyze);
+      } catch (error) {
+        console.error(`Failed to process lead ${leadWithMql.id}:`, error);
+        freshResults.push({
+          leadId: leadWithMql.id,
+          rating: "Warm",
+          insights: "Analysis failed",
+          fullAnalysis: {},
+          parseSuccess: false,
+          fromCache: false,
+          revisitDate: null,
+        });
+      }
+    }
+
+    const allResults = [...cachedResults, ...freshResults];
+    const successCount = allResults.filter((r) => r.parseSuccess).length;
+
+    console.log(`Analysis complete: ${successCount}/${allResults.length} successful (sequential 2-stage pipeline)`);
+
     return new Response(
       JSON.stringify({
-        status: 'processing',
-        message: `Analysis started for ${leadsToAnalyze.length} leads in background`,
-        cachedResults,
+        results: allResults,
         meta: {
-          total: leads.length,
+          total: allResults.length,
+          successful: successCount,
+          failed: allResults.length - successCount,
           cached: cachedResults.length,
-          processing: leadsToAnalyze.length,
+          fresh: freshResults.filter((r) => r.parseSuccess).length,
         },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
