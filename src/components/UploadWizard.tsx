@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Upload, Building2, Home, BarChart3 } from 'lucide-react';
+import { Upload, Building2, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -27,7 +26,6 @@ interface UploadWizardProps {
 }
 
 export const UploadWizard = ({ onFileSelect, isLoading }: UploadWizardProps) => {
-  const navigate = useNavigate();
   const [step, setStep] = useState<1 | 2>(1);
   const [selectedBrand, setSelectedBrand] = useState<Brand | null>(null);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
@@ -210,25 +208,14 @@ export const UploadWizard = ({ onFileSelect, isLoading }: UploadWizardProps) => 
 
               {/* Selected Project Info */}
               {selectedProject && (
-                <div className="p-4 bg-muted rounded-lg space-y-3">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">Selected:</p>
-                    <p className="text-base font-semibold">{selectedBrand?.name} - {selectedProject.name}</p>
-                    {selectedProject.metadata?.location && (
-                      <p className="text-sm text-muted-foreground">
-                        {selectedProject.metadata?.location?.address || selectedProject.metadata?.location}
-                      </p>
-                    )}
-                  </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => navigate(`/project-analytics?project=${selectedProject.id}`)}
-                    className="w-full"
-                  >
-                    <BarChart3 className="mr-2 h-4 w-4" />
-                    View Project Analytics
-                  </Button>
+                <div className="p-4 bg-muted rounded-lg space-y-1">
+                  <p className="text-sm font-medium">Selected:</p>
+                  <p className="text-base font-semibold">{selectedBrand?.name} - {selectedProject.name}</p>
+                  {selectedProject.metadata?.location && (
+                    <p className="text-sm text-muted-foreground">
+                      {selectedProject.metadata?.location?.address || selectedProject.metadata?.location}
+                    </p>
+                  )}
                 </div>
               )}
 
