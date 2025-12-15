@@ -278,6 +278,84 @@ const Index = () => {
     );
   };
 
+  // Helper function to update leads with analysis data (uses functional update to avoid stale closure)
+  const updateLeadsWithAnalyses = (analyses: any[]) => {
+    setLeads(currentLeads => 
+      currentLeads.map(lead => {
+        const analysis = analyses.find((a: any) => a.lead_id === lead.id);
+        if (analysis) {
+          return {
+            ...lead,
+            rating: analysis.rating as Lead['rating'],
+            aiInsights: analysis.insights || undefined,
+            fullAnalysis: analysis.full_analysis as Lead['fullAnalysis'],
+          };
+        }
+        return lead;
+      })
+    );
+  };
+
+  // Poll for analysis results (similar to enrichment polling)
+  const pollForAnalysisResults = async (leadIdsToCheck: string[], maxAttempts = 60) => {
+    let attempts = 0;
+    const pollInterval = 3000; // 3 seconds
+
+    while (attempts < maxAttempts) {
+      attempts++;
+      console.log(`Polling for analysis results, attempt ${attempts}/${maxAttempts}`);
+
+      const { data: analyses } = await supabase
+        .from('lead_analyses')
+        .select('*')
+        .in('lead_id', leadIdsToCheck)
+        .eq('project_id', selectedProjectId);
+
+      if (analyses && analyses.length >= leadIdsToCheck.length) {
+        // All leads have been analyzed
+        updateLeadsWithAnalyses(analyses);
+        
+        const successCount = analyses.filter(a => a.full_analysis).length;
+        
+        toast({
+          title: 'Analysis complete',
+          description: `100% complete - ${successCount} leads analyzed successfully.`,
+        });
+        return true;
+      }
+
+      // Update UI with partial results
+      if (analyses && analyses.length > 0) {
+        updateLeadsWithAnalyses(analyses);
+        const percentComplete = Math.round((analyses.length / leadIdsToCheck.length) * 100);
+        toast({
+          title: 'Analysis in progress',
+          description: `${percentComplete}% complete (${analyses.length}/${leadIdsToCheck.length} leads)...`,
+        });
+      }
+
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
+    }
+
+    // Max attempts reached, show what we have
+    const { data: finalAnalyses } = await supabase
+      .from('lead_analyses')
+      .select('*')
+      .in('lead_id', leadIdsToCheck)
+      .eq('project_id', selectedProjectId);
+
+    if (finalAnalyses && finalAnalyses.length > 0) {
+      updateLeadsWithAnalyses(finalAnalyses);
+    }
+
+    const finalPercentComplete = Math.round(((finalAnalyses?.length || 0) / leadIdsToCheck.length) * 100);
+    toast({
+      title: 'Analysis partially complete',
+      description: `${finalPercentComplete}% complete (${finalAnalyses?.length || 0}/${leadIdsToCheck.length} leads). Some leads may still be processing.`,
+    });
+    return false;
+  };
+
   // Poll for enrichment results
   const pollForEnrichmentResults = async (leadIdsToCheck: string[], maxAttempts = 30) => {
     let attempts = 0;
@@ -425,8 +503,8 @@ const Index = () => {
 
     setIsAnalyzing(true);
     
-    // Chunk size for analysis (max 3 leads per API call to stay within timeout)
-    const CHUNK_SIZE = 3;
+    // Chunk size for analysis (max 2 leads per API call to stay within timeout)
+    const CHUNK_SIZE = 2;
     
     const chunkArray = <T,>(array: T[], size: number): T[][] => {
       const chunks: T[][] = [];
@@ -457,21 +535,21 @@ const Index = () => {
       let totalCached = leadsWithAnalysis.length;
       let totalFresh = 0;
       
+      const leadIdsToCheck = leadsWithoutAnalysis.map(l => l.id);
+      
       toast({
         title: 'Analysis started',
         description: `Processing ${leadsWithoutAnalysis.length} leads in ${totalChunks} batches...`,
       });
       
+      // Start all batch function calls (they return immediately and process in background)
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
-        const percentComplete = Math.round((i / totalChunks) * 100);
+        const percentInitiated = Math.round(((i + 1) / totalChunks) * 100);
         
-        toast({
-          title: 'Analysis in progress',
-          description: `${percentComplete}% complete (batch ${i + 1}/${totalChunks})...`,
-        });
+        console.log(`Starting analysis batch ${i + 1}/${totalChunks} with ${chunk.length} leads`);
         
-        const { data, error } = await supabase.functions.invoke('analyze-leads', {
+        const { error } = await supabase.functions.invoke('analyze-leads', {
           body: { 
             leads: chunk,
             projectId: selectedProjectId,
@@ -481,53 +559,28 @@ const Index = () => {
         });
         
         if (error) {
-          console.error(`Batch ${i + 1} failed:`, error);
+          console.error(`Batch ${i + 1} initiation failed:`, error);
           toast({
-            title: `Batch ${i + 1} failed`,
-            description: error.message || 'Failed to analyze batch',
+            title: `Batch ${i + 1} initiation failed`,
+            description: error.message || 'Failed to start analysis batch',
             variant: 'destructive',
           });
-          continue; // Continue with next batch instead of failing completely
         }
+
+        // Show batch initiation progress
+        toast({
+          title: 'Batches initiated',
+          description: `${percentInitiated}% of batches started (${i + 1}/${totalChunks})...`,
+        });
         
-        if (data?.results) {
-          totalCached += data.meta?.cached || 0;
-          totalFresh += data.meta?.fresh || 0;
-          
-          // Update leads state with partial results
-          setLeads(currentLeads => 
-            currentLeads.map(lead => {
-              const analysis = data.results.find((r: AnalysisResult) => r.leadId === lead.id);
-              if (analysis) {
-                return {
-                  ...lead,
-                  rating: analysis.rating,
-                  aiInsights: analysis.insights,
-                  fullAnalysis: analysis.fullAnalysis,
-                };
-              }
-              return lead;
-            })
-          );
-        }
-        
-        // Add small delay between chunks
+        // Small delay between batch initiations
         if (i < chunks.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
       
-      let description = `Successfully analyzed ${leads.length} leads.`;
-      if (totalCached > 0 && totalFresh > 0) {
-        description = `Analyzed ${leads.length} leads (${totalCached} from cache, ${totalFresh} fresh analysis).`;
-      } else if (totalCached > 0 && totalFresh === 0) {
-        description = `Retrieved ${totalCached} leads from cache (no fresh analysis needed).`;
-      }
-      
-      toast({
-        title: 'Analysis complete',
-        description,
-      });
+      // Poll for all results (similar to enrichment flow)
+      await pollForAnalysisResults(leadIdsToCheck);
     } catch (error) {
       console.error('Analysis error:', error);
       toast({

@@ -1584,53 +1584,223 @@ IMPORTANT SCORING RULES:
 
     console.log(`Processing chunk ${chunkIndex}/${totalChunks} with ${leadsToAnalyze.length} leads`);
 
-    // Sequential processing (chunks are small by design - max 2 leads per chunk)
-    const freshResults: any[] = [];
-    
-    for (let index = 0; index < leadsToAnalyze.length; index++) {
-      const leadWithMql = leadsToAnalyze[index];
+    // Process in background and return immediately
+    EdgeRuntime.waitUntil((async () => {
+      console.log(`Background processing started for chunk ${chunkIndex}/${totalChunks}`);
       
-      // Add 200ms delay between leads (not before first one)
-      if (index > 0) {
-        await new Promise((resolve) => setTimeout(resolve, 200));
-      }
+      // PARALLEL Stage 1 for all leads in chunk
+      console.log(`Starting parallel Stage 1 extraction for ${leadsToAnalyze.length} leads...`);
       
-      console.log(`Processing lead ${index + 1}/${leadsToAnalyze.length}: ${leadWithMql.id}`);
+      const stage1Results = await Promise.all(
+        leadsToAnalyze.map(async (leadWithMql) => {
+          const lead = leadWithMql;
+          const mqlEnrichment = leadWithMql.mqlEnrichment;
+          const mqlAvailable = !!(mqlEnrichment && Object.keys(mqlEnrichment).length > 0);
+          
+          // Prepare lead data JSON
+          const leadDataJson = JSON.stringify(lead.rawData || lead, null, 2);
+          
+          // Build MQL section for prompt
+          let mqlSection = "";
+          if (mqlAvailable) {
+            const homeLoanRecency = mqlEnrichment.latest_home_loan_date
+              ? `Within 3 years (${mqlEnrichment.latest_home_loan_date})`
+              : mqlEnrichment.home_loan_count > 0
+              ? "Historical"
+              : "No home loans";
+            const employmentStatus = mqlEnrichment.designation ? "Employed" : "Unknown";
+            
+            mqlSection = `# MQL ENRICHMENT DATA (Verified Financial Profile)
+## Basic Profile
+Rating: ${mqlEnrichment.mql_rating || "N/A"}
+Capability: ${mqlEnrichment.mql_capability || "N/A"}
+Lifestyle: ${mqlEnrichment.mql_lifestyle || mqlEnrichment.lifestyle || "N/A"}
+Locality Grade: ${mqlEnrichment.locality_grade || "N/A"}
+Age: ${mqlEnrichment.age || "N/A"}
+Gender: ${mqlEnrichment.gender || "N/A"}
+
+## Employment Details
+Employer Name: ${mqlEnrichment.employer_name || "N/A"}
+Designation: ${mqlEnrichment.designation || "N/A"}
+Employment Status: ${employmentStatus}
+
+## Income (For Scoring Only)
+Annual Income (Lacs): ${mqlEnrichment.final_income_lacs || "N/A"}
+
+## Business Details
+Business Type: ${mqlEnrichment.business_type || "N/A"}
+Industry: ${mqlEnrichment.industry || "N/A"}
+Turnover Slab: ${mqlEnrichment.turnover_slab || "N/A"}
+
+## Credit Profile
+Credit Score: ${mqlEnrichment.credit_score || "N/A"}
+Credit Behavior: ${mqlEnrichment.credit_behavior_signal || "N/A"}
+
+## Loan History
+Home Loans - Total: ${mqlEnrichment.home_loan_count ?? "N/A"}, Active: ${mqlEnrichment.home_loan_active ?? "N/A"}, Paid Off: ${mqlEnrichment.home_loan_paid_off ?? "N/A"}
+Latest Home Loan: ${homeLoanRecency}
+Auto Loans: ${mqlEnrichment.auto_loan_count ?? "N/A"}
+Consumer/Personal Loans: ${mqlEnrichment.consumer_loan_count ?? "N/A"}
+Guarantor Loans: ${mqlEnrichment.guarantor_loan_count ?? "N/A"}
+
+## EMI Burden
+Active EMI Burden (Monthly): ${mqlEnrichment.active_emi_burden ? `₹${mqlEnrichment.active_emi_burden}` : "N/A"}
+EMI-to-Income Ratio: ${mqlEnrichment.emi_to_income_ratio ? `${mqlEnrichment.emi_to_income_ratio.toFixed(1)}%` : "N/A"}
+
+## Credit Cards
+Card Count: ${mqlEnrichment.credit_card_count ?? "N/A"}
+Has Premium Cards: ${mqlEnrichment.has_premium_cards ? "Yes" : "No"}`;
+          } else {
+            mqlSection = `# MQL DATA: Not available for this lead. Score using CRM data only.`;
+          }
+          
+          const stage1Prompt = buildStage1Prompt(
+            leadDataJson,
+            mqlSection,
+            mqlAvailable,
+            crmFieldExplainer,
+            mqlFieldExplainer
+          );
+          
+          try {
+            console.log(`Stage 1 (parallel) starting for lead ${lead.id}`);
+            const stage1Response = await callGeminiAPI(stage1Prompt, googleApiKey!, true);
+            const extractedSignals = JSON.parse(stage1Response);
+            console.log(`Stage 1 (parallel) complete for lead ${lead.id}`);
+            return { leadWithMql, extractedSignals, mqlAvailable, success: true };
+          } catch (stage1Error) {
+            console.error(`Stage 1 (parallel) failed for lead ${lead.id}:`, stage1Error);
+            const extractedSignals = createFallbackExtraction(lead, mqlEnrichment);
+            return { leadWithMql, extractedSignals, mqlAvailable, success: false };
+          }
+        })
+      );
       
-      try {
-        const result = await processLeadAnalysis(leadWithMql);
-        freshResults.push(result);
+      console.log(`Parallel Stage 1 complete. Starting sequential Stage 2 for ${stage1Results.length} leads...`);
+      
+      // SEQUENTIAL Stage 2 with delays and immediate storage
+      for (let index = 0; index < stage1Results.length; index++) {
+        const { leadWithMql, extractedSignals, mqlAvailable } = stage1Results[index];
+        const lead = leadWithMql;
+        const mqlEnrichment = leadWithMql.mqlEnrichment;
         
-        // Store result immediately (enables partial progress)
-        await storeAnalysisResult(result, projectId, leadsToAnalyze);
-      } catch (error) {
-        console.error(`Failed to process lead ${leadWithMql.id}:`, error);
-        freshResults.push({
-          leadId: leadWithMql.id,
-          rating: "Warm",
-          insights: "Analysis failed",
-          fullAnalysis: {},
-          parseSuccess: false,
-          fromCache: false,
-          revisitDate: null,
-        });
+        // Add 200ms delay between Stage 2 calls (not before first one)
+        if (index > 0) {
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        }
+        
+        console.log(`Stage 2 starting for lead ${lead.id} (${index + 1}/${stage1Results.length})`);
+        
+        try {
+          const stage2Prompt = buildStage2Prompt(
+            JSON.stringify(extractedSignals, null, 2),
+            systemPrompt,
+            brandContext,
+            projectContext,
+            leadScoringModel,
+            personaDefinitions,
+            privacyRules,
+            outputConstraints,
+            concernGeneration,
+            talkingpointsGeneration,
+            outputStructure
+          );
+          
+          let analysisResult;
+          let parseSuccess = true;
+          
+          try {
+            const stage2Response = await callGeminiAPI(stage2Prompt, googleApiKey!, true);
+            analysisResult = JSON.parse(stage2Response);
+            console.log(`Stage 2 complete for lead ${lead.id}`);
+          } catch (stage2Error) {
+            parseSuccess = false;
+            console.error(`Stage 2 failed for lead ${lead.id}:`, stage2Error);
+            analysisResult = {
+              ai_rating: "Warm",
+              rating_confidence: "Low",
+              rating_rationale: "Analysis completed with limited structure",
+              summary: extractedSignals.visit_notes_summary || "Unable to analyze lead",
+              mql_data_available: mqlAvailable,
+            };
+          }
+          
+          // Apply MQL-based final score adjustment
+          if (parseSuccess && analysisResult.pps_score !== undefined) {
+            const mqlRating = mqlEnrichment?.mql_rating || "N/A";
+            let adjustedPpsScore = analysisResult.pps_score;
+            
+            switch (mqlRating) {
+              case "P0":
+                break;
+              case "P1":
+                adjustedPpsScore = Math.round(adjustedPpsScore * 0.90);
+                break;
+              case "P2":
+                adjustedPpsScore = Math.round(adjustedPpsScore * 0.80);
+                break;
+              default:
+                adjustedPpsScore = Math.round(adjustedPpsScore * 0.95);
+                break;
+            }
+            
+            let adjustedRating: "Hot" | "Warm" | "Cold";
+            if (adjustedPpsScore >= 85) {
+              adjustedRating = "Hot";
+            } else if (adjustedPpsScore >= 65) {
+              adjustedRating = "Warm";
+            } else {
+              adjustedRating = "Cold";
+            }
+            
+            analysisResult.pps_score = adjustedPpsScore;
+            analysisResult.ai_rating = adjustedRating;
+          }
+          
+          // Store result immediately to database
+          await supabase.from("lead_analyses").upsert(
+            {
+              lead_id: lead.id,
+              project_id: projectId,
+              rating: analysisResult.ai_rating,
+              insights: analysisResult.summary || analysisResult.rating_rationale,
+              full_analysis: analysisResult,
+              revisit_date_at_analysis: lead.rawData?.["Latest Revisit Date"] || null,
+            },
+            { onConflict: "lead_id,project_id" },
+          );
+          
+          console.log(`Lead ${lead.id} analysis stored to database`);
+        } catch (error) {
+          console.error(`Failed to process Stage 2 for lead ${lead.id}:`, error);
+          // Store fallback result
+          await supabase.from("lead_analyses").upsert(
+            {
+              lead_id: lead.id,
+              project_id: projectId,
+              rating: "Warm",
+              insights: "Analysis failed",
+              full_analysis: {},
+              revisit_date_at_analysis: lead.rawData?.["Latest Revisit Date"] || null,
+            },
+            { onConflict: "lead_id,project_id" },
+          );
+        }
       }
-    }
-
-    const allResults = [...cachedResults, ...freshResults];
-    const successCount = allResults.filter((r) => r.parseSuccess).length;
-
-    console.log(`Analysis complete: ${successCount}/${allResults.length} successful (sequential 2-stage pipeline)`);
-
+      
+      console.log(`Background processing complete for chunk ${chunkIndex}/${totalChunks}`);
+    })());
+    
+    // Return immediately with processing status
     return new Response(
       JSON.stringify({
-        results: allResults,
+        status: 'processing',
+        message: `Analysis started for ${leadsToAnalyze.length} leads in background`,
+        cachedResults,
         meta: {
-          total: allResults.length,
-          successful: successCount,
-          failed: allResults.length - successCount,
+          total: leads.length,
           cached: cachedResults.length,
-          fresh: freshResults.filter((r) => r.parseSuccess).length,
+          processing: leadsToAnalyze.length,
         },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
