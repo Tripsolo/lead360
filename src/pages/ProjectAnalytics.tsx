@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Users, Flame, Sun, Snowflake, TrendingUp, Loader2, Eye } from "lucide-react";
+import { ArrowLeft, Users, Flame, Sun, Snowflake, TrendingUp, Loader2, Eye, ArrowUp, ArrowDown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useProjectAnalytics } from "@/hooks/useProjectAnalytics";
@@ -14,13 +14,65 @@ interface Project {
   name: string;
 }
 
+type SortField = 'total' | 'upgradePercentage';
+type SortDirection = 'asc' | 'desc';
+
 const ProjectAnalytics = () => {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
   const [loadingProjects, setLoadingProjects] = useState(true);
+  
+  // Sorting state for Manager Performance table
+  const [managerSortField, setManagerSortField] = useState<SortField>('total');
+  const [managerSortDirection, setManagerSortDirection] = useState<SortDirection>('desc');
+  
+  // Sorting state for Source Performance table
+  const [sourceSortField, setSourceSortField] = useState<SortField>('total');
+  const [sourceSortDirection, setSourceSortDirection] = useState<SortDirection>('desc');
 
   const { analytics, loading, error } = useProjectAnalytics(selectedProjectId);
+  
+  // Sorted manager performance data
+  const sortedManagerPerformance = useMemo(() => {
+    return [...analytics.managerPerformance].sort((a, b) => {
+      const aVal = a[managerSortField];
+      const bVal = b[managerSortField];
+      return managerSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+    });
+  }, [analytics.managerPerformance, managerSortField, managerSortDirection]);
+  
+  // Sorted source performance data
+  const sortedSourcePerformance = useMemo(() => {
+    return [...analytics.sourcePerformance].sort((a, b) => {
+      const aVal = a[sourceSortField];
+      const bVal = b[sourceSortField];
+      return sourceSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+    });
+  }, [analytics.sourcePerformance, sourceSortField, sourceSortDirection]);
+  
+  const handleManagerSort = (field: SortField) => {
+    if (managerSortField === field) {
+      setManagerSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setManagerSortField(field);
+      setManagerSortDirection('desc');
+    }
+  };
+  
+  const handleSourceSort = (field: SortField) => {
+    if (sourceSortField === field) {
+      setSourceSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSourceSortField(field);
+      setSourceSortDirection('desc');
+    }
+  };
+  
+  const SortIcon = ({ field, currentField, direction }: { field: SortField; currentField: SortField; direction: SortDirection }) => {
+    if (field !== currentField) return null;
+    return direction === 'asc' ? <ArrowUp className="h-3 w-3 ml-1" /> : <ArrowDown className="h-3 w-3 ml-1" />;
+  };
 
   useEffect(() => {
     const fetchProjects = async () => {
@@ -183,15 +235,35 @@ const ProjectAnalytics = () => {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Manager Name</TableHead>
-                        <TableHead className="text-center">Total</TableHead>
+                        <TableHead className="text-center">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-auto p-0 hover:bg-transparent font-medium"
+                            onClick={() => handleManagerSort('total')}
+                          >
+                            Total
+                            <SortIcon field="total" currentField={managerSortField} direction={managerSortDirection} />
+                          </Button>
+                        </TableHead>
                         <TableHead className="text-center">Hot</TableHead>
                         <TableHead className="text-center">Warm</TableHead>
                         <TableHead className="text-center">Cold</TableHead>
-                        <TableHead className="text-center">% Upgraded</TableHead>
+                        <TableHead className="text-center">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-auto p-0 hover:bg-transparent font-medium"
+                            onClick={() => handleManagerSort('upgradePercentage')}
+                          >
+                            % Upgraded
+                            <SortIcon field="upgradePercentage" currentField={managerSortField} direction={managerSortDirection} />
+                          </Button>
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {analytics.managerPerformance.map((manager) => (
+                      {sortedManagerPerformance.map((manager) => (
                         <TableRow key={manager.name}>
                           <TableCell className="font-medium">{manager.name}</TableCell>
                           <TableCell className="text-center">{manager.total}</TableCell>
@@ -234,15 +306,35 @@ const ProjectAnalytics = () => {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Source</TableHead>
-                        <TableHead className="text-center">Total</TableHead>
+                        <TableHead className="text-center">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-auto p-0 hover:bg-transparent font-medium"
+                            onClick={() => handleSourceSort('total')}
+                          >
+                            Total
+                            <SortIcon field="total" currentField={sourceSortField} direction={sourceSortDirection} />
+                          </Button>
+                        </TableHead>
                         <TableHead className="text-center">Hot</TableHead>
                         <TableHead className="text-center">Warm</TableHead>
                         <TableHead className="text-center">Cold</TableHead>
-                        <TableHead className="text-center">% Upgraded</TableHead>
+                        <TableHead className="text-center">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-auto p-0 hover:bg-transparent font-medium"
+                            onClick={() => handleSourceSort('upgradePercentage')}
+                          >
+                            % Upgraded
+                            <SortIcon field="upgradePercentage" currentField={sourceSortField} direction={sourceSortDirection} />
+                          </Button>
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {analytics.sourcePerformance.map((source, index) => (
+                      {sortedSourcePerformance.map((source, index) => (
                         <TableRow key={`${source.subSource}-${index}`}>
                           <TableCell className="font-medium">{source.subSource}</TableCell>
                           <TableCell className="text-center">{source.total}</TableCell>

@@ -33,7 +33,9 @@ export interface Lead {
   timeline?: string;
   notes?: string;
   source?: string;
+  subSource?: string;
   date?: string;
+  lastVisit?: string;
   rating?: LeadRating;
   aiInsights?: string;
   fullAnalysis?: AnalysisResult['fullAnalysis'];
@@ -42,6 +44,7 @@ export interface Lead {
   // Additional PRD fields
   leadOwner?: string;
   managerRating?: LeadRating;
+  manualRating?: LeadRating;
   unitInterested?: string;
   towerInterested?: string;
   
