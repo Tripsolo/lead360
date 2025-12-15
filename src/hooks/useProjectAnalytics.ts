@@ -19,6 +19,14 @@ interface SourceStats {
   upgradePercentage: number;
 }
 
+interface ConcernStats {
+  concernType: string;
+  leadCount: number;
+  percentage: number;
+  dominantPersona: string;
+  dominantProfession: string;
+}
+
 interface ProjectAnalyticsData {
   totalLeads: number;
   analyzedLeads: number;
@@ -28,6 +36,7 @@ interface ProjectAnalyticsData {
   upgradePercentage: number;
   managerPerformance: ManagerStats[];
   sourcePerformance: SourceStats[];
+  concernAnalysis: ConcernStats[];
 }
 
 interface LeadWithAnalysis {
@@ -37,6 +46,7 @@ interface LeadWithAnalysis {
   lead_analyses: Array<{
     rating: string;
     analyzed_at: string;
+    full_analysis: Record<string, unknown> | null;
   }>;
 }
 
@@ -67,7 +77,7 @@ export function useProjectAnalytics(selectedProjectId: string | null) {
         // First fetch all analyses (only AI-rated leads)
         let analysesQuery = supabase
           .from('lead_analyses')
-          .select('lead_id, project_id, rating, analyzed_at');
+          .select('lead_id, project_id, rating, analyzed_at, full_analysis');
         
         if (selectedProjectId && selectedProjectId !== 'all') {
           analysesQuery = analysesQuery.eq('project_id', selectedProjectId);
@@ -93,7 +103,7 @@ export function useProjectAnalytics(selectedProjectId: string | null) {
         if (leadsError) throw leadsError;
 
         // Map analyses to leads
-        const analysesMap = new Map<string, Array<{ rating: string; analyzed_at: string }>>();
+        const analysesMap = new Map<string, Array<{ rating: string; analyzed_at: string; full_analysis: Record<string, unknown> | null }>>();
         (analysesData || []).forEach((analysis) => {
           const key = analysis.lead_id;
           if (!analysesMap.has(key)) {
@@ -101,7 +111,8 @@ export function useProjectAnalytics(selectedProjectId: string | null) {
           }
           analysesMap.get(key)!.push({
             rating: analysis.rating,
-            analyzed_at: analysis.analyzed_at
+            analyzed_at: analysis.analyzed_at,
+            full_analysis: analysis.full_analysis as Record<string, unknown> | null
           });
         });
 
@@ -133,6 +144,11 @@ export function useProjectAnalytics(selectedProjectId: string | null) {
 
     const managerMap = new Map<string, { total: number; hot: number; warm: number; cold: number; upgraded: number }>();
     const sourceMap = new Map<string, { total: number; hot: number; warm: number; cold: number; upgraded: number }>();
+    const concernMap = new Map<string, { 
+      count: number; 
+      personas: Map<string, number>; 
+      professions: Map<string, number>;
+    }>();
 
     leads.forEach(lead => {
       const latestAnalysis = lead.lead_analyses.sort(
@@ -144,6 +160,13 @@ export function useProjectAnalytics(selectedProjectId: string | null) {
       const managerName = (lead.crm_data?.['Name of Closing Manager'] as string) || 'Unknown';
       const subSource = (lead.crm_data?.['Sales Walkin Sub Source'] as string) || 'Unknown';
       const sourceKey = subSource;
+      
+      // Extract concern, persona, and profession from full_analysis
+      const fullAnalysis = latestAnalysis?.full_analysis;
+      const primaryConcern = (fullAnalysis?.primary_concern_category as string) || null;
+      const persona = (fullAnalysis?.persona as string) || 'Unknown';
+      const profession = (lead.crm_data?.['Occupation'] as string) || 'Unknown';
+
       // Count by AI rating
       if (aiRating === 'Hot') hotLeads++;
       else if (aiRating === 'Warm') warmLeads++;
@@ -174,6 +197,21 @@ export function useProjectAnalytics(selectedProjectId: string | null) {
       else if (aiRating === 'Warm') sourceStats.warm++;
       else if (aiRating === 'Cold') sourceStats.cold++;
       if (upgraded) sourceStats.upgraded++;
+
+      // Concern stats
+      if (primaryConcern) {
+        if (!concernMap.has(primaryConcern)) {
+          concernMap.set(primaryConcern, { 
+            count: 0, 
+            personas: new Map(), 
+            professions: new Map() 
+          });
+        }
+        const concernStats = concernMap.get(primaryConcern)!;
+        concernStats.count++;
+        concernStats.personas.set(persona, (concernStats.personas.get(persona) || 0) + 1);
+        concernStats.professions.set(profession, (concernStats.professions.get(profession) || 0) + 1);
+      }
     });
 
     const managerPerformance: ManagerStats[] = Array.from(managerMap.entries())
@@ -198,6 +236,40 @@ export function useProjectAnalytics(selectedProjectId: string | null) {
       }))
       .sort((a, b) => b.total - a.total);
 
+    // Calculate concern analysis
+    const totalLeadsWithConcerns = Array.from(concernMap.values()).reduce((sum, c) => sum + c.count, 0);
+    const concernAnalysis: ConcernStats[] = Array.from(concernMap.entries())
+      .map(([concernType, stats]) => {
+        // Find dominant persona
+        let dominantPersona = 'Unknown';
+        let maxPersonaCount = 0;
+        stats.personas.forEach((count, persona) => {
+          if (count > maxPersonaCount) {
+            maxPersonaCount = count;
+            dominantPersona = persona;
+          }
+        });
+
+        // Find dominant profession
+        let dominantProfession = 'Unknown';
+        let maxProfessionCount = 0;
+        stats.professions.forEach((count, profession) => {
+          if (count > maxProfessionCount) {
+            maxProfessionCount = count;
+            dominantProfession = profession;
+          }
+        });
+
+        return {
+          concernType,
+          leadCount: stats.count,
+          percentage: totalLeadsWithConcerns > 0 ? Math.round((stats.count / totalLeadsWithConcerns) * 100) : 0,
+          dominantPersona,
+          dominantProfession
+        };
+      })
+      .sort((a, b) => b.percentage - a.percentage);
+
     return {
       totalLeads: leads.length,
       analyzedLeads: leads.length, // All leads are AI-rated
@@ -206,7 +278,8 @@ export function useProjectAnalytics(selectedProjectId: string | null) {
       coldLeads,
       upgradePercentage: leads.length > 0 ? Math.round((upgradedCount / leads.length) * 100) : 0,
       managerPerformance,
-      sourcePerformance
+      sourcePerformance,
+      concernAnalysis
     };
   }, [leads]);
 

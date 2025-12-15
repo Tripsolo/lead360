@@ -294,7 +294,7 @@ const ProjectAnalytics = () => {
             </Card>
 
             {/* Source Performance Table */}
-            <Card>
+            <Card className="mb-8">
               <CardHeader>
                 <CardTitle>Source Performance</CardTitle>
               </CardHeader>
@@ -356,6 +356,41 @@ const ProjectAnalytics = () => {
                           <TableCell className="text-center">
                             <Badge variant="secondary">{source.upgradePercentage}%</Badge>
                           </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Concern Analysis Table */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Concern Analysis</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {analytics.concernAnalysis.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-8">No concern data available</p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Concern Type</TableHead>
+                        <TableHead className="text-center">% of Leads</TableHead>
+                        <TableHead>Dominant Persona</TableHead>
+                        <TableHead>Dominant Profession</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {analytics.concernAnalysis.map((concern) => (
+                        <TableRow key={concern.concernType}>
+                          <TableCell className="font-medium">{concern.concernType}</TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="secondary">{concern.percentage}%</Badge>
+                          </TableCell>
+                          <TableCell>{concern.dominantPersona}</TableCell>
+                          <TableCell>{concern.dominantProfession}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
