@@ -116,31 +116,26 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
               </div>
             </div>
             
-            {/* Middle column: Manager Rating */}
-            <div className="p-2.5 bg-muted/30 rounded-lg h-fit">
-              <p className="text-sm text-muted-foreground mb-1.5">Manager Rating</p>
-              <Badge className={`${getRatingColor(lead.managerRating)} min-w-[60px] justify-center`}>
-                {lead.managerRating || '-'}
-              </Badge>
+            {/* Middle column: Manager Rating + PPS Score stacked */}
+            <div className="space-y-3">
+              <div className="p-2.5 bg-muted/30 rounded-lg">
+                <p className="text-sm text-muted-foreground mb-1.5">Manager Rating</p>
+                <Badge className={`${getRatingColor(lead.managerRating)} min-w-[60px] justify-center`}>
+                  {lead.managerRating || '-'}
+                </Badge>
+              </div>
+              <div className="p-2.5 bg-muted/30 rounded-lg">
+                <p className="text-sm text-muted-foreground mb-1.5">PPS Score</p>
+                <span className="text-lg font-semibold">
+                  {analysis?.pps_score !== undefined ? `${analysis.pps_score}/100` : 'N/A'}
+                </span>
+              </div>
             </div>
 
             {/* Right column: Rating Rationale */}
             <div className="p-2.5 bg-muted/30 rounded-lg">
               <p className="text-sm text-muted-foreground mb-1.5">Rating Rationale</p>
-              <p className="text-sm">
-                {analysis?.rating_rationale ? (
-                  <>
-                    {analysis.rating_rationale.match(/PPS Score: \d+\/100/) ? (
-                      <>
-                        <span className="font-bold">{analysis.rating_rationale.match(/PPS Score: \d+\/100/)?.[0]}</span>
-                        {analysis.rating_rationale.replace(/PPS Score: \d+\/100/, '')}
-                      </>
-                    ) : (
-                      analysis.rating_rationale
-                    )}
-                  </>
-                ) : 'N/A'}
-              </p>
+              <p className="text-sm">{analysis?.rating_rationale || 'N/A'}</p>
             </div>
           </div>
 
