@@ -140,7 +140,27 @@ Extract structured signals from the CRM and MQL data provided. Transform raw val
 - For sample_response_quote, capture exact feedback about sample flat visit
 - For competitor_comparison_quote, capture exact price/feature comparisons stated by customer
 - If no evidence available for a field, set to null (NEVER fabricate quotes or facts)
-- Evidence sections ground the Stage 2 outputs in real data, preventing hallucination`;
+- Evidence sections ground the Stage 2 outputs in real data, preventing hallucination
+
+### Employment Stability (from MQL employment_details array):
+30. current_tenure_months: Calculate from current employer's date_of_joining to today
+    - Current employer = entry where date_of_exit is null or empty
+    - If date_of_joining exists: calculate months from that date to today
+    - If no current employer found: null
+
+31. total_work_experience_years: Calculate from earliest date_of_joining to today
+    - Find the earliest date_of_joining across all employment entries
+    - Calculate years from that date to today
+
+32. job_stability: Derive from employment history pattern:
+    - "Stable": current_tenure_months >= 36 OR only 1-2 employers in 10+ years experience
+    - "Moderate": current_tenure_months 12-36 OR 3-4 employers in 10+ years experience
+    - "Frequent": current_tenure_months < 12 AND 4+ employers in 5 years
+    - "New": current_tenure_months < 6 (recently joined current role)
+    - null: if employment_details is empty or unavailable
+
+33. employment_history_summary: Brief summary like "4 years at TCS, previously 2 years at Capgemini"`;
+
 
   const extractionOutputSchema = `# EXTRACTION OUTPUT STRUCTURE
 Return a JSON object with this EXACT structure:
@@ -167,7 +187,11 @@ Return a JSON object with this EXACT structure:
     "business_type": "string | null",
     "turnover_tier": "0-40L" | "40L-1.5Cr" | "1.5Cr-5Cr" | "5Cr-25Cr" | "25Cr+" | null,
     "work_location": "string | null",
-    "company_type": "MNC" | "Indian Corporate" | "SME" | "Startup" | "Government" | "PSU" | null
+    "company_type": "MNC" | "Indian Corporate" | "SME" | "Startup" | "Government" | "PSU" | null,
+    "job_stability": "Stable" | "Moderate" | "Frequent" | "New" | null,
+    "current_tenure_months": number | null,
+    "total_work_experience_years": number | null,
+    "employment_history_summary": "string | null"
   },
   "financial_signals": {
     "budget_stated_cr": number | null,
@@ -263,7 +287,8 @@ Return a JSON object with this EXACT structure:
   },
   "professional_evidence": {
     "role_context": "string | null",
-    "work_location_detail": "string | null"
+    "work_location_detail": "string | null",
+    "employment_history_summary": "string | null"
   },
   "financial_evidence": {
     "stated_budget_quote": "string | null",
@@ -336,7 +361,6 @@ You are provided with PRE-EXTRACTED SIGNALS from CRM and MQL data (not raw data)
 2. Apply scoring adjustments from extracted signals:
    - If investor_signal is true: +5 pts to Urgency
    - If home_loan_recency is "Within 3 years" AND investor_signal is false: -3 pts to Urgency
-   - If emi_burden_level is "High": -5 pts to Financial. If "Moderate": -2 pts
    - If guarantor_loan_count > 0: +1 pt to Authority (family network signal)
    - If joint_loan_count > 0: +1 pt to Authority (family decision-making)
    - If card_portfolio_strength is "Premium": +2 pts to Financial
@@ -349,6 +373,56 @@ You are provided with PRE-EXTRACTED SIGNALS from CRM and MQL data (not raw data)
    - If visit_quality is "Thorough": +2 pts to Intent
    - If visit_quality is "Rushed" or "Issues": -2 pts to Intent
    - If revisit_promised is true: +2 pts to Intent
+
+   ### Job Stability Adjustments (for salaried profiles):
+   - If job_stability is "Stable": +2 pts to Financial (income stability, reliable loan servicing)
+   - If job_stability is "Moderate": +1 pt to Financial
+   - If job_stability is "Frequent": -2 pts to Financial (income volatility risk, loan approval concerns)
+   - If job_stability is "New": -1 pt to Financial (probation period, income not established)
+
+## CREDIT BUREAU SCORING GUIDELINES (CRITICAL - Pay Close Attention)
+
+### EMI Burden Impact on Liquidity:
+The emi_burden_level signal DIRECTLY impacts a lead's ability to service a new home loan:
+
+- **"High" (EMI > 50% of income)**: SEVERE liquidity constraint
+  - Banks unlikely to approve additional home loan (FOIR breach risk)
+  - Apply -5 pts to Financial Capability
+  - Flag as Price concern if attempting loan funding
+  - Customer likely needs co-borrower or higher downpayment
+  
+- **"Moderate" (EMI 30-50%)**: Stretched but manageable
+  - May face difficulty with large ticket size
+  - Apply -2 pts to Financial Capability
+  - Consider if budget is realistic given existing obligations
+
+- **"Low" (EMI < 30%)**: Healthy debt profile
+  - Comfortable capacity for new loan servicing
+  - No penalty applied to Financial Capability
+
+### Credit Rating Usage in Scoring:
+- credit_rating "High" (750+): Strong loan eligibility, competitive rates, +2 pts to Financial
+- credit_rating "Medium" (650-749): Loan possible but higher rates, no adjustment
+- credit_rating "Low" (<650): Loan approval uncertain, -3 pts to Financial, flag as concern if loan funding required
+
+### Combined Credit Assessment Rules:
+Apply NET adjustment based on combination of credit_rating and emi_burden_level:
+
+| Credit Rating | EMI Burden Low | EMI Burden Moderate | EMI Burden High |
+|--------------|----------------|---------------------|-----------------|
+| High         | +4 pts         | +2 pts              | -1 pts          |
+| Medium       | +1 pts         | -1 pts              | -4 pts          |
+| Low          | -2 pts         | -5 pts              | -8 pts (cap)    |
+
+### Active Loan Indicators (Additional Adjustments):
+- If total_active_emi_monthly > 50000: Flag liquidity concern regardless of ratio
+- If consumer_loan_count > 3: Credit-dependent behavior signal, -1 pt to Financial
+- If guarantor_loan_count > 0: Positive family network signal, +1 pt to Authority
+- If total_collateral_value_cr >= 1: Asset-backed strength, +2 pts to Financial
+
+### PRIVACY REMINDER:
+NEVER mention credit scores, EMI amounts, loan counts, or income figures in rating_rationale, persona_description, or summary. 
+Use these data points ONLY for internal PPS scoring calculations.
 
 3. Derive final rating from PPS: >= 85 = Hot, >= 65 = Warm, < 65 = Cold
 
@@ -598,16 +672,72 @@ function createFallbackExtraction(lead: any, mqlEnrichment: any): any {
       children_count: null,
       children_ages: null,
     },
-    professional_profile: {
-      occupation_type: rawData["Occupation"] || null,
-      designation: mqlEnrichment?.designation || rawData["Designation"] || null,
-      employer: mqlEnrichment?.employer_name || rawData["Place of Work"] || null,
-      industry: mqlEnrichment?.industry || rawData["Industry / Sector"] || null,
-      business_type: mqlEnrichment?.business_type || null,
-      turnover_tier: mqlEnrichment?.turnover_slab || null,
-      work_location: rawData["Place of Work"] || null,
-      company_type: null,
-    },
+    professional_profile: (() => {
+      // NEW: Calculate job stability from employment_details
+      let jobStability: string | null = null;
+      let currentTenureMonths: number | null = null;
+      let totalWorkExperienceYears: number | null = null;
+      let employmentHistorySummary: string | null = null;
+
+      if (mqlEnrichment?.raw_response?.leads?.[0]?.employment_details?.length > 0) {
+        const employments = mqlEnrichment.raw_response.leads[0].employment_details;
+        
+        // Find current employer (no exit date)
+        const currentJob = employments.find((e: any) => !e.date_of_exit && e.date_of_joining);
+        if (currentJob?.date_of_joining) {
+          const joinDate = new Date(currentJob.date_of_joining);
+          currentTenureMonths = Math.floor((Date.now() - joinDate.getTime()) / (30.44 * 24 * 60 * 60 * 1000));
+          const yearsAtCurrent = Math.round(currentTenureMonths / 12);
+          employmentHistorySummary = `${yearsAtCurrent} year${yearsAtCurrent !== 1 ? 's' : ''} at ${currentJob.employer_name || 'current employer'}`;
+          
+          // Add previous employer if available
+          const previousJob = employments.find((e: any) => e.date_of_exit && e.employer_name !== currentJob.employer_name);
+          if (previousJob?.employer_name) {
+            employmentHistorySummary += `, previously at ${previousJob.employer_name}`;
+          }
+        }
+        
+        // Calculate total experience
+        const allJoinDates = employments
+          .filter((e: any) => e.date_of_joining)
+          .map((e: any) => new Date(e.date_of_joining).getTime());
+        if (allJoinDates.length > 0) {
+          const earliest = Math.min(...allJoinDates);
+          totalWorkExperienceYears = Math.floor((Date.now() - earliest) / (365.25 * 24 * 60 * 60 * 1000));
+        }
+        
+        // Derive stability rating
+        const jobCount = employments.length;
+        if (currentTenureMonths !== null) {
+          if (currentTenureMonths >= 36 || (totalWorkExperienceYears && totalWorkExperienceYears >= 10 && jobCount <= 2)) {
+            jobStability = "Stable";
+          } else if (currentTenureMonths >= 12 || (totalWorkExperienceYears && totalWorkExperienceYears >= 10 && jobCount <= 4)) {
+            jobStability = "Moderate";
+          } else if (currentTenureMonths < 12 && jobCount >= 4 && (!totalWorkExperienceYears || totalWorkExperienceYears < 5)) {
+            jobStability = "Frequent";
+          } else if (currentTenureMonths < 6) {
+            jobStability = "New";
+          } else {
+            jobStability = "Moderate"; // Default fallback
+          }
+        }
+      }
+
+      return {
+        occupation_type: rawData["Occupation"] || null,
+        designation: mqlEnrichment?.designation || rawData["Designation"] || null,
+        employer: mqlEnrichment?.employer_name || rawData["Place of Work"] || null,
+        industry: mqlEnrichment?.industry || rawData["Industry / Sector"] || null,
+        business_type: mqlEnrichment?.business_type || null,
+        turnover_tier: mqlEnrichment?.turnover_slab || null,
+        work_location: rawData["Place of Work"] || null,
+        company_type: null,
+        job_stability: jobStability,
+        current_tenure_months: currentTenureMonths,
+        total_work_experience_years: totalWorkExperienceYears,
+        employment_history_summary: employmentHistorySummary,
+      };
+    })(),
     financial_signals: {
       budget_stated_cr: null,
       in_hand_funds_pct: null,
@@ -700,6 +830,7 @@ function createFallbackExtraction(lead: any, mqlEnrichment: any): any {
     professional_evidence: {
       role_context: null,
       work_location_detail: null,
+      employment_history_summary: null,
     },
     financial_evidence: {
       stated_budget_quote: null,
