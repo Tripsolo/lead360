@@ -9,7 +9,7 @@ import { exportLeadsToExcel } from '@/utils/excelExport';
 import { Lead, AnalysisResult, MqlEnrichment } from '@/types/lead';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Sparkles, Upload, LogOut, Database, BarChart3 } from 'lucide-react';
+import { Sparkles, Upload, LogOut, Database, BarChart3, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { ExcelSchema } from '@/config/projects';
 import type { User, Session } from '@supabase/supabase-js';
@@ -60,6 +60,7 @@ const Index = () => {
   const [showEnrichPrompt, setShowEnrichPrompt] = useState(false);
   const [showClearCacheConfirm, setShowClearCacheConfirm] = useState(false);
   const [isClearingCache, setIsClearingCache] = useState(false);
+  const [isReanalyzing, setIsReanalyzing] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -671,6 +672,106 @@ const Index = () => {
     }
   };
 
+  // Re-analyze leads that got fallback analysis (due to quota or API errors)
+  const handleReanalyzeFailedLeads = async () => {
+    // Identify leads with fallback analysis
+    const failedLeads = leads.filter(lead => {
+      const rationale = lead.fullAnalysis?.rating_rationale || '';
+      return rationale.includes('limited structure') || rationale.includes('Analysis completed with limited');
+    });
+
+    if (failedLeads.length === 0) {
+      toast({
+        title: 'No failed analyses found',
+        description: 'All leads have been analyzed successfully.',
+      });
+      return;
+    }
+
+    setIsReanalyzing(true);
+    
+    try {
+      // Delete cached analyses for failed leads
+      const failedLeadIds = failedLeads.map(l => l.id);
+      
+      const { error: deleteError } = await supabase
+        .from('lead_analyses')
+        .delete()
+        .in('lead_id', failedLeadIds)
+        .eq('project_id', selectedProjectId);
+
+      if (deleteError) {
+        console.error('Error deleting failed analyses:', deleteError);
+        throw new Error('Failed to clear failed analyses');
+      }
+
+      // Clear the analysis from UI state so they're treated as fresh
+      setLeads(currentLeads => 
+        currentLeads.map(lead => 
+          failedLeadIds.includes(lead.id) 
+            ? { ...lead, rating: undefined, aiInsights: undefined, fullAnalysis: undefined }
+            : lead
+        )
+      );
+
+      toast({
+        title: 'Re-analysis started',
+        description: `Re-analyzing ${failedLeads.length} leads that had fallback ratings...`,
+      });
+
+      // Now run the analysis flow for these leads
+      const CHUNK_SIZE = 2;
+      const chunks: Lead[][] = [];
+      for (let i = 0; i < failedLeads.length; i += CHUNK_SIZE) {
+        chunks.push(failedLeads.slice(i, i + CHUNK_SIZE));
+      }
+
+      // Start batch function calls
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        
+        console.log(`Starting re-analysis batch ${i + 1}/${chunks.length} with ${chunk.length} leads`);
+        
+        const { error } = await supabase.functions.invoke('analyze-leads', {
+          body: { 
+            leads: chunk,
+            projectId: selectedProjectId,
+            chunkIndex: i + 1,
+            totalChunks: chunks.length,
+          },
+        });
+        
+        if (error) {
+          console.error(`Batch ${i + 1} failed:`, error);
+        }
+
+        // Small delay between batches
+        if (i < chunks.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+      
+      // Poll for results
+      await pollForAnalysisResults(failedLeadIds);
+      
+    } catch (error) {
+      console.error('Re-analysis error:', error);
+      toast({
+        title: 'Re-analysis failed',
+        description: error instanceof Error ? error.message : 'Failed to re-analyze leads.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsReanalyzing(false);
+    }
+  };
+
+  // Count failed analyses for UI
+  const failedAnalysisCount = leads.filter(lead => {
+    const rationale = lead.fullAnalysis?.rating_rationale || '';
+    return rationale.includes('limited structure') || rationale.includes('Analysis completed with limited');
+  }).length;
+
   if (!user) {
     return null;
   }
@@ -707,13 +808,25 @@ const Index = () => {
               </Button>
               <Button 
                 onClick={() => handleAnalyzeLeads()} 
-                disabled={isAnalyzing || isEnriching} 
+                disabled={isAnalyzing || isEnriching || isReanalyzing} 
                 size="lg"
                 className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
               >
                 <Sparkles className="mr-2 h-5 w-5" />
                 {isAnalyzing ? 'Analyzing...' : 'Analyze with AI'}
               </Button>
+              {failedAnalysisCount > 0 && (
+                <Button 
+                  onClick={handleReanalyzeFailedLeads} 
+                  disabled={isReanalyzing || isAnalyzing || isEnriching} 
+                  size="lg"
+                  variant="outline"
+                  className="border-amber-500 text-amber-600 hover:bg-amber-50"
+                >
+                  <RefreshCw className={`mr-2 h-5 w-5 ${isReanalyzing ? 'animate-spin' : ''}`} />
+                  {isReanalyzing ? 'Re-analyzing...' : `Re-analyze Failed (${failedAnalysisCount})`}
+                </Button>
+              )}
               <div className="flex-1" />
               <Button variant="outline" onClick={handleReset} size="lg">
                 <Upload className="mr-2 h-5 w-5" />
