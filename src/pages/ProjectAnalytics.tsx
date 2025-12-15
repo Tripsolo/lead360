@@ -112,10 +112,15 @@ const ProjectAnalytics = () => {
       setCalculatingCIS(true);
       
       // Fetch leads without CIS scores
-      const { data: analyses, error: fetchError } = await supabase
+      let query = supabase
         .from('lead_analyses')
-        .select('id, lead_id, project_id, full_analysis')
-        .eq(selectedProjectId !== 'all' ? 'project_id' : 'id', selectedProjectId !== 'all' ? selectedProjectId : 'id');
+        .select('id, lead_id, project_id, full_analysis');
+      
+      if (selectedProjectId && selectedProjectId !== 'all') {
+        query = query.eq('project_id', selectedProjectId);
+      }
+      
+      const { data: analyses, error: fetchError } = await query;
       
       if (fetchError) throw fetchError;
       
