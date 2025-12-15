@@ -104,15 +104,42 @@ async function processEnrichmentBatch(
       console.log(`[MQL Request] Headers: { "x-schema": "${mqlSchema}", "authorization": "***", "Content-Type": "application/json" }`);
       console.log(`[MQL Request] Body: ${JSON.stringify(payload)}`);
 
-      const mqlResponse = await fetch("https://api.dev.raisn.ai/api/lead/mql/batch/", {
-        method: "POST",
-        headers: {
-          "x-schema": mqlSchema,
-          "authorization": mqlApiKey,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
+      // Add 55-second timeout to prevent edge function from hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 55000);
+
+      let mqlResponse: Response;
+      try {
+        mqlResponse = await fetch("https://api.dev.raisn.ai/api/lead/mql/batch/", {
+          method: "POST",
+          headers: {
+            "x-schema": mqlSchema,
+            "authorization": mqlApiKey,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        
+        if (fetchError.name === 'AbortError') {
+          console.log(`[MQL Timeout] Lead ${lead.id}: MQL API timed out after 55 seconds`);
+          
+          await supabase.from("lead_enrichments").upsert({
+            lead_id: lead.id,
+            project_id: projectId,
+            enriched_at: new Date().toISOString(),
+            mql_rating: "N/A",
+            raw_response: { status: "TIMEOUT", error: "MQL API timeout after 55 seconds - retry later" },
+          }, { onConflict: "lead_id,project_id" });
+          
+          continue;
+        }
+        
+        throw fetchError;
+      }
 
       console.log(`[MQL Response] Status: ${mqlResponse.status} ${mqlResponse.statusText}`);
       console.log(`[MQL Response] Headers: ${JSON.stringify(Object.fromEntries(mqlResponse.headers.entries()))}`);
