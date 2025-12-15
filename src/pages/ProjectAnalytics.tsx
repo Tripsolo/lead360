@@ -234,7 +234,6 @@ const ProjectAnalytics = () => {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Source</TableHead>
-                        <TableHead>Sub Source</TableHead>
                         <TableHead className="text-center">Total</TableHead>
                         <TableHead className="text-center">Hot</TableHead>
                         <TableHead className="text-center">Warm</TableHead>
@@ -244,9 +243,8 @@ const ProjectAnalytics = () => {
                     </TableHeader>
                     <TableBody>
                       {analytics.sourcePerformance.map((source, index) => (
-                        <TableRow key={`${source.source}-${source.subSource}-${index}`}>
-                          <TableCell className="font-medium">{source.source}</TableCell>
-                          <TableCell>{source.subSource}</TableCell>
+                        <TableRow key={`${source.subSource}-${index}`}>
+                          <TableCell className="font-medium">{source.subSource}</TableCell>
                           <TableCell className="text-center">{source.total}</TableCell>
                           <TableCell className="text-center">
                             <Badge variant="outline" className="bg-rating-hot/10 text-rating-hot border-rating-hot/20">

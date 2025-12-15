@@ -11,7 +11,6 @@ interface ManagerStats {
 }
 
 interface SourceStats {
-  source: string;
   subSource: string;
   total: number;
   hot: number;
@@ -143,10 +142,8 @@ export function useProjectAnalytics(selectedProjectId: string | null) {
       const aiRating = latestAnalysis?.rating;
       const manualRating = lead.crm_data?.['Walkin Manual Rating'] as string | undefined;
       const managerName = (lead.crm_data?.['Name of Closing Manager'] as string) || 'Unknown';
-      const source = (lead.crm_data?.['Sales Walkin Source'] as string) || 'Unknown';
       const subSource = (lead.crm_data?.['Sales Walkin Sub Source'] as string) || 'Unknown';
-      const sourceKey = `${source}|||${subSource}`;
-
+      const sourceKey = subSource;
       // Count by AI rating
       if (aiRating === 'Hot') hotLeads++;
       else if (aiRating === 'Warm') warmLeads++;
@@ -191,18 +188,14 @@ export function useProjectAnalytics(selectedProjectId: string | null) {
       .sort((a, b) => b.total - a.total);
 
     const sourcePerformance: SourceStats[] = Array.from(sourceMap.entries())
-      .map(([key, stats]) => {
-        const [source, subSource] = key.split('|||');
-        return {
-          source,
-          subSource,
-          total: stats.total,
-          hot: stats.hot,
-          warm: stats.warm,
-          cold: stats.cold,
-          upgradePercentage: stats.total > 0 ? Math.round((stats.upgraded / stats.total) * 100) : 0
-        };
-      })
+      .map(([subSource, stats]) => ({
+        subSource,
+        total: stats.total,
+        hot: stats.hot,
+        warm: stats.warm,
+        cold: stats.cold,
+        upgradePercentage: stats.total > 0 ? Math.round((stats.upgraded / stats.total) * 100) : 0
+      }))
       .sort((a, b) => b.total - a.total);
 
     return {
