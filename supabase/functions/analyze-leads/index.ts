@@ -150,6 +150,9 @@ Return a JSON object with this EXACT structure:
   },
   "financial_signals": {
     "budget_stated_cr": number | null,
+    "quoted_price_cr": number | null,
+    "budget_gap_percent": number | null,  // Calculate: ((quoted_price - budget_stated) / quoted_price) * 100. Positive = over budget, Negative = under budget
+    "customer_mentioned_price_high": boolean,  // TRUE only if customer explicitly says "too expensive", "out of budget", "pricing gap", etc.
     "in_hand_funds_pct": number | null,
     "funding_source": "Self-Funding" | "Loan" | "Sale of Asset" | "Subvention Loan" | "Mixed" | null,
     "income_tier": "Elite" | "High" | "Mid-Senior" | "Entry-Mid" | null,
@@ -360,6 +363,9 @@ When generating persona_description, summary, and talking_points, reference the 
 
 4. **CONCERNS**: Reference engagement_evidence.objection_stated
    - Use direct customer words when available for accurate concern capture
+   - ⚠️ PRICE VALIDATION: Before adding "Price" to key_concerns, CHECK:
+     * If financial_signals.budget_gap_percent ≤ 20 AND customer_mentioned_price_high = false: DO NOT add Price
+     * Only add "Price" if gap > 20% OR customer explicitly complained about pricing
 
 5. **NEXT BEST ACTION**: Reference engagement_evidence.next_steps_stated and negotiation_asks
    - Tailor action based on stated next steps and any negotiation requests
@@ -1268,16 +1274,45 @@ Violations of this rule are unacceptable under any circumstances.`;
 - Summary: Maximum 30 words. Be concise and focused.
 - Next Best Action: Maximum 15 words. Keep it actionable and specific.`;
 
-    const concernGeneration = `#Key Concerns: These must be the CUSTOMER'S concerns about the project or specific unit they are considering. Focus on: price/budget gap, location/connectivity issues, possession date/timeline, unit configuration/size, amenities/facilities. DO NOT include generic sales concerns.
-- Concern Categories: For EACH key_concern, classify it into ONE of these categories (same order as key_concerns array):
-  1. "Price" - Budget gaps, pricing issues, financing concerns, EMI issues. Only show this as a concern if the customer mentions price being too high or there is abudget gap of more than 20%
-  2. "Location" - Connectivity, infrastructure, surroundings, pollution, traffic, facilities nearby
-  3. "Possession" - Delivery timeline, construction delays, handover dates
-  4. "Config" - Unit configuration, layout issues, view concerns, floor preference, carpet area
-  5. "Amenities" - Amenities in home or complex, facilities
-  6. "Trust" - Builder reputation, track record concerns
-  7. "Others" - Anything else
-- Primary Concern Category: The SINGLE most important concern category. If multiple concerns exist, pick the one that appears FIRST in the priority order above ( Location > Config > Price > Possession > Amenities > Trust > Others)`;
+    const concernGeneration = `# KEY CONCERNS GENERATION (CRITICAL - FOLLOW VALIDATION RULES EXACTLY)
+
+## DEFINITION
+Key concerns must be the CUSTOMER'S stated concerns about the project or specific unit.
+Focus on: location/connectivity, possession timeline, unit configuration/size, amenities, trust.
+
+## ⚠️ PRICE CONCERN VALIDATION (MANDATORY - HARD RULE)
+Before adding "Price" as a concern, you MUST validate ONE of these conditions is TRUE:
+
+CONDITION A: Customer EXPLICITLY mentioned price being too high
+- Check financial_signals.customer_mentioned_price_high = true
+- Examples of explicit mentions: "too expensive", "out of budget", "pricing gap", "price is high"
+
+CONDITION B: Budget gap is GREATER THAN 20%
+- Check financial_signals.budget_gap_percent > 20
+- If budget_gap_percent is null, 0, or ≤20: DO NOT add Price concern
+
+❌ DO NOT add "Price" as concern if:
+- Budget gap is 20% or less (e.g., 10%, 15%, 18%, 20%)
+- Customer did not explicitly complain about pricing
+- Gap is within normal negotiation range (≤20%)
+
+✅ ONLY add "Price" as concern if:
+- budget_gap_percent > 20, OR
+- customer_mentioned_price_high = true
+
+This is a NON-NEGOTIABLE rule. Gaps of 10-20% are NORMAL and should NOT trigger Price concerns.
+
+## CONCERN CATEGORIES (Priority Order for primary_concern_category):
+1. "Location" - Connectivity, infrastructure, surroundings, pollution, traffic
+2. "Config" - Unit configuration, layout, floor preference, carpet area
+3. "Possession" - Delivery timeline, construction delays
+4. "Price" - ONLY if validated per rules above (gap >20% OR explicit complaint)
+5. "Amenities" - Facilities, amenities concerns
+6. "Trust" - Builder reputation concerns
+7. "Others" - Anything else
+
+## PRIMARY CONCERN CATEGORY
+The SINGLE most important concern. Pick the one that appears FIRST in priority order above.`;
 
     const talkingpointsGeneration = `# TALKING POINTS GENERATION (CRITICAL - FOLLOW PRIORITY RULES):
 Generate 2-3 talking points TOTAL following these strict priority rules:
