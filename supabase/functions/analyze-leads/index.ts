@@ -734,15 +734,35 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Fetch project and brand metadata
-    const { data: project, error: projectError } = await supabase
-      .from("projects")
-      .select("*, brands(*)")
-      .eq("id", projectId)
-      .single();
+    // Fetch project and brand metadata with retry logic for transient failures
+    let project = null;
+    let projectError = null;
+    const maxRetries = 3;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      const result = await supabase
+        .from("projects")
+        .select("*, brands(*)")
+        .eq("id", projectId)
+        .single();
+      
+      project = result.data;
+      projectError = result.error;
+      
+      if (project && !projectError) {
+        break;
+      }
+      
+      console.warn(`Project fetch attempt ${attempt}/${maxRetries} failed:`, projectError?.message || "No data returned");
+      
+      if (attempt < maxRetries) {
+        // Wait before retry (exponential backoff: 500ms, 1000ms)
+        await new Promise(resolve => setTimeout(resolve, attempt * 500));
+      }
+    }
 
     if (projectError || !project) {
-      console.error("Error fetching project:", projectError);
+      console.error("Error fetching project after retries:", projectError);
       return new Response(JSON.stringify({ error: "Project not found" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
