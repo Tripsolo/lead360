@@ -11,6 +11,27 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Helper to convert Excel serial dates to ISO strings
+const excelDateToISOString = (excelDate: any): string | null => {
+  if (!excelDate) return null;
+  
+  // If it's already a valid ISO string or date string, return as-is
+  if (typeof excelDate === 'string' && isNaN(Number(excelDate))) {
+    return excelDate;
+  }
+  
+  // If it's a number (Excel serial date), convert it
+  if (typeof excelDate === 'number' || !isNaN(Number(excelDate))) {
+    const numDate = Number(excelDate);
+    // Excel dates start from 1900-01-01 (serial 1)
+    const excelEpoch = new Date(1899, 11, 30);
+    const jsDate = new Date(excelEpoch.getTime() + numDate * 24 * 60 * 60 * 1000);
+    return jsDate.toISOString();
+  }
+  
+  return null;
+};
+
 // ============= STAGE 1: Signal Extraction =============
 function buildStage1Prompt(
   leadDataJson: string,
@@ -1758,33 +1779,40 @@ Has Premium Cards: ${mqlEnrichment.has_premium_cards ? "Yes" : "No"}`;
           }
           
           // Store result immediately to database
-          await supabase.from("lead_analyses").upsert(
+          const { error: upsertError } = await supabase.from("lead_analyses").upsert(
             {
               lead_id: lead.id,
               project_id: projectId,
               rating: analysisResult.ai_rating,
               insights: analysisResult.summary || analysisResult.rating_rationale,
               full_analysis: analysisResult,
-              revisit_date_at_analysis: lead.rawData?.["Latest Revisit Date"] || null,
+              revisit_date_at_analysis: excelDateToISOString(lead.rawData?.["Latest Revisit Date"]),
             },
             { onConflict: "lead_id,project_id" },
           );
           
-          console.log(`Lead ${lead.id} analysis stored to database`);
+          if (upsertError) {
+            console.error(`Failed to store analysis for lead ${lead.id}:`, upsertError);
+          } else {
+            console.log(`Lead ${lead.id} analysis stored to database`);
+          }
         } catch (error) {
           console.error(`Failed to process Stage 2 for lead ${lead.id}:`, error);
           // Store fallback result
-          await supabase.from("lead_analyses").upsert(
+          const { error: fallbackError } = await supabase.from("lead_analyses").upsert(
             {
               lead_id: lead.id,
               project_id: projectId,
               rating: "Warm",
               insights: "Analysis failed",
               full_analysis: {},
-              revisit_date_at_analysis: lead.rawData?.["Latest Revisit Date"] || null,
+              revisit_date_at_analysis: excelDateToISOString(lead.rawData?.["Latest Revisit Date"]),
             },
             { onConflict: "lead_id,project_id" },
           );
+          if (fallbackError) {
+            console.error(`Failed to store fallback for lead ${lead.id}:`, fallbackError);
+          }
         }
       }
       
