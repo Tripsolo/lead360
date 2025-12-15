@@ -30,18 +30,38 @@ const formatBudget = (value: number | string | null | undefined): string => {
 };
 
 // Helper to format in-hand funds as percentage
-const formatInHandFunds = (value: number | string | null | undefined): string => {
+const formatInHandFunds = (
+  value: number | string | null | undefined,
+  budgetValue: number | string | null | undefined
+): string => {
   if (value == null || value === '' || value === 0) return 'No data available';
   
   const numValue = typeof value === 'string' ? parseFloat(value) : value;
   if (isNaN(numValue) || numValue === 0) return 'No data available';
   
-  // If value is a valid percentage (0-100)
-  if (numValue <= 100) {
+  // Case 1: Decimal (0-1) - multiply by 100
+  if (numValue > 0 && numValue < 1) {
+    return `${Math.round(numValue * 100)}%`;
+  }
+  
+  // Case 2: Already percentage (1-100)
+  if (numValue >= 1 && numValue <= 100) {
     return `${Math.round(numValue)}%`;
   }
   
-  // For raw amounts, we can't reliably convert to percentage
+  // Case 3: Raw rupee amount (>100) - calculate percentage from budget
+  if (numValue > 100 && budgetValue != null) {
+    const budgetNum = typeof budgetValue === 'string' ? parseFloat(budgetValue) : budgetValue;
+    if (!isNaN(budgetNum) && budgetNum > 0) {
+      // Convert budget to same unit as in_hand_funds (rupees)
+      const budgetInRupees = budgetNum < 100 ? budgetNum * 10000000 : budgetNum;
+      const percentage = (numValue / budgetInRupees) * 100;
+      if (percentage >= 0 && percentage <= 100) {
+        return `${Math.round(percentage)}%`;
+      }
+    }
+  }
+  
   return 'No data available';
 };
 
@@ -325,7 +345,7 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
               <div className="p-3 bg-muted rounded-lg">
                 <p className="text-xs text-muted-foreground mb-1">In-Hand Funds</p>
                 <p className="font-semibold">
-                  {formatInHandFunds(analysis?.extracted_signals?.in_hand_funds)}
+                  {formatInHandFunds(analysis?.extracted_signals?.in_hand_funds, analysis?.extracted_signals?.budget_stated)}
                 </p>
               </div>
               <div className="p-3 bg-muted rounded-lg">
