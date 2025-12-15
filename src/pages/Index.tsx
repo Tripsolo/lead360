@@ -432,54 +432,73 @@ const Index = () => {
   const handleEnrichLeads = async () => {
     setIsEnriching(true);
     try {
-      // Split leads into smaller batches (max 3 per batch) to avoid timeout
-      const BATCH_SIZE = 3;
+      // Process 1 lead per function call (synchronous processing)
       const allLeads = leads.map(l => ({ id: l.id, name: l.name, phone: l.phone }));
-      const batches: typeof allLeads[] = [];
+      const totalLeads = allLeads.length;
       
-      for (let i = 0; i < allLeads.length; i += BATCH_SIZE) {
-        batches.push(allLeads.slice(i, i + BATCH_SIZE));
-      }
-
-      const leadIdsToCheck = allLeads.map(l => l.id);
+      let enrichedCount = 0;
+      let noDataCount = 0;
+      let failedCount = 0;
       
       toast({
         title: 'Starting enrichment',
-        description: `Processing ${allLeads.length} leads in ${batches.length} batches...`,
+        description: `Processing ${totalLeads} leads (1 at a time)...`,
       });
 
-      // Start all batch function calls sequentially (they process in background)
-      for (let i = 0; i < batches.length; i++) {
-        const batch = batches[i];
-        const percentInitiated = Math.round(((i + 1) / batches.length) * 100);
+      for (let i = 0; i < allLeads.length; i++) {
+        const lead = allLeads[i];
+        const percentComplete = Math.round(((i + 1) / totalLeads) * 100);
         
-        console.log(`Starting enrichment batch ${i + 1}/${batches.length} with ${batch.length} leads`);
+        console.log(`Enriching lead ${i + 1}/${totalLeads}: ${lead.id}`);
         
-        const { error } = await supabase.functions.invoke('enrich-leads', {
-          body: { 
-            leads: batch,
-            projectId: selectedProjectId
-          },
-        });
+        try {
+          const { data, error } = await supabase.functions.invoke('enrich-leads', {
+            body: { 
+              leads: [lead], // Send 1 lead at a time
+              projectId: selectedProjectId
+            },
+          });
 
-        if (error) {
-          console.error(`Batch ${i + 1} error:`, error);
+          if (error) {
+            console.error(`Lead ${i + 1} error:`, error);
+            failedCount++;
+          } else if (data?.enrichments?.[0]) {
+            const enrichment = data.enrichments[0];
+            // Update UI immediately with this enrichment
+            updateLeadsWithEnrichments([enrichment]);
+            
+            if (enrichment.mql_rating && enrichment.mql_rating !== 'N/A') {
+              enrichedCount++;
+            } else {
+              noDataCount++;
+            }
+          }
+        } catch (err) {
+          console.error(`Lead ${i + 1} exception:`, err);
+          failedCount++;
         }
 
-        // Show batch initiation progress
+        // Show progress
         toast({
-          title: 'Batches initiated',
-          description: `${percentInitiated}% of batches started (${i + 1}/${batches.length})...`,
+          title: 'Enrichment in progress',
+          description: `${percentComplete}% complete (${i + 1}/${totalLeads} leads)...`,
         });
 
-        // Small delay between batch initiations to avoid overwhelming the API
-        if (i < batches.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
+        // Delay between calls to avoid rate limiting (2 seconds)
+        if (i < allLeads.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
 
-      // Poll for all results
-      await pollForEnrichmentResults(leadIdsToCheck);
+      // Final summary
+      let description = `Complete: ${enrichedCount} enriched`;
+      if (noDataCount > 0) description += `, ${noDataCount} no data`;
+      if (failedCount > 0) description += `, ${failedCount} failed`;
+      
+      toast({
+        title: 'Enrichment complete',
+        description,
+      });
 
     } catch (error) {
       console.error('Enrichment error:', error);

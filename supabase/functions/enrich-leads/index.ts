@@ -447,10 +447,10 @@ serve(async (req) => {
       );
     }
 
-    // Start background processing
-    console.log(`[enrich-leads] Starting background processing for ${leadsToEnrich.length} leads`);
+    // Process synchronously (1 lead per function call pattern)
+    console.log(`[enrich-leads] Processing ${leadsToEnrich.length} lead(s) synchronously`);
     
-    const backgroundPromise = processEnrichmentBatch(
+    await processEnrichmentBatch(
       leadsToEnrich,
       projectId,
       projectData.name,
@@ -459,54 +459,33 @@ serve(async (req) => {
       supabaseUrl,
       supabaseKey
     );
+    
+    // Fetch all enrichments after processing
+    const { data: allEnrichments } = await supabase
+      .from("lead_enrichments")
+      .select("*")
+      .in("lead_id", leadIds)
+      .eq("project_id", projectId);
 
-    // Check if EdgeRuntime is available (Supabase Edge Functions)
-    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) {
-      EdgeRuntime.waitUntil(backgroundPromise);
-      
-      return new Response(
-        JSON.stringify({
-          status: "processing",
-          message: `Started enrichment for ${leadsToEnrich.length} leads. Results will be available shortly.`,
-          meta: {
-            total: leads.length,
-            toEnrich: leadsToEnrich.length,
-            cached: enrichedLeadIds.size,
-            leadsToEnrichIds: leadsToEnrich.map((l: LeadToEnrich) => l.id),
-          },
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    } else {
-      // Fallback: wait for processing to complete (for local testing)
-      console.log("[enrich-leads] EdgeRuntime not available, processing synchronously");
-      await backgroundPromise;
-      
-      // Fetch all enrichments after processing
-      const { data: allEnrichments } = await supabase
-        .from("lead_enrichments")
-        .select("*")
-        .in("lead_id", leadIds)
-        .eq("project_id", projectId);
+    const successCount = allEnrichments?.filter(e => e.mql_rating && e.mql_rating !== "N/A").length || 0;
+    const noDataCount = allEnrichments?.filter(e => e.mql_rating === "N/A").length || 0;
 
-      const successCount = allEnrichments?.filter(e => e.mql_rating !== "N/A").length || 0;
-      const failedCount = allEnrichments?.filter(e => e.mql_rating === "N/A").length || 0;
+    console.log(`[enrich-leads] Complete: ${successCount} enriched, ${noDataCount} no data`);
 
-      return new Response(
-        JSON.stringify({
-          results: leadIds.map((id: string) => ({ leadId: id, success: true })),
-          enrichments: allEnrichments || [],
-          meta: {
-            total: leads.length,
-            enriched: successCount,
-            cached: enrichedLeadIds.size,
-            failed: failedCount,
-            failedLeadIds: allEnrichments?.filter(e => e.mql_rating === "N/A").map(e => e.lead_id) || [],
-          },
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
+    return new Response(
+      JSON.stringify({
+        status: "complete",
+        results: leadIds.map((id: string) => ({ leadId: id, success: true })),
+        enrichments: allEnrichments || [],
+        meta: {
+          total: leads.length,
+          enriched: successCount,
+          cached: enrichedLeadIds.size,
+          noData: noDataCount,
+        },
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   } catch (error) {
     console.error("[enrich-leads] Error:", error);
     return new Response(
@@ -518,8 +497,3 @@ serve(async (req) => {
     );
   }
 });
-
-// Type declaration for EdgeRuntime
-declare const EdgeRuntime: {
-  waitUntil: (promise: Promise<any>) => void;
-} | undefined;
