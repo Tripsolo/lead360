@@ -260,6 +260,7 @@ const ProjectAnalytics = () => {
                             <SortIcon field="upgradePercentage" currentField={managerSortField} direction={managerSortDirection} />
                           </Button>
                         </TableHead>
+                        <TableHead className="text-center">Avg CIS</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -284,6 +285,20 @@ const ProjectAnalytics = () => {
                           </TableCell>
                           <TableCell className="text-center">
                             <Badge variant="secondary">{manager.upgradePercentage}%</Badge>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge 
+                              variant="outline" 
+                              className={
+                                manager.avgCIS >= 70 
+                                  ? "bg-rating-hot/10 text-rating-hot border-rating-hot/20" 
+                                  : manager.avgCIS >= 50 
+                                    ? "bg-rating-warm/10 text-rating-warm border-rating-warm/20" 
+                                    : "bg-rating-cold/10 text-rating-cold border-rating-cold/20"
+                              }
+                            >
+                              {manager.avgCIS > 0 ? manager.avgCIS : 'N/A'}
+                            </Badge>
                           </TableCell>
                         </TableRow>
                       ))}
