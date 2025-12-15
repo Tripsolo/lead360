@@ -1,0 +1,212 @@
+import { useState, useEffect, useMemo } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+
+interface ManagerStats {
+  name: string;
+  total: number;
+  hot: number;
+  warm: number;
+  cold: number;
+  upgradePercentage: number;
+}
+
+interface SourceStats {
+  source: string;
+  subSource: string;
+  total: number;
+  hot: number;
+  warm: number;
+  cold: number;
+  upgradePercentage: number;
+}
+
+interface ProjectAnalyticsData {
+  totalLeads: number;
+  analyzedLeads: number;
+  hotLeads: number;
+  warmLeads: number;
+  coldLeads: number;
+  upgradePercentage: number;
+  managerPerformance: ManagerStats[];
+  sourcePerformance: SourceStats[];
+}
+
+interface LeadWithAnalysis {
+  lead_id: string;
+  project_id: string | null;
+  crm_data: Record<string, unknown>;
+  lead_analyses: Array<{
+    rating: string;
+    analyzed_at: string;
+  }>;
+}
+
+const RATING_VALUE: Record<string, number> = {
+  'Hot': 3,
+  'Warm': 2,
+  'Cold': 1
+};
+
+const isUpgraded = (manualRating: string | null | undefined, aiRating: string | null | undefined): boolean => {
+  if (!manualRating || !aiRating) return false;
+  const manual = RATING_VALUE[manualRating] || 0;
+  const ai = RATING_VALUE[aiRating] || 0;
+  return ai > manual;
+};
+
+export function useProjectAnalytics(selectedProjectId: string | null) {
+  const [leads, setLeads] = useState<LeadWithAnalysis[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        // Fetch leads
+        let leadsQuery = supabase
+          .from('leads')
+          .select('lead_id, project_id, crm_data');
+
+        if (selectedProjectId && selectedProjectId !== 'all') {
+          leadsQuery = leadsQuery.eq('project_id', selectedProjectId);
+        }
+
+        const { data: leadsData, error: leadsError } = await leadsQuery;
+        if (leadsError) throw leadsError;
+
+        // Fetch all analyses
+        const { data: analysesData, error: analysesError } = await supabase
+          .from('lead_analyses')
+          .select('lead_id, rating, analyzed_at');
+        if (analysesError) throw analysesError;
+
+        // Map analyses to leads
+        const analysesMap = new Map<string, Array<{ rating: string; analyzed_at: string }>>();
+        (analysesData || []).forEach((analysis) => {
+          const key = analysis.lead_id;
+          if (!analysesMap.has(key)) {
+            analysesMap.set(key, []);
+          }
+          analysesMap.get(key)!.push({
+            rating: analysis.rating,
+            analyzed_at: analysis.analyzed_at
+          });
+        });
+
+        const combinedData: LeadWithAnalysis[] = (leadsData || []).map((lead) => ({
+          lead_id: lead.lead_id,
+          project_id: lead.project_id,
+          crm_data: lead.crm_data as Record<string, unknown>,
+          lead_analyses: analysesMap.get(lead.lead_id) || []
+        }));
+
+        setLeads(combinedData);
+      } catch (err) {
+        console.error('Error fetching analytics data:', err);
+        setError(err instanceof Error ? err.message : 'Failed to fetch analytics data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [selectedProjectId]);
+
+  const analytics = useMemo((): ProjectAnalyticsData => {
+    const analyzedLeads = leads.filter(l => l.lead_analyses && l.lead_analyses.length > 0);
+    
+    let hotLeads = 0;
+    let warmLeads = 0;
+    let coldLeads = 0;
+    let upgradedCount = 0;
+
+    const managerMap = new Map<string, { total: number; hot: number; warm: number; cold: number; upgraded: number }>();
+    const sourceMap = new Map<string, { total: number; hot: number; warm: number; cold: number; upgraded: number }>();
+
+    analyzedLeads.forEach(lead => {
+      const latestAnalysis = lead.lead_analyses.sort(
+        (a, b) => new Date(b.analyzed_at).getTime() - new Date(a.analyzed_at).getTime()
+      )[0];
+      
+      const aiRating = latestAnalysis?.rating;
+      const manualRating = lead.crm_data?.['Walkin Manual Rating'] as string | undefined;
+      const managerName = (lead.crm_data?.['Name of Closing Manager'] as string) || 'Unknown';
+      const source = (lead.crm_data?.['Sales Walkin Source'] as string) || 'Unknown';
+      const subSource = (lead.crm_data?.['Sales Walkin Sub Source'] as string) || 'Unknown';
+      const sourceKey = `${source}|||${subSource}`;
+
+      // Count by AI rating
+      if (aiRating === 'Hot') hotLeads++;
+      else if (aiRating === 'Warm') warmLeads++;
+      else if (aiRating === 'Cold') coldLeads++;
+
+      // Check if upgraded
+      const upgraded = isUpgraded(manualRating, aiRating);
+      if (upgraded) upgradedCount++;
+
+      // Manager stats
+      if (!managerMap.has(managerName)) {
+        managerMap.set(managerName, { total: 0, hot: 0, warm: 0, cold: 0, upgraded: 0 });
+      }
+      const managerStats = managerMap.get(managerName)!;
+      managerStats.total++;
+      if (aiRating === 'Hot') managerStats.hot++;
+      else if (aiRating === 'Warm') managerStats.warm++;
+      else if (aiRating === 'Cold') managerStats.cold++;
+      if (upgraded) managerStats.upgraded++;
+
+      // Source stats
+      if (!sourceMap.has(sourceKey)) {
+        sourceMap.set(sourceKey, { total: 0, hot: 0, warm: 0, cold: 0, upgraded: 0 });
+      }
+      const sourceStats = sourceMap.get(sourceKey)!;
+      sourceStats.total++;
+      if (aiRating === 'Hot') sourceStats.hot++;
+      else if (aiRating === 'Warm') sourceStats.warm++;
+      else if (aiRating === 'Cold') sourceStats.cold++;
+      if (upgraded) sourceStats.upgraded++;
+    });
+
+    const managerPerformance: ManagerStats[] = Array.from(managerMap.entries())
+      .map(([name, stats]) => ({
+        name,
+        total: stats.total,
+        hot: stats.hot,
+        warm: stats.warm,
+        cold: stats.cold,
+        upgradePercentage: stats.total > 0 ? Math.round((stats.upgraded / stats.total) * 100) : 0
+      }))
+      .sort((a, b) => b.total - a.total);
+
+    const sourcePerformance: SourceStats[] = Array.from(sourceMap.entries())
+      .map(([key, stats]) => {
+        const [source, subSource] = key.split('|||');
+        return {
+          source,
+          subSource,
+          total: stats.total,
+          hot: stats.hot,
+          warm: stats.warm,
+          cold: stats.cold,
+          upgradePercentage: stats.total > 0 ? Math.round((stats.upgraded / stats.total) * 100) : 0
+        };
+      })
+      .sort((a, b) => b.total - a.total);
+
+    return {
+      totalLeads: leads.length,
+      analyzedLeads: analyzedLeads.length,
+      hotLeads,
+      warmLeads,
+      coldLeads,
+      upgradePercentage: analyzedLeads.length > 0 ? Math.round((upgradedCount / analyzedLeads.length) * 100) : 0,
+      managerPerformance,
+      sourcePerformance
+    };
+  }, [leads]);
+
+  return { analytics, loading, error };
+}
