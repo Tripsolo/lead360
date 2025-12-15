@@ -8,6 +8,7 @@ interface ManagerStats {
   warm: number;
   cold: number;
   upgradePercentage: number;
+  avgCIS: number;
 }
 
 interface SourceStats {
@@ -142,7 +143,7 @@ export function useProjectAnalytics(selectedProjectId: string | null) {
     let coldLeads = 0;
     let upgradedCount = 0;
 
-    const managerMap = new Map<string, { total: number; hot: number; warm: number; cold: number; upgraded: number }>();
+    const managerMap = new Map<string, { total: number; hot: number; warm: number; cold: number; upgraded: number; cisSum: number; cisCount: number }>();
     const sourceMap = new Map<string, { total: number; hot: number; warm: number; cold: number; upgraded: number }>();
     const concernMap = new Map<string, { 
       count: number; 
@@ -161,11 +162,16 @@ export function useProjectAnalytics(selectedProjectId: string | null) {
       const subSource = (lead.crm_data?.['Sales Walkin Sub Source'] as string) || 'Unknown';
       const sourceKey = subSource;
       
-      // Extract concern, persona, and profession from full_analysis
+      // Extract concern, persona, profession, and CIS from full_analysis
       const fullAnalysis = latestAnalysis?.full_analysis;
       const primaryConcern = (fullAnalysis?.primary_concern_category as string) || null;
       const persona = (fullAnalysis?.persona as string) || 'Unknown';
       const profession = (lead.crm_data?.['Occupation'] as string) || 'Unknown';
+      
+      // Extract CIS from extracted_signals
+      const extractedSignals = fullAnalysis?.extracted_signals as Record<string, unknown> | undefined;
+      const crmCompliance = extractedSignals?.crm_compliance_assessment as Record<string, unknown> | undefined;
+      const cisTotal = (crmCompliance?.cis_total as number) || null;
 
       // Count by AI rating
       if (aiRating === 'Hot') hotLeads++;
@@ -178,7 +184,7 @@ export function useProjectAnalytics(selectedProjectId: string | null) {
 
       // Manager stats
       if (!managerMap.has(managerName)) {
-        managerMap.set(managerName, { total: 0, hot: 0, warm: 0, cold: 0, upgraded: 0 });
+        managerMap.set(managerName, { total: 0, hot: 0, warm: 0, cold: 0, upgraded: 0, cisSum: 0, cisCount: 0 });
       }
       const managerStats = managerMap.get(managerName)!;
       managerStats.total++;
@@ -186,6 +192,10 @@ export function useProjectAnalytics(selectedProjectId: string | null) {
       else if (aiRating === 'Warm') managerStats.warm++;
       else if (aiRating === 'Cold') managerStats.cold++;
       if (upgraded) managerStats.upgraded++;
+      if (cisTotal !== null) {
+        managerStats.cisSum += cisTotal;
+        managerStats.cisCount++;
+      }
 
       // Source stats
       if (!sourceMap.has(sourceKey)) {
@@ -221,7 +231,8 @@ export function useProjectAnalytics(selectedProjectId: string | null) {
         hot: stats.hot,
         warm: stats.warm,
         cold: stats.cold,
-        upgradePercentage: stats.total > 0 ? Math.round((stats.upgraded / stats.total) * 100) : 0
+        upgradePercentage: stats.total > 0 ? Math.round((stats.upgraded / stats.total) * 100) : 0,
+        avgCIS: stats.cisCount > 0 ? Math.round(stats.cisSum / stats.cisCount) : 0
       }))
       .sort((a, b) => b.total - a.total);
 

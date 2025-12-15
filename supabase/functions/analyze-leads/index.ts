@@ -119,7 +119,37 @@ Extract structured signals from the CRM and MQL data provided. Transform raw val
 - For sample_response_quote, capture exact feedback about sample flat visit
 - For competitor_comparison_quote, capture exact price/feature comparisons stated by customer
 - If no evidence available for a field, set to null (NEVER fabricate quotes or facts)
-- Evidence sections ground the Stage 2 outputs in real data, preventing hallucination`;
+- Evidence sections ground the Stage 2 outputs in real data, preventing hallucination
+
+## CRM COMPLIANCE ASSESSMENT (CIS) - Evaluate CRM Entry Quality
+
+### Compliance Score (50 points total) - Award 5 points for each field present with valid data:
+1. has_budget: Budget mentioned (number or range stated in visit comments)
+2. has_carpet_requirement: Carpet area in sqft or BHK preference mentioned
+3. has_in_hand_funds: Any in-hand/down payment amount mentioned
+4. has_finalization_timeline: Decision timeframe stated (days/weeks/months)
+5. has_possession_preference: Possession timeline or stage preference mentioned
+6. has_core_motivation: Clear buying reason documented (upgrade, investment, end-use)
+7. has_current_residence: Current home details (location, size, type) documented
+8. has_family_composition: Family members/composition described
+9. has_income_funding: Salary range, loan eligibility, or funding method mentioned
+10. has_spot_closure_attempt: Evidence manager asked for booking/cheque/commitment
+
+### Insight Depth Score (50 points total):
+- has_competitor_comparison: 10 pts if competitor name + price/carpet detailed; 5 pts if only name. Set competitor_detail_quality accordingly.
+- has_pricing_gap_quantified: 5 pts if specific rupee/percentage gap documented
+- has_sample_flat_feedback: 5 pts if customer reaction captured. sample_feedback_quality = "Detailed" if specific likes/dislikes, "Basic" if just positive/negative
+- has_roots_feedback: 5 pts if specific park/township feedback captured
+- has_non_booking_reason: 10 pts if actionable reason documented; 5 pts if generic. Set non_booking_reason_quality accordingly.
+- has_decision_maker_context: 5 pts if clear who needs to decide/be consulted
+- has_lifestyle_context: 5 pts if specific lifestyle needs/preferences captured
+- remarks_word_count: Count total words in "Remarks in Detail" or "Visit Comments". Award 5 pts if >50 words.
+
+### CIS Calculation:
+- compliance_score: Sum of compliance points (0-50)
+- insight_score: Sum of insight points (0-50)
+- cis_total: compliance_score + insight_score (0-100)
+- cis_rating: >=90 "Exceptional", >=70 "Good", >=50 "Adequate", >=30 "Needs Improvement", <30 "Poor"`;
 
   const extractionOutputSchema = `# EXTRACTION OUTPUT STRUCTURE
 Return a JSON object with this EXACT structure:
@@ -237,6 +267,34 @@ Return a JSON object with this EXACT structure:
   "visit_notes_summary": "30-word summary of visit experience and feedback",
   "brand_loyalty": boolean,
   "mql_data_available": ${mqlAvailable},
+  
+  "crm_compliance_assessment": {
+    "has_budget": boolean,
+    "has_carpet_requirement": boolean,
+    "has_in_hand_funds": boolean,
+    "has_finalization_timeline": boolean,
+    "has_possession_preference": boolean,
+    "has_core_motivation": boolean,
+    "has_current_residence": boolean,
+    "has_family_composition": boolean,
+    "has_income_funding": boolean,
+    "has_spot_closure_attempt": boolean,
+    "has_competitor_comparison": boolean,
+    "competitor_detail_quality": "Detailed" | "Basic" | "Missing",
+    "has_pricing_gap_quantified": boolean,
+    "has_sample_flat_feedback": boolean,
+    "sample_feedback_quality": "Detailed" | "Basic" | "Missing",
+    "has_roots_feedback": boolean,
+    "has_non_booking_reason": boolean,
+    "non_booking_reason_quality": "Actionable" | "Generic" | "Missing",
+    "has_decision_maker_context": boolean,
+    "has_lifestyle_context": boolean,
+    "remarks_word_count": number,
+    "compliance_score": number,
+    "insight_score": number,
+    "cis_total": number,
+    "cis_rating": "Exceptional" | "Good" | "Adequate" | "Needs Improvement" | "Poor"
+  },
   
   "demographics_evidence": {
     "family_composition": "string | null",
