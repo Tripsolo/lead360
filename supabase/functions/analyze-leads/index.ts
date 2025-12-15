@@ -416,7 +416,7 @@ async function callGeminiAPI(
       }
 
       response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent?key=${googleApiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${googleApiKey}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
