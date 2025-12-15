@@ -929,10 +929,20 @@ const Index = () => {
             <h1 className="text-3xl font-bold">Customer360</h1>
             <p className="text-sm text-muted-foreground">Powered by Raisn.ai</p>
           </div>
-          <Button variant="outline" onClick={handleLogout} size="sm">
-            <LogOut className="mr-2 h-4 w-4" />
-            Logout
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => navigate('/project-analytics')} 
+              size="sm"
+            >
+              <BarChart3 className="mr-2 h-4 w-4" />
+              View Analytics
+            </Button>
+            <Button variant="outline" onClick={handleLogout} size="sm">
+              <LogOut className="mr-2 h-4 w-4" />
+              Logout
+            </Button>
+          </div>
         </div>
 
         {leads.length === 0 ? (
