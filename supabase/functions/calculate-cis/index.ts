@@ -80,13 +80,12 @@ serve(async (req) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: 'claude-sonnet-4-5',
+            model: 'google/gemini-2.5-flash',
             messages: [
               { role: 'system', content: CIS_PROMPT },
               { role: 'user', content: JSON.stringify(crmSummary) }
             ],
-            max_tokens: 500,
-            temperature: 0.1
+            max_tokens: 500
           })
         });
 
