@@ -6,32 +6,40 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const CIS_PROMPT = `Evaluate CRM data quality and return a JSON object with CIS scores.
+const CIS_PROMPT = `Evaluate the quality of CRM visit comments and return a CIS (Compliance & Insight Score).
 
-**Compliance Score (50 pts)** - 5 pts each for these fields if filled with meaningful data:
-1. customerName 2. phone 3. occupation 4. currentResidence 5. workLocation 
-6. budgetRange 7. configPreference 8. visitComments 9. managerRating 10. nextFollowUp
+**COMPLIANCE SCORE (50 pts)** - Check if these required data points are captured in comments:
+- Budget mentioned (e.g., "1.3Cr", "Budget: 1.5Cr"): 5 pts
+- Carpet area requirement (e.g., "Carpet: 950sqft", "Looking for 1000+ carpet"): 5 pts
+- In-hand funds (e.g., "In hand: 50L", "Ready funds: 40%"): 5 pts
+- Finalization timeline (e.g., "Finalization: 2 weeks", "Decision by month-end"): 5 pts
+- Possession preference (e.g., "Possession: ASAP", "Ready to move", "2026 okay"): 5 pts
+- Core motivation (e.g., "Upgrade", "Investment", "End-use", "Relocation"): 5 pts
+- Current residence details (e.g., "Currently in 2BHK Thane", "Renting in Mumbai"): 5 pts
+- Family composition (e.g., "Couple + 2 kids", "Joint family", "Nuclear family"): 5 pts
+- Income/funding source (e.g., "Salaried IT", "Business owner", "NRI", "Loan eligible"): 5 pts
+- Spot closure attempted (e.g., "Token discussed", "Tried closing", "Offered discount"): 5 pts
 
-**Insight Depth Score (50 pts)** - Points for quality insights in visit comments:
-- Customer motivation/timeline mentioned: 10 pts
-- Competitor comparison noted: 10 pts  
-- Specific objections/concerns captured: 10 pts
-- Family/decision-maker info: 5 pts
-- Budget constraints detailed: 5 pts
-- Property preferences specific: 5 pts
-- Negotiation points noted: 5 pts
+**INSIGHT DEPTH SCORE (50 pts)** - Quality of insights captured:
+- Competitor comparison with specific details (name, price, carpet area): 10 pts
+- Pricing gap quantified (e.g., "Gap of 15L", "Expects 10% discount"): 8 pts
+- Sample flat/roots feedback with specific observations: 8 pts
+- Non-booking reason clearly documented: 8 pts
+- Decision maker context (who needs to be consulted, family dynamics): 6 pts
+- Lifestyle/family context beyond basic facts: 5 pts
+- Detailed narrative with specific observations (>50 words): 5 pts
 
-Return ONLY this JSON structure:
+Return ONLY this JSON:
 {
   "compliance_score": <0-50>,
   "insight_score": <0-50>,
   "cis_total": <0-100>,
-  "cis_rating": "<Excellent|Good|Average|Poor>",
-  "compliance_flags": {"customerName":true/false,...},
-  "insight_flags": {"motivation":true/false,...}
+  "cis_rating": "<Exceptional|Good|Adequate|Needs Improvement|Poor>",
+  "compliance_flags": {"budget":true/false,"carpet":true/false,"in_hand_funds":true/false,"finalization_time":true/false,"possession_preference":true/false,"core_motivation":true/false,"current_residence":true/false,"family_composition":true/false,"income_funding":true/false,"spot_closure_attempted":true/false},
+  "insight_flags": {"competitor_details":true/false,"pricing_gap_quantified":true/false,"sample_flat_feedback":true/false,"non_booking_reason":true/false,"decision_maker_context":true/false,"lifestyle_context":true/false,"detailed_narrative":true/false}
 }
 
-CIS Rating: Excellent (85+), Good (70-84), Average (50-69), Poor (<50)`;
+CIS Rating: Exceptional (90+), Good (70-89), Adequate (50-69), Needs Improvement (30-49), Poor (<30)`;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -60,18 +68,13 @@ serve(async (req) => {
     for (const lead of leads) {
       try {
         const crm = lead.crmData || {};
-        const crmSummary = {
-          customerName: crm['Customer Name'] || '',
-          phone: crm['Cust Mobile'] || '',
-          occupation: crm['Occupation'] || '',
-          currentResidence: crm['Area of Residence'] || '',
-          workLocation: crm['Work Location'] || '',
-          budgetRange: crm['Budget'] || '',
-          configPreference: crm['Config Interested'] || '',
-          visitComments: `${crm['Visit Comment'] || ''} ${crm['Revisit Comments'] || ''}`.trim(),
-          managerRating: crm['Walkin Manual Rating'] || '',
-          nextFollowUp: crm['Revisit Date'] || ''
-        };
+        const visitComments = `${crm['Visit Comments (Not for Reports)'] || ''} ${crm['Site Re-Visit Comment'] || ''}`.trim();
+        
+        if (!visitComments) {
+          console.log(`No comments for ${lead.leadId}, skipping`);
+          results.push({ leadId: lead.leadId, cis: 0, error: 'No comments' });
+          continue;
+        }
 
         const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
           method: 'POST',
@@ -83,7 +86,7 @@ serve(async (req) => {
             model: 'google/gemini-2.5-flash',
             messages: [
               { role: 'system', content: CIS_PROMPT },
-              { role: 'user', content: JSON.stringify(crmSummary) }
+              { role: 'user', content: visitComments }
             ],
             max_tokens: 500
           })
