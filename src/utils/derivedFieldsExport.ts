@@ -254,26 +254,26 @@ export const exportDerivedFieldsToCSV = async (projectId?: string): Promise<void
       compliance_score: cisData?.compliance_score || null,
       insight_score: cisData?.insight_score || null,
       
-      // CIS Compliance Flags
-      has_budget: complianceFlags?.has_budget ? 'Yes' : 'No',
-      has_carpet_requirement: complianceFlags?.has_carpet_requirement ? 'Yes' : 'No',
-      has_in_hand_funds: complianceFlags?.has_in_hand_funds ? 'Yes' : 'No',
-      has_timeline: complianceFlags?.has_timeline ? 'Yes' : 'No',
-      has_possession_preference: complianceFlags?.has_possession_preference ? 'Yes' : 'No',
-      has_core_motivation: complianceFlags?.has_core_motivation ? 'Yes' : 'No',
-      has_current_residence: complianceFlags?.has_current_residence ? 'Yes' : 'No',
-      has_family_composition: complianceFlags?.has_family_composition ? 'Yes' : 'No',
-      has_income_funding: complianceFlags?.has_income_funding ? 'Yes' : 'No',
-      has_spot_closure_attempt: complianceFlags?.has_spot_closure_attempt ? 'Yes' : 'No',
+      // CIS Compliance Flags (using actual database field names)
+      has_budget: complianceFlags?.budget ? 'Yes' : 'No',
+      has_carpet_requirement: complianceFlags?.carpet ? 'Yes' : 'No',
+      has_in_hand_funds: complianceFlags?.in_hand_funds ? 'Yes' : 'No',
+      has_timeline: complianceFlags?.finalization_time ? 'Yes' : 'No',
+      has_possession_preference: complianceFlags?.possession_preference ? 'Yes' : 'No',
+      has_core_motivation: complianceFlags?.core_motivation ? 'Yes' : 'No',
+      has_current_residence: complianceFlags?.current_residence ? 'Yes' : 'No',
+      has_family_composition: complianceFlags?.family_composition ? 'Yes' : 'No',
+      has_income_funding: complianceFlags?.income_funding ? 'Yes' : 'No',
+      has_spot_closure_attempt: complianceFlags?.spot_closure_attempted ? 'Yes' : 'No',
       
-      // CIS Insight Flags
-      has_competitor_comparison: insightFlags?.has_competitor_comparison ? 'Yes' : 'No',
-      has_pricing_gap_quantified: insightFlags?.has_pricing_gap_quantified ? 'Yes' : 'No',
-      has_sample_feedback: insightFlags?.has_sample_feedback ? 'Yes' : 'No',
-      has_non_booking_reason: insightFlags?.has_non_booking_reason ? 'Yes' : 'No',
-      has_decision_maker_context: insightFlags?.has_decision_maker_context ? 'Yes' : 'No',
-      has_lifestyle_context: insightFlags?.has_lifestyle_context ? 'Yes' : 'No',
-      has_detailed_narrative: insightFlags?.has_detailed_narrative ? 'Yes' : 'No',
+      // CIS Insight Flags (using actual database field names)
+      has_competitor_comparison: insightFlags?.competitor_details ? 'Yes' : 'No',
+      has_pricing_gap_quantified: insightFlags?.pricing_gap_quantified ? 'Yes' : 'No',
+      has_sample_feedback: insightFlags?.sample_flat_feedback ? 'Yes' : 'No',
+      has_non_booking_reason: insightFlags?.non_booking_reason ? 'Yes' : 'No',
+      has_decision_maker_context: insightFlags?.decision_maker_context ? 'Yes' : 'No',
+      has_lifestyle_context: insightFlags?.lifestyle_context ? 'Yes' : 'No',
+      has_detailed_narrative: insightFlags?.detailed_narrative ? 'Yes' : 'No',
       
       // Source Tracking
       source: crmData?.['Sales Walkin Source'] || 'Unknown',
