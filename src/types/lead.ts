@@ -67,6 +67,13 @@ export interface Lead {
   mqlEnrichment?: MqlEnrichment;
 }
 
+export type NBAActionType = 
+  | 'COMMUNICATION' 
+  | 'CONTENT/COLLATERAL' 
+  | 'OFFER' 
+  | 'FOLLOW-UP' 
+  | 'ESCALATION';
+
 export interface AnalysisResult {
   leadId: string;
   rating: LeadRating;
@@ -90,11 +97,32 @@ export interface AnalysisResult {
     key_concerns?: string[];
     concern_categories?: Array<'Price' | 'Location' | 'Possession' | 'Config' | 'Amenities' | 'Trust' | 'Others'>;
     primary_concern_category?: 'Price' | 'Location' | 'Possession' | 'Config' | 'Amenities' | 'Trust' | 'Others';
-    next_best_action?: string;
+    
+    // Enhanced NBA with ID and action type (Stage 3)
+    next_best_action?: {
+      nba_id: string;  // e.g., "NBA-OFF-001"
+      action_type: NBAActionType;
+      action: string;  // Specific action text (max 15 words)
+      escalation_trigger?: string;
+      fallback_action?: string;
+    } | string;  // Backward compatibility with old string format
+    
+    // Enhanced talking points with TP-ID (Stage 3)
     talking_points?: Array<{
+      tp_id?: string;  // e.g., "TP-ECO-007"
       type: 'What to highlight' | 'Competitor handling' | 'Objection handling';
-      point: string;
+      point: string;  // Contextualized version
+      source_text?: string;  // Original framework text
     }>;
+    
+    // Objection classification (Stage 3)
+    objection_categories_detected?: string[];
+    primary_objection?: string;
+    secondary_objections?: string[];
+    
+    // Safety tracking (Stage 3)
+    safety_check_triggered?: string | null;
+    
     extracted_signals?: {
       budget_stated?: number | null;
       in_hand_funds?: number | null;

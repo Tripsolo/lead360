@@ -403,8 +403,20 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
                 <div className="flex items-center gap-2 mb-2">
                   <Target className="h-4 w-4 text-primary" />
                   <h4 className="font-semibold text-sm text-primary">Next Best Action</h4>
+                  {typeof analysis?.next_best_action === 'object' && analysis.next_best_action?.action_type && (
+                    <Badge variant="outline" className="text-xs">
+                      {analysis.next_best_action.action_type}
+                    </Badge>
+                  )}
                 </div>
-                <p className="text-sm">{analysis?.next_best_action || 'N/A'}</p>
+                <p className="text-sm">
+                  {typeof analysis?.next_best_action === 'string' 
+                    ? analysis.next_best_action 
+                    : analysis?.next_best_action?.action || 'N/A'}
+                </p>
+                {typeof analysis?.next_best_action === 'object' && analysis.next_best_action?.nba_id && (
+                  <p className="text-xs text-muted-foreground mt-1">ID: {analysis.next_best_action.nba_id}</p>
+                )}
               </div>
             </div>
 
