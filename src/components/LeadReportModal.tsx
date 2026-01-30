@@ -7,7 +7,7 @@ import {
 import { Lead } from '@/types/lead';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Mail, Phone, Briefcase, MapPin, Home, DollarSign, Target, AlertCircle, MessageSquare, Users, Lightbulb, User, Building2 } from 'lucide-react';
+import { Mail, Phone, Briefcase, MapPin, Home, DollarSign, Target, AlertCircle, MessageSquare, Users, Lightbulb, User, Building2, ArrowRightCircle } from 'lucide-react';
 
 // Helper to convert snake_case to readable text
 const formatSnakeCase = (text: string) => text.replace(/_/g, ' ');
@@ -433,6 +433,26 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
                 <p className="text-sm text-muted-foreground">N/A</p>
               )}
             </div>
+
+            {/* Cross-Sell Recommendation */}
+            {analysis?.cross_sell_recommendation && analysis.cross_sell_recommendation.recommended_project && (
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <ArrowRightCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  <h4 className="font-semibold text-sm text-blue-700 dark:text-blue-300">Cross-Sell Opportunity</h4>
+                  <Badge className="bg-blue-600 text-white ml-auto">
+                    {analysis.cross_sell_recommendation.recommended_project}
+                  </Badge>
+                </div>
+                <p className="text-sm text-blue-800 dark:text-blue-200 mb-2">
+                  <span className="font-medium">Reason: </span>
+                  {analysis.cross_sell_recommendation.reason}
+                </p>
+                <p className="text-sm text-blue-700 dark:text-blue-300 italic">
+                  💡 "{analysis.cross_sell_recommendation.talking_point}"
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </DialogContent>
