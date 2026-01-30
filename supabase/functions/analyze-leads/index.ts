@@ -17,6 +17,28 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Helper function to convert Excel serial date to ISO string
+function excelDateToISOString(excelDate: any): string | null {
+  if (!excelDate) return null;
+  
+  // If it's already a valid ISO string or date string, return as-is
+  if (typeof excelDate === 'string' && isNaN(Number(excelDate))) {
+    return excelDate;
+  }
+  
+  // If it's a number (Excel serial date), convert it
+  if (typeof excelDate === 'number' || !isNaN(Number(excelDate))) {
+    const numDate = Number(excelDate);
+    // Excel dates start from 1900-01-01 (serial 1)
+    // JavaScript Date epoch adjustment: Dec 30, 1899
+    const excelEpoch = new Date(1899, 11, 30);
+    const jsDate = new Date(excelEpoch.getTime() + numDate * 24 * 60 * 60 * 1000);
+    return jsDate.toISOString();
+  }
+  
+  return null;
+}
+
 // ============= STAGE 1: Signal Extraction =============
 function buildStage1Prompt(
   leadDataJson: string,
@@ -2038,7 +2060,7 @@ IMPORTANT SCORING RULES:
         fullAnalysis: analysisResult,
         parseSuccess,
         fromCache: false,
-        revisitDate: lead.rawData?.["Latest Revisit Date"] || null,
+        revisitDate: excelDateToISOString(lead.rawData?.["Latest Revisit Date"]),
       };
     }
 
@@ -2430,7 +2452,7 @@ IMPORTANT SCORING RULES:
         fullAnalysis: analysisResult,
         parseSuccess,
         fromCache: false,
-        revisitDate: lead.rawData?.["Latest Revisit Date"] || null,
+        revisitDate: excelDateToISOString(lead.rawData?.["Latest Revisit Date"]),
       };
 
       freshResults.push(result);
