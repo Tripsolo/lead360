@@ -1563,3 +1563,202 @@ export function buildFrameworkSubset(
     nbaRules: Array.from(relevantNBAs).map((id) => NBA_RULES[id]).filter(Boolean),
   };
 }
+
+// ============= STAGE 3 PROMPT BUILDER =============
+
+/**
+ * Build Stage 3 prompt for NBA & Talking Points generation
+ * Uses decision tree framework based on persona + objection matrix
+ */
+export function buildStage3Prompt(
+  stage2Result: any,
+  extractedSignals: any,
+  visitComments: string
+): string {
+  const persona = stage2Result?.persona || "Unknown";
+  const primaryConcern = stage2Result?.primary_concern_category || null;
+  const concernCategories = stage2Result?.concern_categories || [];
+  
+  // Detect objection categories from visit comments and signals
+  const objectionCategories = detectObjectionCategories(visitComments, extractedSignals);
+  
+  // Build relevant framework subset for this persona
+  const frameworkSubset = buildFrameworkSubset(persona, objectionCategories);
+  
+  // Check safety conditions
+  const safetyCheck = checkSafetyConditions(persona, extractedSignals);
+  
+  // Get normalized persona for matrix lookup
+  const normalizedPersona = normalizePersona(persona);
+  
+  // Build persona-specific matrix excerpt
+  const personaMatrix = PERSONA_OBJECTION_MATRIX[normalizedPersona] || {};
+  
+  // Build talking points reference section
+  const tpReference = frameworkSubset.talkingPoints.map(tp => `
+**${tp.tp_id}** (${tp.category} - ${tp.sub_category})
+- Scenario: ${tp.objection_scenario}
+- Talking Point: ${tp.talking_point}
+- Key Data: ${tp.key_data_points}
+- Emotional Hook: ${tp.emotional_hook}
+- Logical Argument: ${tp.logical_argument}
+${tp.competitor_counter ? `- Competitor Counter: ${tp.competitor_counter}` : ""}`
+  ).join("\n");
+  
+  // Build NBA rules reference section
+  const nbaReference = frameworkSubset.nbaRules.map(nba => `
+**${nba.nba_id}** (${nba.action_category})
+- Trigger: ${nba.trigger_condition}
+- Action: ${nba.specific_action}
+- Escalation Trigger: ${nba.escalation_trigger}
+- Fallback: ${nba.fallback_action}
+- Linked TPs: ${nba.linked_talking_points.join(", ")}`
+  ).join("\n");
+  
+  // Build matrix excerpt for this persona
+  const matrixExcerpt = Object.entries(personaMatrix).map(([objection, entry]) => 
+    `| ${objection} | ${entry.nba_id} | ${entry.tp_ids.join(", ")} | ${entry.action_summary} |`
+  ).join("\n");
+  
+  // Extract key context from signals
+  const budgetStated = extractedSignals?.financial_signals?.budget_stated_cr || null;
+  const budgetGap = extractedSignals?.financial_signals?.budget_gap_percent || null;
+  const carpetDesired = extractedSignals?.property_preferences?.carpet_area_desired || null;
+  const unitInterested = extractedSignals?.property_preferences?.specific_unit_interest || null;
+  const competitors = extractedSignals?.competitor_intelligence?.competitors_mentioned || [];
+  const age = extractedSignals?.demographics?.age || null;
+  const visitNotesSummary = extractedSignals?.visit_notes_summary || "";
+  
+  const systemPrompt = `You are an expert real estate sales strategist. Your task is to generate the OPTIMAL Next Best Action (NBA) and Talking Points for a lead using a decision tree framework.
+
+You MUST:
+1. Use the Persona-Objection Matrix to select specific NBA-IDs and TP-IDs
+2. Contextualize the framework talking points with lead-specific data
+3. Keep the core message intact while adding specific numbers and context
+4. Follow safety rules strictly (75+ RTMI mandatory, etc.)`;
+
+  const inputDataSection = `# INPUT DATA (From Stage 1 & Stage 2)
+
+## Lead Context
+- Detected Persona: ${persona} (normalized: ${normalizedPersona})
+- Primary Concern Category: ${primaryConcern || "None detected"}
+- Secondary Concerns: ${concernCategories.join(", ") || "None"}
+- Objection Categories Detected: ${objectionCategories.join(", ") || "None detected"}
+
+## Customer Details
+- Age: ${age || "Unknown"}
+- Budget Stated: ${budgetStated ? `₹${budgetStated} Cr` : "Not stated"}
+- Budget Gap: ${budgetGap !== null ? `${budgetGap.toFixed(1)}%` : "Not calculated"}
+- Carpet Desired: ${carpetDesired || "Not specified"}
+- Unit Interested: ${unitInterested ? unitInterested.join(", ") : "Not specified"}
+
+## Competitors Mentioned
+${competitors.length > 0 
+  ? competitors.map((c: any) => `- ${c.name}: ${c.carpet_stated || "N/A"} sqft at ₹${c.price_stated_cr || "N/A"} Cr (${c.advantage_stated || "No advantage stated"})`).join("\n")
+  : "None mentioned"}
+
+## Visit Notes Summary
+${visitNotesSummary}`;
+
+  const safetySection = safetyCheck.triggered 
+    ? `# ⚠️ SAFETY RULE TRIGGERED
+**${safetyCheck.safetyRule}**
+MANDATORY: Use NBA-ID ${safetyCheck.overrideNbaId} and corresponding talking points.
+DO NOT recommend any Under Construction pitch.`
+    : "";
+
+  const frameworkSection = `# DECISION TREE FRAMEWORK
+
+## Persona-Objection Matrix for "${normalizedPersona}"
+| Objection | NBA-ID | TP-IDs | Action Summary |
+|-----------|--------|--------|----------------|
+${matrixExcerpt}
+
+## Relevant Talking Points
+${tpReference}
+
+## Relevant NBA Rules
+${nbaReference}`;
+
+  const instructionsSection = `# GENERATION INSTRUCTIONS
+
+## Step 1: Objection Classification
+Based on the visit notes and extracted signals, classify the primary objection:
+- Use the objection categories detected: ${objectionCategories.join(", ") || "None"}
+- Map to the closest matrix row for "${normalizedPersona}"
+
+## Step 2: Matrix Lookup
+Use the Persona (${normalizedPersona}) + Primary Objection to find:
+- NBA-ID from the matrix
+- Linked TP-IDs
+
+## Step 3: Talking Point Selection & Contextualization
+For each TP-ID from the matrix:
+1. Retrieve the framework talking point text
+2. CONTEXTUALIZE with lead-specific data:
+   - Include specific budget: ${budgetStated ? `₹${budgetStated} Cr` : "customer's budget"}
+   - Include carpet area: ${carpetDesired || "their requirement"}
+   - Reference competitors: ${competitors.map((c: any) => c.name).join(", ") || "as mentioned"}
+   - Use visit notes context for personalization
+3. KEEP the emotional hook and logical argument structure
+4. Maximum 20 words per talking point
+5. Store both the TP-ID and source_text (original framework text)
+
+## Step 4: NBA Action Generation
+From the selected NBA-ID:
+1. Generate a specific, actionable statement
+2. Include lead context: unit interested, timeline, budget gap
+3. Maximum 15 words
+4. Specify action_type: COMMUNICATION | CONTENT/COLLATERAL | OFFER | FOLLOW-UP | ESCALATION
+
+## CRITICAL RULES
+1. You MUST select from the provided TP-IDs and NBA-IDs - do NOT invent new ones
+2. Contextualize but do NOT completely rewrite the talking point
+3. If safety rule is triggered, use the override NBA-ID
+4. Generate 2-3 talking points total (prioritize by type: Competitor > Objection > Highlight)`;
+
+  const outputStructure = `# OUTPUT STRUCTURE
+Return a JSON object with this EXACT structure:
+{
+  "objection_categories_detected": ["Economic Fit", "Competition"],
+  "primary_objection": "Budget Gap (<15%)",
+  "secondary_objections": ["Price Lower at Competitor"],
+  
+  "next_best_action": {
+    "nba_id": "NBA-OFF-001",
+    "action_type": "OFFER",
+    "action": "Specific action max 15 words with lead context",
+    "escalation_trigger": "When to escalate",
+    "fallback_action": "Alternative if primary fails"
+  },
+  
+  "talking_points": [
+    {
+      "tp_id": "TP-ECO-007",
+      "type": "Objection handling",
+      "point": "Contextualized point max 20 words with specific numbers",
+      "source_text": "Original framework talking point text"
+    },
+    {
+      "tp_id": "TP-COMP-003",
+      "type": "Competitor handling",
+      "point": "Contextualized competitor comparison with specific data",
+      "source_text": "Original framework talking point text"
+    }
+  ],
+  
+  "safety_check_triggered": ${safetyCheck.triggered ? `"${safetyCheck.safetyRule}"` : "null"}
+}`;
+
+  return `${systemPrompt}
+
+${inputDataSection}
+
+${safetySection}
+
+${frameworkSection}
+
+${instructionsSection}
+
+${outputStructure}`;
+}
