@@ -577,7 +577,7 @@ async function callGemini3FlashAPI(
       }
 
       response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${googleApiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${googleApiKey}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -2048,7 +2048,7 @@ IMPORTANT SCORING RULES:
         const lead = leadsToAnalyze.find((l) => l.id === result.leadId);
         if (!lead) return;
 
-        await supabase.from("lead_analyses").upsert(
+        const { error } = await supabase.from("lead_analyses").upsert(
           {
             lead_id: lead.id,
             project_id: projectId,
@@ -2059,6 +2059,12 @@ IMPORTANT SCORING RULES:
           },
           { onConflict: "lead_id,project_id" },
         );
+
+        if (error) {
+          console.error(`Failed to store analysis for lead ${lead.id}:`, error.message);
+        } else {
+          console.log(`Stored analysis for lead ${lead.id} with rating ${result.rating}`);
+        }
       }
     }
 
