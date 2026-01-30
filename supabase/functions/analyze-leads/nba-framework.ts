@@ -1414,46 +1414,125 @@ export function normalizePersona(persona: string): string {
 }
 
 /**
+ * Helper function for keyword matching
+ */
+function containsAny(text: string, keywords: string[]): boolean {
+  const lowerText = text.toLowerCase();
+  return keywords.some(kw => lowerText.includes(kw.toLowerCase()));
+}
+
+/**
  * Map objection category to specific sub-category for matrix lookup
+ * Enhanced with keyword detection from visitComments for 14 granular sub-categories
  */
 export function mapToMatrixObjection(
   objectionCategory: ObjectionCategory,
-  extractedSignals: any
+  extractedSignals: any,
+  visitComments: string = ""
 ): string {
+  const lowerComments = (visitComments || "").toLowerCase();
+  const lowerNonBooking = (extractedSignals?.engagement_signals?.non_booking_reason || "").toLowerCase();
+  const combinedText = `${lowerComments} ${lowerNonBooking}`;
+  
   const budgetGap = extractedSignals?.financial_signals?.budget_gap_percent;
   const age = extractedSignals?.demographics?.age;
-  const sopMentioned = (extractedSignals?.engagement_signals?.non_booking_reason || "").toLowerCase().includes("sell") ||
-    (extractedSignals?.engagement_signals?.non_booking_reason || "").toLowerCase().includes("sop");
 
   switch (objectionCategory) {
     case "Economic Fit":
-      if (sopMentioned) return "SOP Required";
+      // Check SOP/selling current property first (highest priority)
+      if (containsAny(combinedText, ["sell property", "sell flat", "sop", "current flat sale", "selling", "need to sell", "sale of current"])) {
+        return "SOP Required";
+      }
+      // Check loan/eligibility issues
+      if (containsAny(combinedText, ["loan", "eligibility", "bank reject", "rejected", "cibil", "loan issue", "financing", "bank approval"])) {
+        return "Loan Eligibility Issue";
+      }
+      // Budget gap based detection
       if (budgetGap !== null && budgetGap !== undefined) {
         return budgetGap > 15 ? "Budget Gap (>15%)" : "Budget Gap (<15%)";
       }
-      return "Budget Gap (<15%)";
+      return "Budget Gap (<15%)"; // Default for Economic Fit
 
     case "Possession Timeline":
-      if (age && age > 75) return "RTMI Need (Urgent 75+)";
-      return "Timeline Concern (General)";
+      // RTMI need for 75+ age (highest priority)
+      if (age && age > 75) {
+        return "RTMI Need (Urgent 75+)";
+      }
+      // Check for Immensa delay fear
+      if (containsAny(lowerComments, ["immensa", "delay history", "previous delay", "delayed before", "late possession"])) {
+        return "Delay Fear (Immensa History)";
+      }
+      // Check for general timeline/possession concerns
+      if (containsAny(lowerComments, ["possession", "timeline", "2027", "2028", "2029", "when ready", "completion"])) {
+        return "Timeline Concern (General)";
+      }
+      return "Timeline Concern (General)"; // Default for Possession Timeline
 
     case "Inventory & Product":
-      return "Rooms Feel Small";
+      // Check Vastu concerns (highest priority in this category)
+      if (containsAny(lowerComments, ["vastu", "direction", "northeast", "north east", "facing north", "facing east", "sun direction", "kitchen direction"])) {
+        return "Vastu Non-Compliance";
+      }
+      // Check View/Privacy concerns
+      if (containsAny(lowerComments, ["view", "privacy", "building in front", "facing building", "overlooking", "no view", "blocked view", "neighbour", "neighbor"])) {
+        return "View/Privacy Concern";
+      }
+      // Check for deck/balcony requirements
+      if (containsAny(lowerComments, ["deck", "balcony", "outdoor", "terrace", "jodi"])) {
+        return "Deck/Jodi Requirement";
+      }
+      // Check room size concerns
+      if (containsAny(lowerComments, ["small", "compact", "cramped", "room size", "bedroom small", "tiny", "space", "bigger rooms"])) {
+        return "Rooms Feel Small";
+      }
+      return "Rooms Feel Small"; // Default for Inventory & Product
 
     case "Location & Ecosystem":
-      return "Competitor Location Better";
+      // Check for specific competitor location mentions
+      if (containsAny(lowerComments, ["hiranandani", "powai", "bkc", "worli", "premium area", "better location", "central location", "south bombay"])) {
+        return "Competitor Location Better";
+      }
+      // Check for connectivity concerns
+      if (containsAny(lowerComments, ["far", "commute", "travel time", "distance", "connectivity", "office far"])) {
+        return "Connectivity Concerns";
+      }
+      return "Competitor Location Better"; // Default for Location
 
     case "Competition":
-      return "Price Lower at Competitor";
+      // Check for price comparison
+      if (containsAny(lowerComments, ["cheaper", "lower price", "less expensive", "better price", "price difference", "more affordable"])) {
+        return "Price Lower at Competitor";
+      }
+      // Check for specific competitor mentions
+      if (containsAny(lowerComments, ["lodha", "dosti", "runwal", "oberoi", "godrej", "piramal", "rustomjee", "birla", "mahindra", "hiranandani"])) {
+        return "Price Lower at Competitor";
+      }
+      return "Price Lower at Competitor"; // Default for Competition
 
     case "Investment":
-      return "Just Started Exploring";
+      // Investment concerns - typically exploring options
+      if (containsAny(lowerComments, ["roi", "rental", "yield", "appreciation", "investment", "return", "rental income"])) {
+        return "Just Started Exploring";
+      }
+      return "Just Started Exploring"; // Default for Investment
 
     case "Decision Process":
-      return "Multiple Decision Makers";
+      // Check for exploration phase
+      if (containsAny(lowerComments, ["exploring", "just started", "first visit", "not sure", "options", "early stage", "looking around"])) {
+        return "Just Started Exploring";
+      }
+      // Check for multiple decision makers
+      if (containsAny(lowerComments, ["family", "parents", "spouse", "wife", "husband", "discuss", "bring", "decision maker", "son", "daughter", "consult"])) {
+        return "Multiple Decision Makers";
+      }
+      return "Multiple Decision Makers"; // Default for Decision Process
 
     case "Special Scenarios":
-      return "Just Started Exploring";
+      // NRI-specific handling
+      if (containsAny(lowerComments, ["nri", "overseas", "abroad", "foreign", "dollar", "usd", "gulf", "usa", "uk", "singapore"])) {
+        return "NRI Specific";
+      }
+      return "Just Started Exploring"; // Default fallback
 
     default:
       return "Just Started Exploring";
@@ -1466,10 +1545,11 @@ export function mapToMatrixObjection(
 export function lookupMatrixEntry(
   persona: string,
   objectionCategory: ObjectionCategory,
-  extractedSignals: any
+  extractedSignals: any,
+  visitComments: string = ""
 ): MatrixEntry | null {
   const normalizedPersona = normalizePersona(persona);
-  const matrixObjection = mapToMatrixObjection(objectionCategory, extractedSignals);
+  const matrixObjection = mapToMatrixObjection(objectionCategory, extractedSignals, visitComments);
 
   const personaMatrix = PERSONA_OBJECTION_MATRIX[normalizedPersona];
   if (!personaMatrix) return null;
