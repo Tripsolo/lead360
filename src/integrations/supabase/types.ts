@@ -305,6 +305,57 @@ export type Database = {
           },
         ]
       }
+      sister_projects: {
+        Row: {
+          brand_id: string
+          created_at: string
+          cross_sell_triggers: Json
+          id: string
+          metadata: Json
+          name: string
+          parent_project_id: string
+          relationship_type: string
+          updated_at: string
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          cross_sell_triggers?: Json
+          id: string
+          metadata?: Json
+          name: string
+          parent_project_id: string
+          relationship_type?: string
+          updated_at?: string
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          cross_sell_triggers?: Json
+          id?: string
+          metadata?: Json
+          name?: string
+          parent_project_id?: string
+          relationship_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sister_projects_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sister_projects_parent_project_id_fkey"
+            columns: ["parent_project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

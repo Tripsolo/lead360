@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Lead } from '@/types/lead';
-import { Mail, Phone, Calendar, DollarSign, Clock, TrendingUp, Target, MessageSquare, Users, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Mail, Phone, Calendar, DollarSign, Clock, TrendingUp, Target, MessageSquare, Users, CheckCircle2, AlertCircle, ArrowRightCircle } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -225,6 +225,19 @@ export const LeadCard = ({ lead }: LeadCardProps) => {
                       <p className="text-xs text-muted-foreground mt-1">{analysis.extracted_signals.core_motivation}</p>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Cross-Sell Recommendation */}
+              {analysis.cross_sell_recommendation && analysis.cross_sell_recommendation.recommended_project && (
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
+                  <p className="text-sm font-semibold mb-1 flex items-center gap-2 text-blue-700 dark:text-blue-300">
+                    <ArrowRightCircle className="h-4 w-4" />
+                    Cross-Sell: {analysis.cross_sell_recommendation.recommended_project}
+                  </p>
+                  <p className="text-sm text-blue-600 dark:text-blue-400">
+                    {analysis.cross_sell_recommendation.talking_point}
+                  </p>
                 </div>
               )}
             </CollapsibleContent>

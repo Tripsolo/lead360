@@ -354,6 +354,7 @@ function buildStage2Prompt(
   systemPrompt: string,
   brandContext: string,
   projectContext: string,
+  sisterProjectsContext: string,
   leadScoringModel: string,
   personaDefinitions: string,
   privacyRules: string,
@@ -400,6 +401,11 @@ You are provided with PRE-EXTRACTED SIGNALS from CRM and MQL data (not raw data)
    - Use competitor carpet_stated, price_stated_cr, and price_per_sqft for specific comparisons
    - Calculate differentials: "X% more carpet area at competitive pricing"
 
+7. CROSS-SELL EVALUATION (if sister projects available):
+   - Check if lead's requirements match any sister project's cross-sell triggers
+   - Consider: budget constraints, RTMI needs, config preference, GCP view interest
+   - Generate cross_sell_recommendation if a clear match exists, otherwise set to null
+
 ## USING EXTRACTED EVIDENCE IN OUTPUTS (CRITICAL)
 
 When generating persona_description, summary, and talking_points, reference the evidence sections:
@@ -435,6 +441,8 @@ CRITICAL: Do not fabricate quotes or facts. Only use evidence that is present (n
 ${brandContext}
 
 ${projectContext}
+
+${sisterProjectsContext}
 
 ${leadScoringModel}
 
@@ -835,7 +843,13 @@ serve(async (req) => {
     const brandMetadata = project.brands.metadata;
     const projectMetadata = project.metadata;
 
-    console.log(`Processing ${leads.length} leads for project ${projectId}`);
+    // Fetch sister projects for cross-selling
+    const { data: sisterProjects } = await supabase
+      .from("sister_projects")
+      .select("*")
+      .eq("parent_project_id", projectId);
+
+    console.log(`Processing ${leads.length} leads for project ${projectId}, ${sisterProjects?.length || 0} sister projects available`);
 
     // Step 1: Check for existing analyses in the database
     const leadIds = leads.map((l: any) => l.id);
@@ -1254,7 +1268,16 @@ These belong in the Summary section, not here.`;
 Developer: ${brandMetadata?.developer?.name || "Unknown"}
 Legacy: ${brandMetadata?.developer?.legacy || "N/A"}
 Reputation: ${brandMetadata?.developer?.reputation || "N/A"}
-Trust Signals: ${brandMetadata?.developer?.trust_signals?.join(", ") || "N/A"}`;
+Trust Signals: ${brandMetadata?.developer?.trust_signals?.join(", ") || "N/A"}
+
+## Township Overview
+${brandMetadata?.township ? `
+Township: ${brandMetadata.township.name || "N/A"}
+Total Area: ${brandMetadata.township.total_area_acres || "N/A"} acres
+Total Units: ${brandMetadata.township.total_units || "N/A"}
+Phases: ${brandMetadata.township.phases?.join(", ") || "N/A"}
+Grand Central Park: ${brandMetadata.township.shared_amenities?.gcp?.area_acres || "N/A"} acres with ${brandMetadata.township.shared_amenities?.gcp?.trees_planted || "N/A"} trees
+` : ""}`;
 
     const projectContext = `# PROJECT CONTEXT: ${projectMetadata?.project_name || project.name}
 
@@ -1413,6 +1436,48 @@ DISTRIBUTION RULES:
 
 ${competitorPricingMatrix}`;
 
+    // Build Sister Projects context for cross-selling
+    let sisterProjectsContext = "";
+    if (sisterProjects && sisterProjects.length > 0) {
+      sisterProjectsContext = `# SISTER PROJECTS FOR CROSS-SELLING
+
+When the lead's requirements don't perfectly match Eternia inventory, consider recommending a sister project from the same township. All sister projects share township benefits (GCP access, connectivity, amenities).
+
+## Available Sister Projects:
+${sisterProjects.map((sp: any) => {
+  const meta = sp.metadata || {};
+  const triggers = sp.cross_sell_triggers || {};
+  const configs = meta.configurations || [];
+  return `
+### ${sp.name} (${sp.relationship_type})
+- Possession: ${meta.rera_possession || meta.oc_date || "N/A"}
+- OC Status: ${meta.oc_received ? `OC received for towers ${meta.oc_received.join(", ")}` : "Under construction"}
+- Unique Selling: ${meta.unique_selling || "N/A"}
+- Payment Plan: ${meta.payment_plan || "N/A"}
+- Configurations:
+${configs.map((c: any) => `  - ${c.type}: ${c.carpet_sqft?.[0] || "N/A"}-${c.carpet_sqft?.[1] || "N/A"} sqft, ₹${c.price_cr?.[0] || "N/A"}-${c.price_cr?.[1] || "N/A"} Cr`).join("\n")}
+
+**Cross-Sell Triggers** (Recommend if ANY match):
+${triggers.budget_below_cr ? `- Budget below ₹${triggers.budget_below_cr} Cr` : ""}
+${triggers.budget_above_cr ? `- Budget above ₹${triggers.budget_above_cr} Cr` : ""}
+${triggers.needs_rtmi ? "- Needs Ready-to-Move-In (RTMI)" : ""}
+${triggers.wants_gcp_view ? "- Wants GCP-facing units" : ""}
+${triggers.config_preference ? `- Prefers ${triggers.config_preference.join("/")}` : ""}
+${triggers.decision_timeline_urgent ? "- Urgent decision timeline" : ""}
+${triggers.investment_buyer ? "- Investment buyer profile" : ""}
+**Talking Point**: "${triggers.talking_point || "N/A"}"
+`;
+}).join("\n")}
+
+## CROSS-SELL DECISION RULES:
+1. Check if lead matches ANY trigger condition for a sister project
+2. If multiple matches, prioritize: RTMI needs > Budget constraints > Config preference > GCP views
+3. Generate cross_sell_recommendation ONLY if a clear match exists
+4. If no match or Eternia is the best fit, set cross_sell_recommendation to null
+5. The talking_point should be specific and include price/config details
+`;
+    }
+
     const outputStructure = `# OUTPUT STRUCTURE
 Return a JSON object with this EXACT structure:
 {
@@ -1448,7 +1513,12 @@ Return a JSON object with this EXACT structure:
   "mql_emi_burden": "Low" | "Moderate" | "High" | null,
   "mql_investor_signal": boolean,
   "overridden_fields": [],
-  "mql_data_available": boolean
+  "mql_data_available": boolean,
+  "cross_sell_recommendation": {
+    "recommended_project": "Primera" | "Estella" | "Immensa" | null,
+    "reason": "Brief explanation of why this sister project is a better fit (max 20 words)",
+    "talking_point": "Specific sales pitch with price/config details (max 20 words)"
+  } | null
 }`;
 
     // ============= TWO-STAGE ANALYSIS PIPELINE (SEQUENTIAL) =============
@@ -1566,6 +1636,7 @@ IMPORTANT SCORING RULES:
         systemPrompt,
         brandContext,
         projectContext,
+        sisterProjectsContext,
         leadScoringModel,
         personaDefinitions,
         privacyRules,
@@ -1802,6 +1873,7 @@ IMPORTANT SCORING RULES:
         systemPrompt,
         brandContext,
         projectContext,
+        sisterProjectsContext,
         leadScoringModel,
         personaDefinitions,
         privacyRules,
