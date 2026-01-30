@@ -428,17 +428,24 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
               </div>
               {analysis?.talking_points && analysis.talking_points.length > 0 ? (
                 <ul className="space-y-3">
-                  {analysis.talking_points.map((item, idx) => (
+              {analysis.talking_points.map((item, idx) => (
                     <li key={idx} className="text-sm flex flex-col gap-1.5">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium w-fit ${
-                        item.type === 'Competitor handling' 
-                          ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'
-                          : item.type === 'Objection handling'
-                          ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400'
-                          : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400'
-                      }`}>
-                        {item.type}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium w-fit ${
+                          item.type === 'Competitor handling' 
+                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'
+                            : item.type === 'Objection handling'
+                            ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400'
+                            : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400'
+                        }`}>
+                          {item.type}
+                        </span>
+                        {item.tp_id && (
+                          <code className="text-xs bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded font-mono text-muted-foreground">
+                            {item.tp_id}
+                          </code>
+                        )}
+                      </div>
                       <span className="leading-relaxed">{item.point}</span>
                     </li>
                   ))}
