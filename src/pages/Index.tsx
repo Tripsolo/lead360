@@ -469,10 +469,14 @@ const Index = () => {
       if (analyses && analyses.length > 0) {
         updateLeadsWithAnalyses(analyses);
         const percentComplete = Math.round((analyses.length / leadIdsToCheck.length) * 100);
-        toast({
-          title: 'Analysis in progress',
-          description: `${percentComplete}% complete (${analyses.length}/${leadIdsToCheck.length} leads)...`,
-        });
+        
+        // Toast less frequently to avoid spam - only at 25% increments or completion
+        if (percentComplete % 25 === 0 || analyses.length === leadIdsToCheck.length) {
+          toast({
+            title: 'Analysis in progress',
+            description: `${percentComplete}% complete (${analyses.length}/${leadIdsToCheck.length} leads)...`,
+          });
+        }
       }
 
       await new Promise(resolve => setTimeout(resolve, pollInterval));

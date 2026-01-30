@@ -1843,7 +1843,7 @@ Return a JSON object with this EXACT structure:
     "product_market_fit": 0-15,
     "authority_dynamics": 0-10
   },
-  "rating_rationale": "**PPS Score: X/100.** Brief explanation of key scoring factors without rating label",
+  "rating_rationale": "Brief 2-3 sentence explanation of key scoring factors that determined this lead's rating. Focus on financial capability, intent signals, and timeline urgency. Do NOT include the PPS score value - it is displayed separately.",
   "persona": "Persona label",
   "persona_description": "2-line description focusing on: (1) demographics - age, gender, family composition; (2) financial/professional profile - occupation, designation, income capability; (3) primary buying motivation. For business owners, mention scale abstractly (e.g., 'established manufacturing business') without specific turnover figures. DO NOT include visit details, property preferences, or concerns here.",
   "summary": "Summarize the lead's visit notes: what they are looking for, visit experience/feedback, decision factors and timelines mentioned. DO NOT repeat demographic or professional details. Max 30 words.",
