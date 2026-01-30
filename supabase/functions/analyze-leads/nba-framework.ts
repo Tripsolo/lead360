@@ -27,6 +27,7 @@ export type PersonaId =
   | "Vastu-Rigid Buyer"
   | "Settlement Seeker"
   | "Pragmatic Investor"
+  | "Business Owner"
   | "Amara Density Escaper"
   | "Kalpataru Loyalist Upgrader"
   | "Parkcity Rental Converter"
@@ -1226,6 +1227,22 @@ export const PERSONA_OBJECTION_MATRIX: Record<string, Record<string, MatrixEntry
     "Multiple Decision Makers": { nba_id: "NBA-COM-004", tp_ids: ["TP-DEC-001"], action_summary: "Data for discussion" },
     "Just Started Exploring": { nba_id: "NBA-FUP-004", tp_ids: ["TP-INV-006"], action_summary: "Market education" },
   },
+  "Business Owner": {
+    "Budget Gap (<15%)": { nba_id: "NBA-OFF-001", tp_ids: ["TP-ECO-007", "TP-ECO-003"], action_summary: "Floor adjustment + value proposition" },
+    "Budget Gap (>15%)": { nba_id: "NBA-OFF-002", tp_ids: ["TP-ECO-006", "TP-ECO-008"], action_summary: "Payment restructuring for cash flow" },
+    "SOP Required": { nba_id: "NBA-OFF-003", tp_ids: ["TP-ECO-010"], action_summary: "Conditional with business flexibility" },
+    "Loan Eligibility Issue": { nba_id: "NBA-ESC-003", tp_ids: ["TP-ECO-009"], action_summary: "Often cash-rich, explore alternatives" },
+    "RTMI Need (Urgent 75+)": { nba_id: "NBA-ESC-004", tp_ids: ["TP-SPEC-005"], action_summary: "Immediate resale pivot" },
+    "Timeline Concern (General)": { nba_id: "NBA-COL-002", tp_ids: ["TP-POS-003", "TP-POS-001"], action_summary: "Progress + opportunity cost" },
+    "Delay Fear (Immensa History)": { nba_id: "NBA-COL-002", tp_ids: ["TP-POS-004"], action_summary: "Track record reassurance" },
+    "Rooms Feel Small": { nba_id: "NBA-COL-003", tp_ids: ["TP-INV-001"], action_summary: "Efficiency + Jodi option" },
+    "Vastu Non-Compliance": { nba_id: "NBA-OFF-006", tp_ids: ["TP-INV-004"], action_summary: "Show compliant premium options" },
+    "View/Privacy Concern": { nba_id: "NBA-COL-004", tp_ids: ["TP-INV-003"], action_summary: "GCP premium justification" },
+    "Price Lower at Competitor": { nba_id: "NBA-COL-001", tp_ids: ["TP-COMP-003", "TP-ECO-003"], action_summary: "Quality + lifestyle differentiation" },
+    "Competitor Location Better": { nba_id: "NBA-COL-001", tp_ids: ["TP-LOC-003"], action_summary: "Growth potential + infrastructure" },
+    "Multiple Decision Makers": { nba_id: "NBA-COM-004", tp_ids: ["TP-DEC-001"], action_summary: "Quick senior connect" },
+    "Just Started Exploring": { nba_id: "NBA-FUP-001", tp_ids: ["TP-DEC-002", "TP-ECO-003"], action_summary: "Time-efficient education" },
+  },
   "Amara Density Escaper": {
     "Budget Gap (<15%)": { nba_id: "NBA-SPEC-001", tp_ids: ["TP-SPEC-001"], action_summary: "Density value justifies" },
     "Budget Gap (>15%)": { nba_id: "NBA-OFF-001", tp_ids: ["TP-ECO-007"], action_summary: "Smaller efficient unit" },
@@ -1389,6 +1406,9 @@ export function normalizePersona(persona: string): string {
   }
   if (personaLower.includes("investor") && personaLower.includes("pragmatic")) {
     return "Pragmatic Investor";
+  }
+  if (personaLower.includes("business") && personaLower.includes("owner")) {
+    return "Business Owner";
   }
   if (personaLower.includes("amara") || personaLower.includes("density")) {
     return "Amara Density Escaper";
