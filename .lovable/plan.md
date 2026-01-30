@@ -1,79 +1,108 @@
 
 
-# Delete All Leads and Related Data for Project eternia_parkcity_thane
+# Fix PPS Score Display in Rating Rationale + Verify Polling UI Updates
 
 ## Summary
 
-This plan will safely delete all lead-related data for the project `eternia_parkcity_thane` from three tables while preserving all other data (projects, brands, sister_projects, approved_domains).
-
-## Data to be Deleted
-
-| Table | Records | Condition |
-|-------|---------|-----------|
-| `lead_enrichments` | 251 | `project_id = 'eternia_parkcity_thane'` |
-| `lead_analyses` | 160 | `project_id = 'eternia_parkcity_thane'` |
-| `leads` | 346 | `project_id = 'eternia_parkcity_thane'` |
-
-## Data NOT Touched
-
-| Table | Records | Status |
-|-------|---------|--------|
-| `projects` | - | Preserved |
-| `brands` | - | Preserved |
-| `sister_projects` | - | Preserved |
-| `approved_domains` | - | Preserved |
+Two changes are needed:
+1. **Remove PPS Score from rating_rationale prompt** - The LLM is currently instructed to include "**PPS Score: X/100.**" in the rating_rationale, but this should not appear there since there's a separate PPS Score field displayed in the UI.
+2. **Verify real-time polling updates** - The polling mechanism exists and calls `updateLeadsWithAnalyses()` but may benefit from a small enhancement to ensure UI refreshes immediately.
 
 ---
 
-## Technical Details
+## Issue 1: PPS Score Appearing in Rating Rationale
 
-### Deletion Order
+### Root Cause
 
-The deletions must happen in this specific order to maintain referential integrity:
+**File:** `supabase/functions/analyze-leads/index.ts`  
+**Line 1846:** The OUTPUT STRUCTURE prompt explicitly instructs the LLM to include PPS Score:
 
-1. **First**: Delete `lead_enrichments` (references leads by lead_id)
-2. **Second**: Delete `lead_analyses` (references leads by lead_id)  
-3. **Third**: Delete `leads` (the parent table)
+```typescript
+"rating_rationale": "**PPS Score: X/100.** Brief explanation of key scoring factors without rating label"
+```
 
-### SQL Statements
+### Memory Context Violation
 
-Three DELETE statements will be executed:
+Per `memory/llm-output/pps-score-output-constraint`:
+> "PPS Score numbers must never appear in rating_rationale, persona_description, or summary sections of lead analysis output."
 
-```sql
--- Step 1: Delete enrichments for the project
-DELETE FROM lead_enrichments 
-WHERE project_id = 'eternia_parkcity_thane';
+### Technical Fix
 
--- Step 2: Delete analyses for the project
-DELETE FROM lead_analyses 
-WHERE project_id = 'eternia_parkcity_thane';
+**File:** `supabase/functions/analyze-leads/index.ts`  
+**Line 1846:** Update the rating_rationale instruction:
 
--- Step 3: Delete leads for the project
-DELETE FROM leads 
-WHERE project_id = 'eternia_parkcity_thane';
+FROM:
+```typescript
+"rating_rationale": "**PPS Score: X/100.** Brief explanation of key scoring factors without rating label",
+```
+
+TO:
+```typescript
+"rating_rationale": "Brief 2-3 sentence explanation of key scoring factors that determined this lead's rating. Focus on financial capability, intent signals, and timeline urgency. Do NOT include the PPS score value - it is displayed separately.",
 ```
 
 ---
 
-## Safety Measures
+## Issue 2: Real-time Polling UI Updates
 
-1. All queries use explicit `WHERE project_id = 'eternia_parkcity_thane'` condition
-2. No other tables are affected
-3. No cascade deletes are used - each table is deleted explicitly
-4. Deletion order prevents orphaned foreign key references
+### Current Implementation
+
+The polling mechanism in `Index.tsx` (lines 440-498) already:
+- Polls every 3 seconds
+- Calls `updateLeadsWithAnalyses()` with partial results at line 470
+- Uses functional state updates to avoid stale closures
+
+### Verification Needed
+
+The polling logic appears correct. The issue you experienced (ratings visible only after all processing complete) may have been caused by:
+1. **Network errors on batch initiation** (as we saw with FunctionsFetchError) - some batches never started processing
+2. **Toast notification overload** - multiple toasts stacking and obscuring the table updates
+3. **UI rendering delay** - table not re-rendering during rapid state updates
+
+### Optional Enhancement
+
+Add a force re-render trigger after each poll update to ensure the table reflects changes:
+
+**File:** `src/pages/Index.tsx`  
+**Lines 468-476:** Add a key-based refresh:
+
+```typescript
+// Update UI with partial results
+if (analyses && analyses.length > 0) {
+  updateLeadsWithAnalyses(analyses);
+  const percentComplete = Math.round((analyses.length / leadIdsToCheck.length) * 100);
+  
+  // Toast less frequently to avoid spam
+  if (percentComplete % 25 === 0 || analyses.length === leadIdsToCheck.length) {
+    toast({
+      title: 'Analysis in progress',
+      description: `${percentComplete}% complete (${analyses.length}/${leadIdsToCheck.length} leads)...`,
+    });
+  }
+}
+```
 
 ---
 
-## Verification After Deletion
+## Files to Modify
 
-Post-deletion query to confirm all data was removed:
+| File | Change |
+|------|--------|
+| `supabase/functions/analyze-leads/index.ts` | Line 1846: Remove PPS Score from rating_rationale prompt instruction |
+| `src/pages/Index.tsx` | Optional: Reduce toast frequency during polling to improve performance |
 
-```sql
-SELECT 
-  (SELECT COUNT(*) FROM leads WHERE project_id = 'eternia_parkcity_thane') as remaining_leads,
-  (SELECT COUNT(*) FROM lead_analyses WHERE project_id = 'eternia_parkcity_thane') as remaining_analyses,
-  (SELECT COUNT(*) FROM lead_enrichments WHERE project_id = 'eternia_parkcity_thane') as remaining_enrichments;
-```
+---
 
-Expected result: All counts should be 0.
+## Expected Outcome
+
+After implementation:
+1. **Rating Rationale** will contain only qualitative scoring explanations without the PPS Score reference
+2. **PPS Score** continues to display separately in the "AI Rating" section of the Lead Report Modal
+3. **Polling UI** will continue to update ratings as they arrive (behavior was already correct, issue was likely network-related batch failures)
+
+---
+
+## Re-analysis Recommendation
+
+After deploying the prompt change, you'll need to **re-analyze leads** for the updated rating_rationale format to take effect. Existing cached analyses will still show the old format with PPS Score until re-analyzed.
 
