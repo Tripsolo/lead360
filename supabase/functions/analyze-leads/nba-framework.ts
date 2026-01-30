@@ -1103,9 +1103,17 @@ export const OBJECTION_DETECTION_KEYWORDS: Record<ObjectionCategory, string[]> =
     "east", "entrance", "floor", "ventilation", "light", "amenities", "deck", "balcony"
   ],
   "Location & Ecosystem": [
+    // Connectivity
     "location", "far", "commute", "office", "work", "travel", "connectivity",
-    "metro", "highway", "school", "hospital", "market", "infrastructure",
-    "area", "vicinity", "congested"
+    "metro", "highway", "distance", "traffic", "office far",
+    // School/Education
+    "school", "college", "education", "children school", "kids school",
+    "podar", "vasant vihar", "dps", "icse", "cbse", "school proximity",
+    // Ecosystem Rebuild
+    "rebuild", "start over", "new area", "know nobody", "social circle",
+    "friends", "relatives", "familiar", "ecosystem", "neighborhood",
+    // Infrastructure
+    "hospital", "market", "infrastructure", "area", "vicinity", "congested"
   ],
   "Competition": [
     "Lodha", "Dosti", "Runwal", "Rustomjee", "Godrej", "Piramal", "Oberoi",
@@ -1508,12 +1516,20 @@ export function mapToMatrixObjection(
       return "Rooms Feel Small"; // Default for Inventory & Product
 
     case "Location & Ecosystem":
-      // Check for specific competitor location mentions
+      // School proximity concerns - map to specific handling (HIGH PRIORITY)
+      if (containsAny(lowerComments, ["school", "education", "children school", "kids school", "college", "school proximity", "podar", "vasant vihar", "dps", "icse", "cbse"])) {
+        return "Connectivity Concerns"; // Use TP-LOC-001 with school context
+      }
+      // Ecosystem rebuild concerns
+      if (containsAny(lowerComments, ["rebuild", "start over", "know nobody", "social", "friends", "ecosystem", "familiar", "new area", "relatives", "social circle", "neighborhood"])) {
+        return "Connectivity Concerns"; // Use TP-LOC-002 (self-sustaining township)
+      }
+      // Premium location comparison
       if (containsAny(lowerComments, ["hiranandani", "powai", "bkc", "worli", "premium area", "better location", "central location", "south bombay"])) {
         return "Competitor Location Better";
       }
-      // Check for connectivity concerns
-      if (containsAny(lowerComments, ["far", "commute", "travel time", "distance", "connectivity", "office far"])) {
+      // Generic connectivity
+      if (containsAny(lowerComments, ["far", "commute", "travel time", "distance", "connectivity", "office far", "traffic"])) {
         return "Connectivity Concerns";
       }
       return "Competitor Location Better"; // Default for Location
@@ -1530,11 +1546,22 @@ export function mapToMatrixObjection(
       return "Price Lower at Competitor"; // Default for Competition
 
     case "Investment":
-      // Investment concerns - typically exploring options
-      if (containsAny(lowerComments, ["roi", "rental", "yield", "appreciation", "investment", "return", "rental income"])) {
-        return "Just Started Exploring";
+      // Check for specific investment concerns vs general inquiry
+      if (containsAny(lowerComments, ["roi", "rental", "yield", "appreciation", "returns", "rental income"])) {
+        // Check if they're asking questions vs have concerns
+        if (containsAny(lowerComments, ["what is", "how much", "returns?", "rental income?", "tell me", "explain"])) {
+          return "Just Started Exploring"; // Genuine inquiry - educate
+        }
+        // If concerned about ROI/yield specifically (lower than expected)
+        if (containsAny(lowerComments, ["low", "less", "not enough", "expected more", "better returns elsewhere"])) {
+          return "Budget Gap (<15%)"; // Use economic matrix but with investor-specific TPs
+        }
       }
-      return "Just Started Exploring"; // Default for Investment
+      // Market timing concerns
+      if (containsAny(lowerComments, ["market down", "prices falling", "not right time", "wait", "recession", "slowdown"])) {
+        return "Timeline Concern (General)";
+      }
+      return "Just Started Exploring"; // Default for Investment - educate on ROI
 
     case "Decision Process":
       // Check for exploration phase
@@ -1602,8 +1629,9 @@ export function checkSafetyConditions(
   const age = extractedSignals?.demographics?.age;
   const possessionUrgency = (extractedSignals?.engagement_signals?.possession_urgency || "").toLowerCase();
   const timelineConcern = possessionUrgency.includes("immediate") || possessionUrgency.includes("rtmi") || possessionUrgency.includes("urgent");
+  const decisionMakersPresent = extractedSignals?.engagement_signals?.decision_makers_present;
 
-  // Rule 1: 75+ with immediate need
+  // Rule 1: 75+ with immediate need (HIGHEST PRIORITY)
   if (age && age > 75 && (timelineConcern || normalizedPersona === "Settlement Seeker")) {
     return {
       triggered: true,
@@ -1618,6 +1646,17 @@ export function checkSafetyConditions(
       triggered: true,
       safetyRule: "Settlement Seeker - Redirect to RTMI/Resale",
       overrideNbaId: "NBA-ESC-004",
+    };
+  }
+
+  // Rule 3: Proxy Buyer - Always push for decision maker visit or VC
+  if (decisionMakersPresent === "Proxy") {
+    const proxyRelationship = extractedSignals?.engagement_signals?.proxy_relationship || "unknown";
+    const actualDecisionMaker = extractedSignals?.engagement_signals?.actual_decision_maker || "actual buyer";
+    return {
+      triggered: true,
+      safetyRule: `Proxy Buyer (${proxyRelationship} visiting for ${actualDecisionMaker}) - Must push for decision maker visit or video call`,
+      overrideNbaId: "NBA-COM-010",
     };
   }
 
@@ -1815,7 +1854,29 @@ From the selected NBA-ID:
 1. You MUST select from the provided TP-IDs and NBA-IDs - do NOT invent new ones
 2. Contextualize but do NOT completely rewrite the talking point
 3. If safety rule is triggered, use the override NBA-ID
-4. Generate 2-3 talking points total (prioritize by type: Competitor > Objection > Highlight)`;
+4. Generate 2-3 talking points total (prioritize by type: Competitor > Objection > Highlight)
+
+## PERSONA-SPECIFIC TP SELECTION RULES (CRITICAL)
+
+5. **Investor Persona TP Selection:**
+   If persona = "Pragmatic Investor" or "First-Time Investor":
+   - MUST include at least one talking point from Investment category (TP-INV-*)
+   - Prioritize TP-INV-006 (rental yield and ROI) over generic Economic Fit TPs
+   - Focus on: appreciation potential, rental yields, metro infrastructure impact
+   - NEVER use family-centric arguments for investors (school proximity, kids, lifestyle)
+   
+6. **Family Persona TP Selection:**
+   If persona = "Lifestyle Connoisseur" or "Aspirant Upgrader" AND (children_count > 0 OR family_stage indicates children):
+   - Prioritize lifestyle and family-centric talking points
+   - Include school proximity (TP-LOC-001), community quality (TP-ECO-003), safety narratives
+   - Use TP-LOC-002 for ecosystem rebuild concerns (self-sustaining township)
+   - NEVER use pure ROI/investment language for family buyers
+
+7. **Proxy Buyer TP Selection:**
+   If decision_makers_present = "Proxy":
+   - MUST include TP-DEC-003 (decision-maker visit urgency)
+   - Focus on: scheduling decision-maker visit, video call options, sharing materials
+   - Emphasize limited inventory / price lock to create urgency for decision-maker engagement`;
 
   const outputStructure = `# OUTPUT STRUCTURE
 Return a JSON object with this EXACT structure:

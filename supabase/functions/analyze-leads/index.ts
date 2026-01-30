@@ -122,6 +122,22 @@ When both CRM and MQL data are available, apply these rules:
     - "Issues": "lift wasn't working", "sample not ready", "site messy"
 13. revisit_promised: Extract explicit revisit commitment ("will come back" = true, "revisit next week" = true, "coming with family" = true)
 
+### Proxy Buyer Detection (CRITICAL):
+14. decision_makers_present:
+    - "All": All decision makers were present during visit
+    - "Partial": Primary buyer present but spouse/parent/child needs to be consulted
+    - "Proxy": Set to "Proxy" if ANY of these patterns detected:
+      * "on behalf of" / "for my [brother/sister/parent/friend]"
+      * "my [brother/sister/son/daughter] wants" / "[sibling] is looking"
+      * "visiting for someone else" / "checking for family member"
+      * "will share with [family member] who will decide"
+      * CRM field "Who will take decision" = different person from visitor
+      * "brother visiting", "sister's requirement", "parents want"
+    - When Proxy is detected, also extract:
+      * proxy_relationship: Who is the visitor (e.g., "brother", "friend", "colleague")
+      * actual_decision_maker: Who will make the final decision (e.g., "sister in Dubai")
+      * decision_maker_availability: If mentioned (e.g., "abroad", "can visit next month", "busy")
+
 ### Financial (from MQL banking_loans):
 14. joint_loan_count: Count loans from MQL banking_loans where ownership_type = "Joint Account"
 15. guarantor_loan_count: Count loans from MQL banking_loans where ownership_type = "Guarantor"
@@ -260,6 +276,9 @@ Return a JSON object with this EXACT structure:
     "is_duplicate_lead": boolean,
     "sample_feedback": "positive" | "negative" | "neutral" | "not_seen",
     "decision_makers_present": "All" | "Partial" | "Proxy" | null,
+    "proxy_relationship": "string | null",  // e.g., "brother", "friend" - who is visiting on behalf
+    "actual_decision_maker": "string | null",  // Who will make the final decision
+    "decision_maker_availability": "string | null",  // e.g., "abroad", "can visit next month"
     "spot_closure_asked": boolean,
     "finalization_timeline": "string | null",
     "searching_since": "string | null",
@@ -273,7 +292,12 @@ Return a JSON object with this EXACT structure:
     "negotiation_asks": ["string"] | null
   },
   "concerns_extracted": [
-    { "topic": "Price" | "Location" | "Possession" | "Config" | "Amenities" | "Trust" | "Others", "detail": "string" }
+    { 
+      "topic": "Price" | "Location" | "Possession" | "Config" | "Amenities" | "Trust" | "Others", 
+      "sub_topic": "Connectivity" | "School Proximity" | "Ecosystem Rebuild" | "Social Circle" | "Infrastructure" | "Budget Gap" | "Payment Terms" | null,
+      "detail": "string",
+      "customer_words": "string | null"  // Direct quote if available
+    }
   ],
   "competitor_intelligence": {
     "competitors_mentioned": [
@@ -826,6 +850,35 @@ You are provided with PRE-EXTRACTED SIGNALS from CRM and MQL data (not raw data)
 3. Derive final rating from PPS: >= 85 = Hot, >= 65 = Warm, < 65 = Cold
 
 4. Identify persona using detection rules in priority order (NRI > Retirement > Business Owner > Investor > Upgrade Seeker > First-Time Buyer > Custom)
+
+## PERSONA VALIDATION GUARDRAILS (CRITICAL)
+
+After initial persona detection, VALIDATE against these override rules:
+
+1. **Family Override for Investor Label:**
+   If persona = "Pragmatic Investor" or "First-Time Investor" BUT any of these signals present:
+   - children_count > 0 OR children_ages is not empty
+   - core_motivation contains "family", "children", "school", "kids", "upgrade", "bigger space", "growing family"
+   - concerns_extracted mentions "school", "children", "family", "kids"
+   → OVERRIDE to "Lifestyle Connoisseur" (if income_tier = "Elite" or "High") or "Aspirant Upgrader" (otherwise)
+   
+2. **Proxy Buyer Override:**
+   If decision_makers_present = "Proxy":
+   - Persona classification should be based on the ACTUAL decision maker's profile (if known)
+   - If actual_decision_maker profile is unknown, default to "Aspirant Upgrader" and flag for discovery
+   - Set persona_confidence = "Low" when proxy buyer detected
+   
+3. **Core Motivation Alignment Check:**
+   The detected persona MUST align with core_motivation:
+   - "investment", "rental", "ROI", "appreciation", "returns", "passive income" → Investor personas ONLY
+   - "family", "children", "upgrade", "space", "bigger", "school proximity", "growing family" → Family/Lifestyle personas ONLY
+   - "retirement", "settlement", "parents", "peaceful", "health" → Settlement Seeker
+   - "first home", "newly married", "starting family" → First-Time Buyer
+   
+4. **Conflicting Signal Log:**
+   If persona signals conflict, output:
+   - persona_confidence: "Low"
+   - persona_conflict_reason: "Investor signal from MQL but family-centric motivation in CRM"
 
 5. Generate outputs using ONLY the extracted signals - do NOT hallucinate additional information
 
