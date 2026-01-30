@@ -479,7 +479,11 @@ ${stage2Instructions}
 ${outputStructure}`;
 }
 
-// ============= Gemini API Call Helper =============
+// ============= Model Configuration =============
+// Stage 1 & 3: Gemini 3 Flash Preview (Primary) / Gemini 2.5 Flash (Fallback)
+// Stage 2: Claude Opus 4.5 via OpenRouter (Primary) / Gemini 2.5 Pro (Fallback)
+
+// ============= Gemini API Call Helper (gemini-2.5-pro - Stage 2 Fallback) =============
 async function callGeminiAPI(
   prompt: string,
   googleApiKey: string,
@@ -520,14 +524,14 @@ async function callGeminiAPI(
 
       const errorText = await response.text();
 
-      if (response.status === 503 && attempt < maxRetries) {
+      if ((response.status === 503 || response.status === 429) && attempt < maxRetries) {
         const backoffMs = Math.pow(2, attempt) * 1000;
-        console.warn(`Google AI API overloaded (attempt ${attempt}/${maxRetries}), retrying in ${backoffMs}ms...`);
+        console.warn(`Gemini 2.5 Pro API overloaded (attempt ${attempt}/${maxRetries}), retrying in ${backoffMs}ms...`);
         await new Promise((resolve) => setTimeout(resolve, backoffMs));
         continue;
       }
 
-      console.error("Google AI API error:", errorText);
+      console.error("Gemini 2.5 Pro API error:", errorText);
       lastError = new Error(`API call failed: ${errorText}`);
     } catch (fetchError) {
       lastError = fetchError instanceof Error ? fetchError : new Error(String(fetchError));
@@ -547,6 +551,335 @@ async function callGeminiAPI(
   const candidate = data?.candidates?.[0];
   const part = candidate?.content?.parts?.[0];
   return typeof part?.text === "string" ? part.text : JSON.stringify(candidate ?? data);
+}
+
+// ============= Gemini 3 Flash API (Stage 1 & 3 Primary) =============
+async function callGemini3FlashAPI(
+  prompt: string,
+  googleApiKey: string,
+  useJsonMode: boolean = true,
+  maxRetries: number = 3,
+): Promise<string> {
+  let lastError: Error | null = null;
+  let response: Response | null = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const generationConfig: any = {
+        temperature: 0.2,
+        topK: 40,
+        topP: 0.95,
+        maxOutputTokens: 8192,
+      };
+
+      if (useJsonMode) {
+        generationConfig.responseMimeType = "application/json";
+      }
+
+      response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${googleApiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig,
+          }),
+        },
+      );
+
+      if (response.ok) {
+        break;
+      }
+
+      const errorText = await response.text();
+
+      if ((response.status === 503 || response.status === 429) && attempt < maxRetries) {
+        const backoffMs = Math.pow(2, attempt) * 1000;
+        console.warn(`Gemini 3 Flash API overloaded (attempt ${attempt}/${maxRetries}), retrying in ${backoffMs}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+        continue;
+      }
+
+      console.error("Gemini 3 Flash API error:", errorText);
+      lastError = new Error(`Gemini 3 Flash API call failed: ${errorText}`);
+    } catch (fetchError) {
+      lastError = fetchError instanceof Error ? fetchError : new Error(String(fetchError));
+      if (attempt < maxRetries) {
+        const backoffMs = Math.pow(2, attempt) * 1000;
+        console.warn(`Gemini 3 Flash fetch error (attempt ${attempt}/${maxRetries}), retrying in ${backoffMs}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+      }
+    }
+  }
+
+  if (!response?.ok) {
+    throw lastError || new Error("Gemini 3 Flash API call failed after retries");
+  }
+
+  const data = await response.json();
+  const candidate = data?.candidates?.[0];
+  const part = candidate?.content?.parts?.[0];
+  return typeof part?.text === "string" ? part.text : JSON.stringify(candidate ?? data);
+}
+
+// ============= Gemini 2.5 Flash API (Stage 1 & 3 Fallback) =============
+async function callGemini25FlashAPI(
+  prompt: string,
+  googleApiKey: string,
+  useJsonMode: boolean = true,
+  maxRetries: number = 3,
+): Promise<string> {
+  let lastError: Error | null = null;
+  let response: Response | null = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const generationConfig: any = {
+        temperature: 0.2,
+        topK: 40,
+        topP: 0.95,
+        maxOutputTokens: 8192,
+      };
+
+      if (useJsonMode) {
+        generationConfig.responseMimeType = "application/json";
+      }
+
+      response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${googleApiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig,
+          }),
+        },
+      );
+
+      if (response.ok) {
+        break;
+      }
+
+      const errorText = await response.text();
+
+      if ((response.status === 503 || response.status === 429) && attempt < maxRetries) {
+        const backoffMs = Math.pow(2, attempt) * 1000;
+        console.warn(`Gemini 2.5 Flash API overloaded (attempt ${attempt}/${maxRetries}), retrying in ${backoffMs}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+        continue;
+      }
+
+      console.error("Gemini 2.5 Flash API error:", errorText);
+      lastError = new Error(`Gemini 2.5 Flash API call failed: ${errorText}`);
+    } catch (fetchError) {
+      lastError = fetchError instanceof Error ? fetchError : new Error(String(fetchError));
+      if (attempt < maxRetries) {
+        const backoffMs = Math.pow(2, attempt) * 1000;
+        console.warn(`Gemini 2.5 Flash fetch error (attempt ${attempt}/${maxRetries}), retrying in ${backoffMs}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+      }
+    }
+  }
+
+  if (!response?.ok) {
+    throw lastError || new Error("Gemini 2.5 Flash API call failed after retries");
+  }
+
+  const data = await response.json();
+  const candidate = data?.candidates?.[0];
+  const part = candidate?.content?.parts?.[0];
+  return typeof part?.text === "string" ? part.text : JSON.stringify(candidate ?? data);
+}
+
+// ============= OpenRouter API (Stage 2 Primary - Claude Opus 4.5) =============
+async function callOpenRouterAPI(
+  systemPrompt: string,
+  userPrompt: string,
+  maxRetries: number = 3,
+): Promise<string> {
+  const openrouterApiKey = Deno.env.get("OPENROUTER_API_KEY");
+  if (!openrouterApiKey) {
+    throw new Error("OPENROUTER_API_KEY not configured");
+  }
+
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${openrouterApiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://cx360.lovable.app",
+          "X-Title": "CX360 Lead Analysis"
+        },
+        body: JSON.stringify({
+          model: "anthropic/claude-opus-4",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt }
+          ],
+          temperature: 0.2,
+          max_tokens: 8192
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content || "";
+        return content;
+      }
+
+      const errorText = await response.text();
+      
+      // Handle rate limits with exponential backoff
+      if ((response.status === 429 || response.status === 503) && attempt < maxRetries) {
+        const backoffMs = Math.pow(2, attempt) * 1000;
+        console.warn(`OpenRouter rate limited (attempt ${attempt}/${maxRetries}), retrying in ${backoffMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, backoffMs));
+        continue;
+      }
+
+      console.error("OpenRouter API error:", errorText);
+      lastError = new Error(`OpenRouter call failed: ${errorText}`);
+    } catch (fetchError) {
+      lastError = fetchError instanceof Error ? fetchError : new Error(String(fetchError));
+      if (attempt < maxRetries) {
+        const backoffMs = Math.pow(2, attempt) * 1000;
+        console.warn(`OpenRouter fetch error (attempt ${attempt}/${maxRetries}), retrying...`);
+        await new Promise(resolve => setTimeout(resolve, backoffMs));
+      }
+    }
+  }
+
+  throw lastError || new Error("OpenRouter API call failed after retries");
+}
+
+// ============= Stage 2 Prompt Split for Claude =============
+function buildStage2PromptMessages(
+  extractedSignalsJson: string,
+  systemPrompt: string,
+  brandContext: string,
+  projectContext: string,
+  sisterProjectsContext: string,
+  leadScoringModel: string,
+  personaDefinitions: string,
+  privacyRules: string,
+  outputConstraints: string,
+  concernGeneration: string,
+  talkingpointsGeneration: string,
+  outputStructure: string,
+): { systemPromptMsg: string; userPromptMsg: string } {
+  const stage2Instructions = `# ANALYSIS INSTRUCTIONS
+
+You are provided with PRE-EXTRACTED SIGNALS from CRM and MQL data (not raw data). Use these signals to:
+
+1. Calculate the PPS Score using the 5-dimension framework:
+   - Financial Capability (max 30 pts): Use income_tier, turnover_tier, budget gap, funding_source, credit_rating, emi_burden_level, card_portfolio_strength, total_collateral_value_cr
+   - Intent & Engagement (max 25 pts): Use visit_count, is_duplicate_lead, sample_feedback, competitor_intelligence, roots_feedback, visit_quality, revisit_promised
+   - Urgency & Timeline (max 20 pts): Use stage_preference, core_motivation, home_loan_recency, investor_signal, possession_urgency, expected_closure_days, search_duration_months
+   - Product-Market Fit (max 15 pts): Use config match, location fit, mql_lifestyle alignment, upgrade_ratio, family_size, children_count
+   - Authority & Decision Dynamics (max 10 pts): Use decision_makers_present, age-based adjustments, guarantor_loan_count, joint_loan_count, income_earners
+
+2. Apply scoring adjustments from extracted signals:
+   - If investor_signal is true: +5 pts to Urgency
+   - If home_loan_recency is "Within 3 years" AND investor_signal is false: -3 pts to Urgency
+   - If emi_burden_level is "High": -5 pts to Financial. If "Moderate": -2 pts
+   - If guarantor_loan_count > 0: +1 pt to Authority (family network signal)
+   - If joint_loan_count > 0: +1 pt to Authority (family decision-making)
+   - If card_portfolio_strength is "Premium": +2 pts to Financial
+   - If upgrade_ratio > 1.5: +2 pts to Product-Market Fit (significant upgrade)
+   - If total_collateral_value_cr >= 1: +2 pts to Financial (asset-backed strength)
+   - If children_count > 0 AND project has school proximity: +2 pts to PMF
+   - If family_size >= 5 AND config is 3BHK+: +1 pt to PMF (config match)
+   - If search_duration_months > 12: +3 pts to Urgency (serious buyer, extended search)
+   - If search_duration_months 6-12: +1 pt to Urgency (active search)
+   - If visit_quality is "Thorough": +2 pts to Intent
+   - If visit_quality is "Rushed" or "Issues": -2 pts to Intent
+   - If revisit_promised is true: +2 pts to Intent
+
+3. Derive final rating from PPS: >= 85 = Hot, >= 65 = Warm, < 65 = Cold
+
+4. Identify persona using detection rules in priority order (NRI > Retirement > Business Owner > Investor > Upgrade Seeker > First-Time Buyer > Custom)
+
+5. Generate outputs using ONLY the extracted signals - do NOT hallucinate additional information
+
+6. For competitor talking points: Use COMPETITOR PRICING REFERENCE with quantitative comparisons
+   - Use competitor carpet_stated, price_stated_cr, and price_per_sqft for specific comparisons
+   - Calculate differentials: "X% more carpet area at competitive pricing"
+
+7. CROSS-SELL EVALUATION (if sister projects available):
+   - Check if lead's requirements match any sister project's cross-sell triggers
+   - Consider: budget constraints, RTMI needs, config preference, GCP view interest
+   - Generate cross_sell_recommendation if a clear match exists, otherwise set to null
+
+## USING EXTRACTED EVIDENCE IN OUTPUTS (CRITICAL)
+
+When generating persona_description, summary, and talking_points, reference the evidence sections:
+
+1. **PERSONA DESCRIPTION**: Reference demographics_evidence and professional_evidence
+   - Use family_composition for family stage context (e.g., "Couple with two school-going kids")
+   - Use role_context for professional credibility (e.g., "Senior Manager at TCS with 15+ years experience")
+   - Use lifestyle_context for lifestyle tier
+
+2. **SUMMARY**: Reference engagement_evidence and motivation_evidence
+   - Use first_visit_summary and latest_visit_summary for visit chronology
+   - Use stated_motivation_quote for core intent (use customer's own words when available)
+   - Use next_steps_stated for follow-up context
+
+3. **TALKING POINTS**: Reference preferences_evidence and competitor_evidence
+   - Use sample_response_quote for positive reinforcement points
+   - Use competitor_comparison_quote for specific counter-comparisons
+   - Use comparison_to_current for upgrade value proposition
+
+4. **CONCERNS**: Reference engagement_evidence.objection_stated
+   - Use direct customer words when available for accurate concern capture
+   - ⚠️ PRICE VALIDATION: Before adding "Price" to key_concerns, CHECK:
+     * If financial_signals.budget_gap_percent ≤ 20 AND customer_mentioned_price_high = false: DO NOT add Price
+     * Only add "Price" if gap > 20% OR customer explicitly complained about pricing
+
+5. **NEXT BEST ACTION**: Reference engagement_evidence.next_steps_stated and negotiation_asks
+   - Tailor action based on stated next steps and any negotiation requests
+
+CRITICAL: Do not fabricate quotes or facts. Only use evidence that is present (not null). If evidence is null, generate based on signals only.
+
+IMPORTANT: Return ONLY valid JSON. No markdown, no code blocks, no explanatory text.`;
+
+  // Build system prompt with all context
+  const systemPromptMsg = `${systemPrompt}
+
+${brandContext}
+
+${projectContext}
+
+${sisterProjectsContext}
+
+${leadScoringModel}
+
+${personaDefinitions}
+
+${privacyRules}
+
+${outputConstraints}
+
+${concernGeneration}
+
+${talkingpointsGeneration}
+
+${stage2Instructions}
+
+${outputStructure}`;
+
+  // User prompt contains the extracted signals
+  const userPromptMsg = `# PRE-EXTRACTED SIGNALS (Use these for analysis - NOT raw data)
+${extractedSignalsJson}
+
+Analyze the above extracted signals and return a JSON object following the OUTPUT STRUCTURE defined in the system prompt. Return ONLY valid JSON.`;
+
+  return { systemPromptMsg, userPromptMsg };
 }
 
 // ============= Fallback Extraction =============
@@ -1813,7 +2146,7 @@ IMPORTANT SCORING RULES:
       return { mqlSection, mqlAvailable: true };
     }
 
-    // Run Stage 1 for all leads in parallel
+    // Run Stage 1 for all leads in parallel with Gemini 3 Flash (fallback to Gemini 2.5 Flash)
     const stage1Results = await Promise.all(
       leadsToAnalyze.map(async (leadWithMql, index) => {
         // Small stagger to avoid burst requests
@@ -1825,7 +2158,8 @@ IMPORTANT SCORING RULES:
         const leadDataJson = JSON.stringify(lead, null, 2);
         const { mqlSection, mqlAvailable } = buildMqlSection(mqlEnrichment);
         
-        console.log(`Stage 1 (Extraction) starting for lead ${lead.id}`);
+        let stage1Model = "gemini-3-flash-preview";
+        console.log(`Stage 1 (Extraction) starting for lead ${lead.id} using ${stage1Model}`);
         
         const stage1Prompt = buildStage1Prompt(
           leadDataJson,
@@ -1837,35 +2171,47 @@ IMPORTANT SCORING RULES:
         
         let extractedSignals;
         try {
-          const stage1Response = await callGeminiAPI(stage1Prompt, googleApiKey!, true);
+          const stage1Response = await callGemini3FlashAPI(stage1Prompt, googleApiKey!, true);
           extractedSignals = JSON.parse(stage1Response);
-          console.log(`Stage 1 complete for lead ${lead.id}`);
-        } catch (stage1Error) {
-          console.error(`Stage 1 failed for lead ${lead.id}:`, stage1Error);
-          extractedSignals = createFallbackExtraction(lead, mqlEnrichment);
-          console.log(`Using fallback extraction for lead ${lead.id}`);
+          console.log(`Stage 1 complete for lead ${lead.id} using ${stage1Model}`);
+        } catch (stage1PrimaryError) {
+          console.warn(`Stage 1 primary (${stage1Model}) failed for lead ${lead.id}, trying fallback (gemini-2.5-flash)...`);
+          stage1Model = "gemini-2.5-flash (fallback)";
+          
+          try {
+            const stage1Response = await callGemini25FlashAPI(stage1Prompt, googleApiKey!, true);
+            extractedSignals = JSON.parse(stage1Response);
+            console.log(`Stage 1 complete for lead ${lead.id} using ${stage1Model}`);
+          } catch (stage1FallbackError) {
+            console.error(`Stage 1 fallback failed for lead ${lead.id}:`, stage1FallbackError);
+            extractedSignals = createFallbackExtraction(lead, mqlEnrichment);
+            stage1Model = "rule-based fallback";
+            console.log(`Using rule-based fallback extraction for lead ${lead.id}`);
+          }
         }
         
-        return { lead, mqlEnrichment, mqlAvailable, extractedSignals };
+        return { lead, mqlEnrichment, mqlAvailable, extractedSignals, stage1Model };
       })
     );
     
     console.log(`Parallel Stage 1 complete for all ${leadsToAnalyze.length} leads`);
 
-    // ===== SEQUENTIAL STAGE 2 SCORING + STAGE 3 NBA/TP =====
+    // ===== SEQUENTIAL STAGE 2 SCORING (Claude Opus 4.5 via OpenRouter) + STAGE 3 NBA/TP (Gemini 3 Flash) =====
     const freshResults: any[] = [];
 
     for (let index = 0; index < stage1Results.length; index++) {
-      const { lead, mqlEnrichment, mqlAvailable, extractedSignals } = stage1Results[index];
+      const { lead, mqlEnrichment, mqlAvailable, extractedSignals, stage1Model } = stage1Results[index];
 
       // Add 300ms delay between Stage 2 calls (not before first one)
       if (index > 0) {
         await new Promise((resolve) => setTimeout(resolve, 300));
       }
 
-      console.log(`Stage 2 (Generation) starting for lead ${lead.id} (${index + 1}/${stage1Results.length})`);
+      let stage2Model = "claude-opus-4.5";
+      console.log(`Stage 2 (Scoring & Generation) starting for lead ${lead.id} using ${stage2Model} (${index + 1}/${stage1Results.length})`);
 
-      const stage2Prompt = buildStage2Prompt(
+      // Build prompts for Claude (OpenRouter format: system + user messages)
+      const { systemPromptMsg, userPromptMsg } = buildStage2PromptMessages(
         JSON.stringify(extractedSignals, null, 2),
         systemPrompt,
         brandContext,
@@ -1884,19 +2230,55 @@ IMPORTANT SCORING RULES:
       let parseSuccess = true;
 
       try {
-        const stage2Response = await callGeminiAPI(stage2Prompt, googleApiKey!, true);
-        analysisResult = JSON.parse(stage2Response);
-        console.log(`Stage 2 complete for lead ${lead.id}`);
-      } catch (stage2Error) {
-        parseSuccess = false;
-        console.error(`Stage 2 failed for lead ${lead.id}:`, stage2Error);
-        analysisResult = {
-          ai_rating: "Warm",
-          rating_confidence: "Low",
-          rating_rationale: "Analysis completed with limited structure",
-          summary: extractedSignals.visit_notes_summary || "Unable to analyze lead",
-          mql_data_available: mqlAvailable,
-        };
+        const stage2Response = await callOpenRouterAPI(systemPromptMsg, userPromptMsg);
+        // Claude may return JSON wrapped in markdown code blocks - strip them
+        let cleanedResponse = stage2Response.trim();
+        if (cleanedResponse.startsWith("```json")) {
+          cleanedResponse = cleanedResponse.slice(7);
+        } else if (cleanedResponse.startsWith("```")) {
+          cleanedResponse = cleanedResponse.slice(3);
+        }
+        if (cleanedResponse.endsWith("```")) {
+          cleanedResponse = cleanedResponse.slice(0, -3);
+        }
+        analysisResult = JSON.parse(cleanedResponse.trim());
+        console.log(`Stage 2 complete for lead ${lead.id} using ${stage2Model}`);
+      } catch (stage2PrimaryError) {
+        console.warn(`Stage 2 primary (${stage2Model}) failed for lead ${lead.id}, trying fallback (gemini-2.5-pro)...`);
+        stage2Model = "gemini-2.5-pro (fallback)";
+        
+        // Build the original combined prompt for Gemini fallback
+        const stage2Prompt = buildStage2Prompt(
+          JSON.stringify(extractedSignals, null, 2),
+          systemPrompt,
+          brandContext,
+          projectContext,
+          sisterProjectsContext,
+          leadScoringModel,
+          personaDefinitions,
+          privacyRules,
+          outputConstraints,
+          concernGeneration,
+          talkingpointsGeneration,
+          outputStructure,
+        );
+        
+        try {
+          const stage2Response = await callGeminiAPI(stage2Prompt, googleApiKey!, true);
+          analysisResult = JSON.parse(stage2Response);
+          console.log(`Stage 2 complete for lead ${lead.id} using ${stage2Model}`);
+        } catch (stage2FallbackError) {
+          parseSuccess = false;
+          stage2Model = "rule-based fallback";
+          console.error(`Stage 2 fallback failed for lead ${lead.id}:`, stage2FallbackError);
+          analysisResult = {
+            ai_rating: "Warm",
+            rating_confidence: "Low",
+            rating_rationale: "Analysis completed with limited structure",
+            summary: extractedSignals.visit_notes_summary || "Unable to analyze lead",
+            mql_data_available: mqlAvailable,
+          };
+        }
       }
 
       // Apply MQL-based final score adjustment (internal calibration)
@@ -1931,9 +2313,10 @@ IMPORTANT SCORING RULES:
         analysisResult.ai_rating = adjustedRating;
       }
 
-      // ===== STAGE 3: NBA & TALKING POINTS GENERATION =====
+      // ===== STAGE 3: NBA & TALKING POINTS GENERATION (Gemini 3 Flash) =====
+      let stage3Model = "gemini-3-flash-preview";
       if (parseSuccess) {
-        console.log(`Stage 3 (NBA/TP) starting for lead ${lead.id}`);
+        console.log(`Stage 3 (NBA/TP) starting for lead ${lead.id} using ${stage3Model}`);
         
         // Add 200ms delay before Stage 3
         await new Promise((resolve) => setTimeout(resolve, 200));
@@ -1950,9 +2333,9 @@ IMPORTANT SCORING RULES:
             visitComments
           );
           
-          const stage3Response = await callGeminiAPI(stage3Prompt, googleApiKey!, true);
+          const stage3Response = await callGemini3FlashAPI(stage3Prompt, googleApiKey!, true);
           const stage3Result = JSON.parse(stage3Response);
-          console.log(`Stage 3 complete for lead ${lead.id}`);
+          console.log(`Stage 3 complete for lead ${lead.id} using ${stage3Model}`);
           
           // Code-level safety validation (override LLM if needed)
           const safetyCheck = checkSafetyConditions(analysisResult.persona, extractedSignals);
@@ -1978,12 +2361,61 @@ IMPORTANT SCORING RULES:
           analysisResult.secondary_objections = stage3Result.secondary_objections;
           analysisResult.safety_check_triggered = stage3Result.safety_check_triggered;
           
-        } catch (stage3Error) {
-          console.error(`Stage 3 failed for lead ${lead.id}:`, stage3Error);
-          // Keep Stage 2 talking_points and next_best_action as fallback
-          // (if they exist from legacy Stage 2 output)
+        } catch (stage3PrimaryError) {
+          console.warn(`Stage 3 primary (${stage3Model}) failed for lead ${lead.id}, trying fallback (gemini-2.5-flash)...`);
+          stage3Model = "gemini-2.5-flash (fallback)";
+          
+          try {
+            const stage3Prompt = buildStage3Prompt(
+              analysisResult,
+              extractedSignals,
+              lead.rawData?.["Visit Comments"] || ""
+            );
+            
+            const stage3Response = await callGemini25FlashAPI(stage3Prompt, googleApiKey!, true);
+            const stage3Result = JSON.parse(stage3Response);
+            console.log(`Stage 3 complete for lead ${lead.id} using ${stage3Model}`);
+            
+            // Code-level safety validation (override LLM if needed)
+            const safetyCheck = checkSafetyConditions(analysisResult.persona, extractedSignals);
+            if (safetyCheck.triggered && stage3Result.safety_check_triggered === null) {
+              const overrideNba = getNBARuleDef(safetyCheck.overrideNbaId || "");
+              if (overrideNba) {
+                stage3Result.next_best_action = {
+                  nba_id: overrideNba.nba_id,
+                  action_type: overrideNba.action_category as NBAActionType,
+                  action: overrideNba.specific_action,
+                  escalation_trigger: overrideNba.escalation_trigger,
+                  fallback_action: overrideNba.fallback_action,
+                };
+                stage3Result.safety_check_triggered = safetyCheck.safetyRule;
+              }
+            }
+            
+            // Merge Stage 3 results into analysis result
+            analysisResult.next_best_action = stage3Result.next_best_action;
+            analysisResult.talking_points = stage3Result.talking_points;
+            analysisResult.objection_categories_detected = stage3Result.objection_categories_detected;
+            analysisResult.primary_objection = stage3Result.primary_objection;
+            analysisResult.secondary_objections = stage3Result.secondary_objections;
+            analysisResult.safety_check_triggered = stage3Result.safety_check_triggered;
+            
+          } catch (stage3FallbackError) {
+            stage3Model = "skipped (using Stage 2 output)";
+            console.error(`Stage 3 fallback failed for lead ${lead.id}:`, stage3FallbackError);
+            // Keep Stage 2 output without talking_points/NBA enhancement
+          }
         }
+      } else {
+        stage3Model = "skipped (Stage 2 failed)";
       }
+
+      // Add models_used metadata to track which model processed each stage
+      analysisResult.models_used = {
+        stage1: stage1Model,
+        stage2: stage2Model,
+        stage3: stage3Model,
+      };
 
       const result = {
         leadId: lead.id,
@@ -2004,7 +2436,7 @@ IMPORTANT SCORING RULES:
     const allResults = [...cachedResults, ...freshResults];
     const successCount = allResults.filter((r) => r.parseSuccess).length;
 
-    console.log(`Analysis complete: ${successCount}/${allResults.length} successful (parallel Stage 1 + sequential Stage 2)`);
+    console.log(`Analysis complete: ${successCount}/${allResults.length} successful (Gemini 3 Flash Stage 1/3 + Claude Opus 4.5 Stage 2)`);
 
     return new Response(
       JSON.stringify({
