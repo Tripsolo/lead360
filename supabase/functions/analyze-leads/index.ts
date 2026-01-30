@@ -39,11 +39,20 @@ Extract structured signals from the CRM and MQL data provided. Transform raw val
 4. Parse visit_comments for: budget, in-hand funds %, finalization timeline, spot closure response, sample feedback, core motivation
 5. Summarize all visit notes into a concise 30-word summary
 
-## FIELD PRECEDENCE RULES:
-- Employer Name: Use MQL value if available, else CRM
-- Designation: Use MQL value if available, else CRM
-- Location/Residence: ALWAYS use CRM value
-- Age/Gender: Use MQL value if available
+## FIELD PRECEDENCE RULES (CRITICAL - STANDARDIZED):
+When both CRM and MQL data are available, apply these rules:
+
+| Field | Winner | Condition |
+|-------|--------|-----------|
+| Designation | CRM | Always (CRM values are more specific job titles) |
+| Occupation Type | CRM | Always |
+| Employer | MQL | Only if MQL is not empty (verified from banking records) |
+| Location | MQL | Only if MQL is not empty |
+| Age | MQL | Only if MQL is not empty |
+| Gender | MQL | Only if MQL is not empty |
+| Locality Grade | MQL | Only if MQL is not empty |
+| Income | MQL | Only if MQL is not empty (final_income_lacs) |
+| Budget | Complementary | Use CRM budget_stated as primary |
 
 ## FIELD EXTRACTION RULES:
 
@@ -636,8 +645,10 @@ function createFallbackExtraction(lead: any, mqlEnrichment: any): any {
       gender: mqlEnrichment?.gender || null,
       family_stage: null,
       nri_status: rawData["Correspondence Country"] && rawData["Correspondence Country"] !== "India",
-      residence_location: rawData["Location of Residence"] || null,
+      // Location: MQL > CRM (if MQL not empty), per standardization rules
+      residence_location: mqlEnrichment?.location || rawData["Location of Residence"] || null,
       building_name: rawData["Building Name"] || null,
+      // Locality Grade: MQL > CRM (if MQL not empty)
       locality_grade: mqlEnrichment?.locality_grade || null,
       income_earners: null,
       years_at_current_residence: null,
@@ -646,13 +657,16 @@ function createFallbackExtraction(lead: any, mqlEnrichment: any): any {
       children_ages: null,
     },
     professional_profile: {
+      // Occupation Type: CRM > MQL (always)
       occupation_type: rawData["Occupation"] || null,
-      designation: mqlEnrichment?.designation || rawData["Designation"] || null,
-      employer: mqlEnrichment?.employer_name || rawData["Place of Work"] || null,
+      // Designation: CRM > MQL (always) - CORRECTED per standardization rules
+      designation: rawData["Designation"] || mqlEnrichment?.designation || null,
+      // Employer: MQL > CRM (if MQL not empty) - per standardization rules
+      employer: mqlEnrichment?.employer_name || rawData["Place of Work (Company Name)"] || rawData["Place of Work"] || null,
       industry: mqlEnrichment?.industry || rawData["Industry / Sector"] || null,
       business_type: mqlEnrichment?.business_type || null,
       turnover_tier: mqlEnrichment?.turnover_slab || null,
-      work_location: rawData["Place of Work"] || null,
+      work_location: rawData["Location of Work"] || rawData["Place of Work"] || null,
       company_type: null,
     },
     financial_signals: {
@@ -1014,11 +1028,23 @@ Analyze each lead independently and objectively. Focus on extracting conversion 
 - active_emi_burden: Total monthly EMI across all active loans
 - emi_to_income_ratio: EMI burden as % of monthly income
 
-## FIELD PRECEDENCE RULES (CRITICAL):
-1. Employer Name: Use MQL value if available (verified), fallback to CRM
-2. Designation: Use MQL value if available (more accurate than CRM), fallback to CRM
-3. Location/Residence: ALWAYS use CRM value (customer-stated)
-4. If CRM location significantly differs from MQL locality_grade, add "locality_grade" to overridden_fields array`;
+## FIELD PRECEDENCE RULES (CRITICAL - STANDARDIZED):
+Apply these rules when both CRM and MQL data are available:
+
+| Field | Winner | Condition |
+|-------|--------|-----------|
+| Designation | CRM | Always (CRM has more specific job titles) |
+| Occupation Type | CRM | Always |
+| Employer | MQL | Only if MQL is not empty (verified from banking records) |
+| Location | MQL | Only if MQL is not empty |
+| Age | MQL | Only if MQL is not empty |
+| Gender | MQL | Only if MQL is not empty |
+| Locality Grade | MQL | Only if MQL is not empty |
+| Income | MQL | Only if MQL is not empty (use final_income_lacs) |
+| Budget | Complementary | Use CRM budget_stated as primary |
+
+If CRM location significantly differs from MQL locality_grade, add "locality_grade" to overridden_fields array`;
+
 
     const leadScoringModel = `# LEAD SCORING MODEL: PPS (Predictive Probability Score) FRAMEWORK
 
