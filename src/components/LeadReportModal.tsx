@@ -8,6 +8,7 @@ import { Lead } from '@/types/lead';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Mail, Phone, Briefcase, MapPin, Home, DollarSign, Target, AlertCircle, MessageSquare, Users, Lightbulb, User, Building2, ArrowRightCircle } from 'lucide-react';
+import { standardizeLead } from '@/utils/leadStandardization';
 
 // Helper to convert snake_case to readable text
 const formatSnakeCase = (text: string) => text.replace(/_/g, ' ');
@@ -77,11 +78,11 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
   const analysis = lead.fullAnalysis;
   const mql = lead.mqlEnrichment;
 
+  // Use standardization function to get consistent field values
+  const standardized = standardizeLead(lead.rawData || {}, mql);
+
   // Determine if MQL data is available and valid
   const mqlDataAvailable = mql?.mqlRating && mql.mqlRating !== 'N/A';
-
-  // Get designation - prefer MQL if available
-  const displayDesignation = (mqlDataAvailable && mql?.designation) ? mql.designation : lead.designation;
 
   const getRatingColor = (rating?: string) => {
     switch (rating) {
@@ -214,28 +215,29 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
                 </div>
               )}
 
-              {/* MQL Age & Gender */}
-              {mqlDataAvailable && (mql?.age || mql?.gender) && (
+              {/* MQL Age & Gender - using standardized values */}
+              {(standardized.age || standardized.gender) && (
                 <div className="flex items-center gap-2 text-sm">
                   <User className="h-4 w-4 text-muted-foreground" />
                   <span>
-                    {mql?.age ? `${mql.age} yrs` : ''}{mql?.age && mql?.gender ? ', ' : ''}{mql?.gender || ''}
+                    {standardized.age ? `${standardized.age} yrs` : ''}{standardized.age && standardized.gender ? ', ' : ''}{standardized.gender || ''}
                   </span>
                 </div>
               )}
 
-              {/* Designation - prefer MQL, show CRM only if different */}
-              {displayDesignation && (
+              {/* Designation - using standardized value (CRM > MQL) */}
+              {standardized.designation && (
                 <div className="flex items-center gap-2 text-sm">
                   <Briefcase className="h-4 w-4 text-muted-foreground" />
-                  <span>{displayDesignation}</span>
+                  <span>{standardized.designation}</span>
                 </div>
               )}
 
-              {lead.company && (
+              {/* Employer - using standardized value (MQL > CRM if MQL not empty) */}
+              {standardized.employer && (
                 <div className="flex items-center gap-2 text-sm">
                   <Briefcase className="h-4 w-4 text-muted-foreground" />
-                  <span>{lead.company}</span>
+                  <span>{standardized.employer}</span>
                 </div>
               )}
 
@@ -253,25 +255,25 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
                 </div>
               )}
 
-              {/* Current Residence with Locality Badge inline */}
-              {lead.currentResidence && (
+              {/* Location - using standardized value (MQL > CRM if MQL not empty) with Locality Badge inline */}
+              {standardized.location && (
                 <div className="flex items-center gap-2 text-sm flex-wrap">
                   <Home className="h-4 w-4 text-muted-foreground" />
-                  <span>{lead.currentResidence}</span>
-                  {mqlDataAvailable && mql?.localityGrade && (
-                    <Badge variant="outline" className={`${getLocalityGradeColor(mql.localityGrade)} text-xs`}>
-                      {mql.localityGrade}
+                  <span>{standardized.location}</span>
+                  {standardized.localityGrade && (
+                    <Badge variant="outline" className={`${getLocalityGradeColor(standardized.localityGrade)} text-xs`}>
+                      {standardized.localityGrade}
                     </Badge>
                   )}
                 </div>
               )}
 
-              {/* Show locality separately only if no current residence */}
-              {!lead.currentResidence && mqlDataAvailable && mql?.localityGrade && (
+              {/* Show locality separately only if no location but locality grade exists */}
+              {!standardized.location && standardized.localityGrade && (
                 <div className="flex items-center gap-2 text-sm">
                   <MapPin className="h-4 w-4 text-muted-foreground" />
-                  <Badge variant="outline" className={getLocalityGradeColor(mql.localityGrade)}>
-                    {mql.localityGrade}
+                  <Badge variant="outline" className={getLocalityGradeColor(standardized.localityGrade)}>
+                    {standardized.localityGrade}
                   </Badge>
                 </div>
               )}
