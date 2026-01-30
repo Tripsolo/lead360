@@ -141,7 +141,11 @@ export const LeadCard = ({ lead }: LeadCardProps) => {
                     <Target className="h-4 w-4" />
                     Next Best Action
                   </p>
-                  <p className="text-sm">{analysis.next_best_action}</p>
+                  <p className="text-sm">
+                    {typeof analysis.next_best_action === 'string' 
+                      ? analysis.next_best_action 
+                      : analysis.next_best_action?.action || 'N/A'}
+                  </p>
                 </div>
               )}
 
