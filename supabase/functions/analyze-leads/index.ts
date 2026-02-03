@@ -1651,6 +1651,109 @@ Apply these rules when both CRM and MQL data are available:
 
 If CRM location significantly differs from MQL locality_grade, add "locality_grade" to overridden_fields array`;
 
+    // ============= KNOWLEDGE BASE FIELD EXPLAINER (CRITICAL FOR LLM EXTRACTION) =============
+    const knowledgeBaseFieldExplainer = `# KNOWLEDGE BASE FIELD EXPLAINER
+
+This section explains how to interpret fields from project metadata, sister projects, tower inventory, and competitor data. Follow these rules strictly for accurate analysis.
+
+## SECTION 1: PRICING FIELDS (CRITICAL - Multiple Variants)
+
+### Price Field Hierarchy (USE IN THIS ORDER):
+| Field Name | Source | Definition | Usage Rule |
+|------------|--------|------------|------------|
+| closing_min_cr / closing_max_cr | tower_inventory table | All-inclusive price quoted to customer (Base + Floor Rise + Facing Premium + GST + Stamp Duty) | **PRIMARY for budget comparison.** Use this for cross-sell and budget gap calculations. |
+| sourcing_min_cr / sourcing_max_cr | tower_inventory table | Developer's sourcing cost (Total Value). | Internal use only - NEVER quote to customer or use in comparisons. |
+| price_range_cr in metadata | sister_projects | High-level price range for configurations | Use ONLY if tower_inventory data unavailable. |
+
+### EXTRACTION RULE:
+When comparing customer budget against project pricing:
+1. ALWAYS use closing_min_cr/closing_max_cr from tower_inventory for the matching typology
+2. NEVER use base PSF * carpet area as a proxy - it excludes GST, stamp duty, floor rise
+3. If tower_inventory has no data for config, fallback to sister_projects.metadata.configurations[].price_cr
+
+### PSF Reference Fields (For Competitor Comparison Only):
+- base_psf: Base price per square foot (before premiums) - use for PSF comparisons
+- gcp_premium_psf: Additional ₹1000/sqft for Grand Central Park-facing units
+- high_floor_premium_psf: ₹100/floor premium above base floor
+
+## SECTION 2: POSSESSION / OC DATE FIELDS (CRITICAL - Multiple Variants)
+
+### Date Field Hierarchy (USE IN THIS ORDER):
+| Field Name | Source | Definition | Usage Rule |
+|------------|--------|------------|------------|
+| oc_date | tower_inventory table | **ACTUAL expected possession date** per tower (DD-MMM-YY or YYYY-MM-DD) | **PRIMARY for possession timeline matching.** Use this for customer expectation alignment. |
+| construction_status | tower_inventory table | Text describing progress (e.g., "32nd Slab - Complete", "OC Received") | Use for construction progress evidence and RTMI detection. |
+| current_due_pct | tower_inventory table | Percentage of construction-linked payments due | Higher % = closer to completion (85%+ = near completion) |
+| rera_possession | project metadata | Regulatory deadline from RERA registration | **DO NOT use for customer timeline.** Only for compliance reference. |
+
+### RTMI Detection:
+- If construction_status = "OC Received": Tower is RTMI (Ready-to-Move-In)
+- If current_due_pct >= 95: Tower is near RTMI
+- Use Immensa towers (G, H) as RTMI options for immediate possession needs
+
+### EXTRACTION RULE:
+The hierarchy is: construction_status "OC Received" (RTMI) > oc_date (actual expected) > rera_possession (regulatory only).
+NEVER tell a customer their possession is based on RERA date - always use oc_date.
+
+## SECTION 3: INVENTORY STRUCTURE FIELDS
+
+### Tower Inventory Fields:
+| Field Name | Definition | Extraction Rule |
+|------------|------------|-----------------|
+| tower | Tower identifier (A, B, C, or Estella-A, Primera-B, Immensa-G) | Sister project towers prefixed with project name |
+| typology | 1 BHK / 2 BHK / 2.5 BHK / 3 BHK / 4 BHK | Match to customer's config_interested |
+| carpet_sqft_min / carpet_sqft_max | Carpet area range in sqft | Match to customer's carpet_area_desired (apply 10% tolerance) |
+| car_parking | Single / Tandem / Double | Tandem = 2 cars stacked; Double = 2 separate spots |
+| total_inventory | Total units of this typology in tower | For availability context |
+| unsold | Currently available units | For urgency/scarcity messaging |
+| gcp_view_units | Count of units facing Grand Central Park | For GCP preference matching |
+| view_type | "Grand Central Park" / "Creek View" | For view preference matching |
+
+## SECTION 4: COMPETITOR PRICING FIELDS
+
+### Competitor Reference (from competitor_pricing table):
+| Field Name | Definition | Usage Rule |
+|------------|------------|------------|
+| price_min_av / price_max_av | Competitor's price in Lakhs (Agreement Value) | For price comparison - convert to Cr by dividing by 100 |
+| avg_psf | Competitor's average PSF (carpet) | For PSF comparison - Eternia typically higher due to premium positioning |
+| payment_plans | Available payment plans | For payment flexibility comparison |
+| vs_eternia | Comparison note (e.g., "Cheaper 25%") | Direct positioning reference |
+| availability | High / Medium / Low | For urgency/scarcity contrast |
+
+### COMPETITOR COUNTER RULES:
+1. Lodha Amara: MLCP parking issues, 40+ tower high density (121 families/acre vs our lower density)
+2. Dosti Westcounty: Lower quality fittings, Balkum location (farther from metro)
+3. Godrej Ascend: Small carpet areas, investor-focused (not end-user)
+4. Piramal Vaikunth: Premium pricing, Balkum location, ISKCON niche
+5. Oberoi Forestville: New launch risk, unproven delivery timeline
+
+## SECTION 5: TOWNSHIP & SHARED ASSET FIELDS
+
+### Brand-Level Fields:
+- gcp_access: All Parkcity projects share access to Grand Central Park (20.5 acres)
+- total_project_area: 108 acres total for Parkcity
+- township_components: Retail + Residential + Office Space + School + Temple
+- entry_exit_points: 4 access points for the township
+
+### Project-Level Cross-Sell Context:
+- Eternia: Premium positioning, Olympic amenities, 10 towers
+- Estella: Value positioning, 2 BHK + 3 BHK focus, 2 towers, earliest OC 2031
+- Primera: Entry-level, 2 BHK only, GCP access, earliest OC 2029
+- Immensa: RTMI available (Towers G, H), 4 BHK luxury, GCP-facing
+
+## SECTION 6: CROSS-SELL DECISION RULES
+
+When recommending sister projects:
+1. **Budget Check**: closing_min_cr of recommended config ≤ customer budget × 1.20
+2. **Possession Check**: oc_date within 8 months of customer expectation (or RTMI if urgent)
+3. **Size Check**: carpet_sqft_max ≥ customer desired carpet × 0.90
+4. **Room Check**: NEVER recommend fewer rooms; max 1 additional room allowed
+
+### Cross-Sell Priority:
+1. Immensa: If customer needs RTMI and budget ≥ ₹4.5Cr for 4 BHK
+2. Primera: If customer budget < ₹1.5Cr for 2 BHK
+3. Estella: If customer wants 2-3 BHK with double parking and longer timeline acceptable`;
+
     const inventoryFieldExplainer = `# INVENTORY & POSSESSION DATE FIELDS (CRITICAL)
 
 ## Possession Date Rules:
