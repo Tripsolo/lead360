@@ -1,366 +1,252 @@
 
+# Knowledge Base Field Explainer & Database Schema Update Plan
 
-# Separate Cross-Sell Prompt with Enhanced Guardrails
+## Executive Summary
 
-## Summary
-
-This plan creates a dedicated Stage 2.5 cross-sell recommendation step using Gemini 3 Flash Preview, with explicit guardrails for:
-1. **OC Date for Possession** - Use `oc_date` (not `rera_possession`) for possession timeline matching
-2. **Budget Ceiling (20%)** - Cross-sell recommendation must not exceed 20% of stated budget
-3. **Possession Margin (8 months)** - Allow maximum 8-month flexibility for possession expectations
-4. **Size/Config Constraints** - No more than 10% smaller; no fewer rooms; max 1 room more than desired
+This plan addresses three interconnected objectives:
+1. **Create a Knowledge Base Field Explainer** - A comprehensive guide for LLM extraction of technical and multi-variant fields from project metadata
+2. **Ingest missing data** - Add unit-level inventory with closing prices, tower-level OC dates, and competitor pricing to the database
+3. **Update prompts** - Integrate the Knowledge Base Field Explainer into Stage 2, Stage 2.5, and Stage 3 prompts
 
 ---
 
-## Technical Implementation
+## Part 1: Knowledge Base Field Explainer
 
-### File to Modify
-`supabase/functions/analyze-leads/index.ts`
+### Fields Identified for Inclusion
 
----
+The following fields are either technical or have multiple variants in the knowledge base, requiring explicit extraction guidelines:
 
-### Change 1: Add CRM Field Explainer for Possession Date
+#### 1. Pricing Fields (CRITICAL - Multiple Variants)
 
-**Location:** After `crmFieldExplainer` (around line 1403)
+| Field Name | Source | Definition | Usage Rule |
+|------------|--------|------------|------------|
+| `closing_price_total_value_cr` | Unit Inventory (Page 6) | All-inclusive price quoted to customer. Includes: Base + Floor Rise + Facing Premium + GST + Stamp Duty. | **PRIMARY for budget comparison.** Use this for cross-sell and budget gap calculations. |
+| `closing_price_agreement_value_cr` | Unit Inventory (Page 6) | Agreement value (pre-stamp duty/registration). | Use only if total value unavailable. |
+| `sourcing_price_total_value_cr` | Unit Inventory (Page 6) | Developer's sourcing cost (Total Value). | Internal use only - never quote to customer. |
+| `sourcing_price_agreement_value_cr` | Unit Inventory (Page 6) | Developer's sourcing cost (Agreement Value). | Internal use only. |
+| `base_psf` | Project Metadata | Base price per square foot (before premiums). | For PSF comparisons with competitors. |
+| `gcp_premium_psf` | Project Metadata | Additional PSF for Grand Central Park-facing units. | Factor into total when customer wants GCP view. |
+| `high_floor_premium_psf` | Project Metadata | Per-floor premium (e.g., Rs 100/floor). | Factor into total for high-floor preferences. |
 
-Add a new field explainer section emphasizing OC date usage:
+**Extraction Rule:** When comparing customer budget against project pricing, ALWAYS use `closing_price_total_value_cr` (min/max range for the matching typology). Never use base PSF * carpet area as a proxy.
 
-```typescript
-## INVENTORY & POSSESSION DATE FIELDS (CRITICAL)
-- OC Date: The ACTUAL expected possession date for any SKU. USE THIS for possession timeline matching.
-- RERA Possession Date: Regulatory deadline - NOT the actual expected possession. DO NOT use for customer timeline matching.
-- RULE: Always use OC Date from inventory/sister project metadata for any possession-related analysis or recommendations.
-```
+#### 2. Possession/OC Date Fields (CRITICAL - Multiple Variants)
 
----
+| Field Name | Source | Definition | Usage Rule |
+|------------|--------|------------|------------|
+| `oc_date` | Unit Inventory (Page 6) | **Actual expected possession date** per tower. Format: DD-MMM-YY or MMM-YY. | **PRIMARY for possession timeline matching.** Use this for customer expectation alignment. |
+| `rera_possession` | Project Metadata | Regulatory deadline from RERA registration. | DO NOT use for customer timeline. Only for compliance reference. |
+| `oc_received` | Project Metadata (array) | Towers that have already received OC. | If tower in this array, mark as RTMI (Ready-to-Move-In). |
+| `current_construction_status` | Unit Inventory (Page 6) | Text describing progress (e.g., "32nd Slab - Complete", "OC Received"). | Use for construction progress evidence. |
+| `current_due` | Unit Inventory (Page 6) | Percentage of construction-linked payments due. | Indicates construction progress (higher % = closer to completion). |
 
-### Change 2: Create New `buildCrossSellPrompt` Function
+**Extraction Rule:** The hierarchy is: `oc_received` (if present, unit is RTMI) > `oc_date` (actual expected) > `rera_possession` (regulatory only). Never tell a customer their possession is based on RERA date.
 
-**Location:** After `buildStage2PromptMessages` function (around line 958)
+#### 3. Inventory Structure Fields
 
-Create a dedicated prompt builder for cross-sell recommendations:
+| Field Name | Source | Definition | Usage Rule |
+|------------|--------|------------|------------|
+| `typology` | Unit Inventory | Config type: 1 BHK, 2 BHK, 2.5 BHK, 3 BHK, 4 BHK | Match to customer's config interest. |
+| `carpet_area_sqft` | Unit Inventory | Carpet area range in sqft (e.g., "600-699"). | Match to customer's carpet area preference. |
+| `car_parking` | Unit Inventory | Parking type: Single, Tandem, Double. | Note: Tandem = 2 cars stacked. |
+| `total_inventory` | Unit Inventory | Total units of this typology in tower. | For availability context. |
+| `unsold` | Unit Inventory | Currently available units. | For urgency/scarcity messaging. |
+| `units_with_gcp_view` | Unit Inventory | Count of units facing Grand Central Park. | For GCP preference matching. |
+| `view` | Unit Inventory | View type: "Grand Central Park", "Creek View", or blank. | For view preference matching. |
 
-```typescript
-// ============= STAGE 2.5: Cross-Sell Recommendation =============
-function buildCrossSellPrompt(
-  analysisResult: any,
-  extractedSignals: any,
-  sisterProjects: any[],
-  projectMetadata: any
-): string {
-  // Build sister projects data with OC dates (NOT RERA dates)
-  const sisterProjectsData = sisterProjects.map((sp: any) => {
-    const meta = sp.metadata || {};
-    const triggers = sp.cross_sell_triggers || {};
-    const configs = meta.configurations || [];
-    
-    // CRITICAL: Use OC date, fallback to RERA only if OC unavailable
-    const possessionDate = meta.oc_date || meta.rera_possession || "N/A";
-    
-    return {
-      name: sp.name,
-      id: sp.id,
-      relationship_type: sp.relationship_type,
-      possession_date: possessionDate,  // OC Date prioritized
-      oc_received: meta.oc_received || null,
-      is_rtmi: meta.oc_received && meta.oc_received.length > 0,
-      unique_selling: meta.unique_selling || "N/A",
-      payment_plan: meta.payment_plan || "N/A",
-      configurations: configs.map((c: any) => ({
-        type: c.type,
-        carpet_sqft_min: c.carpet_sqft?.[0] || null,
-        carpet_sqft_max: c.carpet_sqft?.[1] || null,
-        price_cr_min: c.price_cr?.[0] || null,
-        price_cr_max: c.price_cr?.[1] || null,
-        rooms: extractRoomCount(c.type) // "2 BHK" → 2, "3 BHK" → 3, etc.
-      })),
-      triggers: triggers
-    };
-  });
-  
-  // Extract lead's stated preferences
-  const leadBudget = extractedSignals?.financial_signals?.budget_stated_cr || null;
-  const leadConfig = extractedSignals?.property_preferences?.config_interested || null;
-  const leadCarpetDesired = extractedSignals?.property_preferences?.carpet_area_desired || null;
-  const leadPossessionUrgency = extractedSignals?.engagement_signals?.possession_urgency || null;
-  const leadStagePreference = extractedSignals?.property_preferences?.stage_preference || null;
-  const leadRooms = extractRoomCount(leadConfig);
-  
-  const crossSellPrompt = `# CROSS-SELL RECOMMENDATION EVALUATION
+#### 4. Township & Shared Asset Fields
 
-You are evaluating whether a lead should be recommended a sister project from the same township.
+| Field Name | Source | Definition | Usage Rule |
+|------------|--------|------------|------------|
+| `gcp_access` | Brand Metadata | All Parkcity projects share access to Grand Central Park (20.5 acres). | Mention for all sister projects - shared township benefit. |
+| `total_project_area` | Project Metadata | Total township acreage. | 108 acres total for Parkcity. |
+| `retail_plaza` | Project Metadata | Commercial retail within township. | "Retail taking shape" talking point. |
+| `township_components` | Brand Metadata | Includes: Retail, Residential, Office Space, School, Temple. | For township ecosystem pitch. |
+| `entry_exit_points` | Brand Metadata | Number of access points (4 for Parkcity). | For connectivity pitch. |
 
-## LEAD PROFILE (Extracted from Stage 2)
-- Stated Budget: ${leadBudget ? `₹${leadBudget} Cr` : "Not stated"}
-- Desired Config: ${leadConfig || "Not stated"}
-- Desired Rooms: ${leadRooms || "Unknown"}
-- Desired Carpet Area: ${leadCarpetDesired || "Not stated"}
-- Possession Urgency: ${leadPossessionUrgency || "Not stated"}
-- Stage Preference: ${leadStagePreference || "Not stated"}
-- Persona: ${analysisResult.persona || "Unknown"}
-- Primary Concern: ${analysisResult.primary_concern_category || "Unknown"}
-- Core Motivation: ${analysisResult.extracted_signals?.core_motivation || "Unknown"}
+#### 5. Connectivity & Location Fields
 
-## SISTER PROJECTS AVAILABLE
-${JSON.stringify(sisterProjectsData, null, 2)}
+| Field Name | Source | Definition | Usage Rule |
+|------------|--------|------------|------------|
+| `metro_line_4_status` | Location Metadata | Under Construction, target 2027. | "5 min walk post-metro" pitch. |
+| `metro_line_5_status` | Location Metadata | Under Construction, target 2028. | Bhiwandi connectivity. |
+| `distance_to_bkc` | Location Metadata | 26.6 km, 50 min current / 35 min post-metro. | For corporate professional pitch. |
+| `distance_to_tcs` | Location Metadata | 3.7 km - Walk-to-Work employer. | For IT professional targeting. |
+| `school_proximity` | Location Metadata | Poddar International (3.9 km), Singhania (4.1 km). | For family buyer pitch. |
+| `hospital_proximity` | Location Metadata | Jupiter (3.3 km), Hiranandani (3.5 km). | For senior/healthcare pitch. |
 
-## CROSS-SELL EVALUATION RULES (CRITICAL - ALL MUST PASS)
+#### 6. Competitor Reference Fields
 
-### RULE 1: BUDGET CEILING (20% MAX)
-- The recommended project's entry price (price_cr_min for matching config) must NOT exceed 120% of the lead's stated budget.
-- Formula: IF (sister_project_price_cr_min > lead_budget * 1.20) THEN REJECT
-- If budget is not stated, this rule passes automatically.
-
-### RULE 2: POSSESSION MARGIN (8 MONTHS MAX)
-- The possession date difference from lead's expectation must be within 8 months.
-- Use OC Date (possession_date field) - NOT RERA date.
-- If lead needs RTMI, only recommend projects with is_rtmi = true OR possession within 8 months from today.
-- If lead has no specific possession urgency, this rule passes automatically.
-
-### RULE 3: SIZE CONSTRAINT (10% SMALLER MAX)
-- The recommended config's carpet area must not be more than 10% smaller than desired.
-- Formula: IF (sister_config_carpet_sqft_max < lead_desired_carpet * 0.90) THEN REJECT
-- If carpet area is not stated, use typical config size comparison.
-
-### RULE 4: ROOM COUNT CONSTRAINT (STRICT)
-- NEVER recommend a config with FEWER rooms than desired.
-- NEVER recommend a config with MORE THAN 1 ADDITIONAL room.
-- Examples:
-  - Lead wants 2 BHK → Can recommend 2 BHK or 3 BHK only (NOT 1 BHK, NOT 4 BHK)
-  - Lead wants 3 BHK → Can recommend 3 BHK or 4 BHK only (NOT 2 BHK, NOT 5 BHK)
-  - Lead wants 4 BHK → Can recommend 4 BHK only (5 BHK if exists, but never smaller)
-
-### RULE 5: MATCH PRIORITY (If multiple pass)
-If multiple sister projects pass all rules, prioritize:
-1. RTMI needs (if lead has urgent possession)
-2. Budget optimization (closest to stated budget)
-3. Config exact match (same room count preferred)
-4. GCP view preference (if lead expressed interest)
-
-## EVALUATION PROCESS
-1. For each sister project, check ALL 4 rules above.
-2. Log which rules pass/fail for each project.
-3. If no project passes all rules, return null.
-4. If one or more pass, select the best match per priority rules.
-
-## OUTPUT STRUCTURE
-Return a JSON object with ONLY these fields:
-{
-  "cross_sell_recommendation": {
-    "recommended_project": "Primera" | "Estella" | "Immensa" | null,
-    "recommended_config": "2 BHK" | "3 BHK" | "4 BHK" | null,
-    "price_range_cr": "₹X.XX - ₹Y.YY Cr",
-    "possession_date": "YYYY-MM",
-    "reason": "Brief explanation of why this is a better fit (max 25 words)",
-    "talking_point": "Specific sales pitch with price/config/possession details (max 25 words)",
-    "rules_evaluation": {
-      "budget_check": "PASS" | "FAIL" | "N/A",
-      "possession_check": "PASS" | "FAIL" | "N/A",
-      "size_check": "PASS" | "FAIL" | "N/A",
-      "room_check": "PASS" | "FAIL" | "N/A"
-    }
-  } | null,
-  "evaluation_log": "Brief log of which projects were considered and why they passed/failed"
-}
-
-If no sister project meets all criteria, return:
-{
-  "cross_sell_recommendation": null,
-  "evaluation_log": "No sister project passed all validation rules. [Reason for each rejection]"
-}`;
-
-  return crossSellPrompt;
-}
-
-// Helper to extract room count from config string
-function extractRoomCount(config: string | null): number | null {
-  if (!config) return null;
-  const match = config.match(/(\d+)\s*BHK/i);
-  return match ? parseInt(match[1]) : null;
-}
-```
+| Field Name | Source | Definition | Usage Rule |
+|------------|--------|------------|------------|
+| `competitor.price_min_av` | Competitor Metadata (Page 8) | Competitor's minimum Agreement Value for config. | For price comparison. |
+| `competitor.avg_psf` | Competitor Metadata (Page 8) | Competitor's average PSF (carpet). | For PSF comparison. |
+| `competitor.vs_eternia` | Competitor Metadata (Page 8) | Comparison note (e.g., "Cheaper 25%"). | For positioning. |
+| `competitor.key_weakness` | Competitor Metadata (Page 8) | Strategic weakness (e.g., "High density 40+ towers"). | For objection handling. |
 
 ---
 
-### Change 3: Add `callCrossSellAPI` Function
+## Part 2: Database Schema Updates
 
-**Location:** After `callGemini3FlashAPI` function (around line 670)
+### A. New Table: `tower_inventory`
 
-```typescript
-// ============= Cross-Sell API (Gemini 3 Flash) =============
-async function callCrossSellAPI(
-  prompt: string,
-  googleApiKey: string,
-  maxRetries: number = 2,
-): Promise<any> {
-  let lastError: Error | null = null;
-  
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const generationConfig = {
-        temperature: 0.1,  // Lower temperature for more deterministic rule-following
-        topK: 20,
-        topP: 0.9,
-        maxOutputTokens: 2048,
-        responseMimeType: "application/json",
-      };
-
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${googleApiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig,
-          }),
-        },
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-        return JSON.parse(text);
-      }
-
-      const errorText = await response.text();
-      if ((response.status === 503 || response.status === 429) && attempt < maxRetries) {
-        const backoffMs = Math.pow(2, attempt) * 500;
-        console.warn(`Cross-sell API rate limited (attempt ${attempt}), retrying in ${backoffMs}ms...`);
-        await new Promise((resolve) => setTimeout(resolve, backoffMs));
-        continue;
-      }
-      
-      lastError = new Error(`Cross-sell API failed: ${errorText}`);
-    } catch (fetchError) {
-      lastError = fetchError instanceof Error ? fetchError : new Error(String(fetchError));
-    }
-  }
-  
-  console.error("Cross-sell API failed after retries:", lastError);
-  return { cross_sell_recommendation: null, evaluation_log: "API call failed" };
-}
-```
-
----
-
-### Change 4: Integrate Stage 2.5 into Pipeline
-
-**Location:** After Stage 2 completes, before Stage 3 (around line 2395)
-
-Insert a new Stage 2.5 call between Stage 2 and Stage 3:
-
-```typescript
-// ===== STAGE 2.5: CROSS-SELL RECOMMENDATION (Gemini 3 Flash) =====
-if (parseSuccess && sisterProjects && sisterProjects.length > 0) {
-  console.log(`Stage 2.5 (Cross-Sell) starting for lead ${lead.id}`);
-  
-  try {
-    // Add small delay before cross-sell call
-    await new Promise((resolve) => setTimeout(resolve, 150));
-    
-    const crossSellPrompt = buildCrossSellPrompt(
-      analysisResult,
-      extractedSignals,
-      sisterProjects,
-      projectMetadata
-    );
-    
-    const crossSellResult = await callCrossSellAPI(crossSellPrompt, googleApiKey!);
-    
-    // Merge cross-sell recommendation into analysis result
-    if (crossSellResult?.cross_sell_recommendation) {
-      analysisResult.cross_sell_recommendation = crossSellResult.cross_sell_recommendation;
-      console.log(`Stage 2.5 complete: Recommended ${crossSellResult.cross_sell_recommendation.recommended_project} for lead ${lead.id}`);
-    } else {
-      analysisResult.cross_sell_recommendation = null;
-      console.log(`Stage 2.5 complete: No cross-sell recommendation for lead ${lead.id}. ${crossSellResult?.evaluation_log || ""}`);
-    }
-  } catch (crossSellError) {
-    console.warn(`Stage 2.5 failed for lead ${lead.id}:`, crossSellError);
-    analysisResult.cross_sell_recommendation = null;
-  }
-}
-```
-
----
-
-### Change 5: Update Sister Projects Context in Stage 2
-
-**Location:** Around line 1858 in `sisterProjectsContext` building
-
-Update to emphasize OC date over RERA date:
-
-```typescript
-// Change this line:
-- Possession: ${meta.rera_possession || meta.oc_date || "N/A"}
-
-// To this (OC date prioritized):
-- Possession (OC Date): ${meta.oc_date || "Under construction"}
-- RERA Deadline: ${meta.rera_possession || "N/A"}
-- OC Status: ${meta.oc_received ? `OC received for towers ${meta.oc_received.join(", ")}` : "Pending"}
-```
-
----
-
-### Change 6: Update Output Structure for Cross-Sell
-
-**Location:** Around line 1920-1925
-
-Update the cross-sell output structure to include new fields:
-
-```typescript
-"cross_sell_recommendation": {
-  "recommended_project": "Primera" | "Estella" | "Immensa" | null,
-  "recommended_config": "2 BHK" | "3 BHK" | "4 BHK" | null,
-  "price_range_cr": "₹X.XX - ₹Y.YY Cr",
-  "possession_date": "YYYY-MM",
-  "reason": "Brief explanation (max 25 words)",
-  "talking_point": "Sales pitch with details (max 25 words)",
-  "rules_evaluation": {
-    "budget_check": "PASS" | "FAIL" | "N/A",
-    "possession_check": "PASS" | "FAIL" | "N/A",
-    "size_check": "PASS" | "FAIL" | "N/A",
-    "room_check": "PASS" | "FAIL" | "N/A"
-  }
-} | null
-```
-
----
-
-## Summary of Guardrails Implemented
-
-| Guardrail | Implementation |
-|-----------|----------------|
-| **OC Date for Possession** | `possession_date = meta.oc_date || meta.rera_possession` - OC prioritized |
-| **Budget Ceiling (20%)** | `sister_price_min <= lead_budget * 1.20` |
-| **Possession Margin (8 months)** | Possession difference from expectation ≤ 8 months |
-| **Size Constraint (10%)** | `sister_carpet_max >= lead_carpet * 0.90` |
-| **Room Count - No Fewer** | Sister rooms >= Lead desired rooms |
-| **Room Count - Max +1** | Sister rooms <= Lead desired rooms + 1 |
-
----
-
-## Pipeline Flow After Changes
+Store unit-level inventory with closing prices per tower/typology.
 
 ```text
-Stage 1 (Gemini 3 Flash) → Signal Extraction
-        ↓
-Stage 2 (Claude Opus 4.5) → Scoring & Persona
-        ↓
-Stage 2.5 (Gemini 3 Flash) → Cross-Sell Recommendation [NEW]
-        ↓
-Stage 3 (Gemini 3 Flash) → NBA & Talking Points
+tower_inventory
++------------------+----------+--------------------------------------+
+| Column           | Type     | Description                          |
++------------------+----------+--------------------------------------+
+| id               | uuid     | Primary key                          |
+| project_id       | text     | FK to projects.id                    |
+| tower            | text     | Tower identifier (A, B, C, etc.)     |
+| floors           | integer  | Number of floors                     |
+| units_per_floor  | integer  | Units per floor                      |
+| current_due_pct  | numeric  | Construction-linked payment %        |
+| construction_status | text  | Current construction status          |
+| oc_date          | date     | Expected OC date                     |
+| typology         | text     | 1 BHK / 2 BHK / 2.5 BHK / 3 BHK / 4 BHK |
+| car_parking      | text     | Single / Tandem / Double             |
+| carpet_sqft_min  | integer  | Minimum carpet area                  |
+| carpet_sqft_max  | integer  | Maximum carpet area                  |
+| total_inventory  | integer  | Total units                          |
+| sold             | integer  | Sold units                           |
+| unsold           | integer  | Available units                      |
+| gcp_view_units   | integer  | Units with GCP view                  |
+| view_type        | text     | Grand Central Park / Creek View      |
+| sourcing_min_cr  | numeric  | Min sourcing price (Total Value)     |
+| sourcing_max_cr  | numeric  | Max sourcing price (Total Value)     |
+| closing_min_cr   | numeric  | Min closing price (Total Value)      |
+| closing_max_cr   | numeric  | Max closing price (Total Value)      |
+| created_at       | timestamp| Creation timestamp                   |
+| updated_at       | timestamp| Update timestamp                     |
++------------------+----------+--------------------------------------+
 ```
+
+### B. New Table: `competitor_pricing`
+
+Store configuration-wise competitor pricing.
+
+```text
+competitor_pricing
++------------------+----------+--------------------------------------+
+| Column           | Type     | Description                          |
++------------------+----------+--------------------------------------+
+| id               | uuid     | Primary key                          |
+| competitor_name  | text     | Developer name                       |
+| project_name     | text     | Project name                         |
+| config           | text     | 1 BHK / 2 BHK / 3 BHK / 4 BHK        |
+| carpet_sqft_min  | integer  | Minimum carpet area                  |
+| carpet_sqft_max  | integer  | Maximum carpet area                  |
+| price_min_av     | numeric  | Min Agreement Value (in lakhs)       |
+| price_max_av     | numeric  | Max Agreement Value (in lakhs)       |
+| avg_psf          | numeric  | Average PSF (carpet)                 |
+| payment_plans    | text     | Available payment plans              |
+| vs_eternia       | text     | Comparison note                      |
+| availability     | text     | High / Medium / Low                  |
+| sample_flat      | boolean  | Sample flat available                |
+| last_updated     | date     | Last price update date               |
+| created_at       | timestamp| Creation timestamp                   |
++------------------+----------+--------------------------------------+
+```
+
+### C. Update `sister_projects.metadata`
+
+Update existing `price_cr` fields to `closing_price_cr` with clarification that these are all-inclusive closing prices.
 
 ---
 
-## Testing Recommendations
+## Part 3: Prompt Integration
 
-After implementing:
+### Stage 2 (Scoring & Persona)
 
-1. **Test Budget Ceiling**: Analyze a lead with stated budget ₹1.5 Cr - should NOT recommend Estella 3BHK (₹1.97Cr = 31% above budget)
-2. **Test Possession Margin**: Analyze a lead needing RTMI - should only recommend Immensa (OC received)
-3. **Test Room Constraint**: Analyze a lead wanting 3 BHK - should NOT recommend Primera (only 2 BHK available)
-4. **Test Size Constraint**: Analyze a lead wanting 1000 sqft - should NOT recommend Primera 2BHK compact (400-499 sqft = 50% smaller)
+Add the Knowledge Base Field Explainer as a new constant `knowledgeBaseFieldExplainer` and include it in the system prompt:
 
+```typescript
+const knowledgeBaseFieldExplainer = `# KNOWLEDGE BASE FIELD EXPLAINER
+
+This section explains how to interpret fields from project metadata, sister projects, 
+and inventory data. Follow these rules strictly for accurate analysis.
+
+## PRICING FIELDS (CRITICAL)
+...
+[Full content as defined above]
+`;
+```
+
+Include in Stage 2 prompt:
+- After `mqlFieldExplainer`
+- Before `leadScoringModel`
+
+### Stage 2.5 (Cross-Sell Recommendation)
+
+Update `buildCrossSellPrompt()` to:
+1. Pass `knowledgeBaseFieldExplainer` as context
+2. Reference `closing_price_cr` (not `price_cr`) for budget comparison
+3. Include tower-level OC dates from inventory
+
+### Stage 3 (NBA & Talking Points)
+
+Update `buildStage3Prompt()` in `nba-framework.ts` to:
+1. Include `knowledgeBaseFieldExplainer` 
+2. Reference inventory availability for urgency messaging
+3. Use competitor pricing for specific rebuttals
+
+---
+
+## Part 4: Implementation Steps
+
+### Phase 1: Database Schema (Migration)
+1. Create `tower_inventory` table with RLS policies
+2. Create `competitor_pricing` table with RLS policies
+3. Add indexes for efficient querying
+
+### Phase 2: Data Ingestion
+1. Parse Page 6 (Unit Inventory) and insert into `tower_inventory`
+2. Parse Page 8 (Competitor Pricing) and insert into `competitor_pricing`
+3. Update `sister_projects.metadata` with corrected field names
+
+### Phase 3: Edge Function Updates
+1. Create `knowledgeBaseFieldExplainer` constant in `analyze-leads/index.ts`
+2. Fetch `tower_inventory` data for the project
+3. Fetch `competitor_pricing` data for the micro-market
+4. Update Stage 2, Stage 2.5, and Stage 3 prompts to include the explainer
+5. Update cross-sell logic to use `closing_price_cr` from inventory
+
+### Phase 4: Testing
+1. Re-analyze sample leads to verify correct field usage
+2. Validate cross-sell recommendations use correct closing prices
+3. Verify possession timeline matching uses OC dates not RERA dates
+
+---
+
+## Technical Details
+
+### Files to Modify
+
+| File | Changes |
+|------|---------|
+| `supabase/functions/analyze-leads/index.ts` | Add `knowledgeBaseFieldExplainer` constant, update Stage 2 prompt, update cross-sell prompt to fetch inventory data |
+| `supabase/functions/analyze-leads/nba-framework.ts` | Add `knowledgeBaseFieldExplainer` to Stage 3 prompt context |
+| Database | Create `tower_inventory` and `competitor_pricing` tables via migration |
+
+### Data Volume
+
+From Page 6 analysis:
+- **Eternia**: ~30 tower/typology combinations
+- **Estella**: ~6 tower/typology combinations  
+- **Primera**: ~4 tower/typology combinations
+- **Immensa**: ~4 tower/typology combinations
+- **Total**: ~44 inventory records to ingest
+
+From Page 8:
+- **Competitors**: 14 projects with ~80 configuration-wise pricing records
+
+---
+
+## Expected Outcomes
+
+1. **Accurate Budget Comparisons**: Cross-sell and scoring will use closing prices (all-inclusive) rather than base price estimates
+2. **Correct Possession Matching**: OC dates per tower will drive RTMI recommendations
+3. **Specific Competitor Rebuttals**: NBA/Talking Points will reference exact competitor pricing
+4. **Consistent Field Interpretation**: All three stages will use the same field definitions
