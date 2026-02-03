@@ -59,6 +59,60 @@ export type Database = {
         }
         Relationships: []
       }
+      competitor_pricing: {
+        Row: {
+          availability: string | null
+          avg_psf: number | null
+          carpet_sqft_max: number | null
+          carpet_sqft_min: number | null
+          competitor_name: string
+          config: string
+          created_at: string
+          id: string
+          last_updated: string | null
+          payment_plans: string | null
+          price_max_av: number | null
+          price_min_av: number | null
+          project_name: string
+          sample_flat: boolean | null
+          vs_eternia: string | null
+        }
+        Insert: {
+          availability?: string | null
+          avg_psf?: number | null
+          carpet_sqft_max?: number | null
+          carpet_sqft_min?: number | null
+          competitor_name: string
+          config: string
+          created_at?: string
+          id?: string
+          last_updated?: string | null
+          payment_plans?: string | null
+          price_max_av?: number | null
+          price_min_av?: number | null
+          project_name: string
+          sample_flat?: boolean | null
+          vs_eternia?: string | null
+        }
+        Update: {
+          availability?: string | null
+          avg_psf?: number | null
+          carpet_sqft_max?: number | null
+          carpet_sqft_min?: number | null
+          competitor_name?: string
+          config?: string
+          created_at?: string
+          id?: string
+          last_updated?: string | null
+          payment_plans?: string | null
+          price_max_av?: number | null
+          price_min_av?: number | null
+          project_name?: string
+          sample_flat?: boolean | null
+          vs_eternia?: string | null
+        }
+        Relationships: []
+      }
       lead_analyses: {
         Row: {
           analyzed_at: string
@@ -350,6 +404,92 @@ export type Database = {
           {
             foreignKeyName: "sister_projects_parent_project_id_fkey"
             columns: ["parent_project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tower_inventory: {
+        Row: {
+          car_parking: string | null
+          carpet_sqft_max: number | null
+          carpet_sqft_min: number | null
+          closing_max_cr: number | null
+          closing_min_cr: number | null
+          construction_status: string | null
+          created_at: string
+          current_due_pct: number | null
+          floors: number | null
+          gcp_view_units: number | null
+          id: string
+          oc_date: string | null
+          project_id: string
+          sold: number | null
+          sourcing_max_cr: number | null
+          sourcing_min_cr: number | null
+          total_inventory: number | null
+          tower: string
+          typology: string
+          units_per_floor: number | null
+          unsold: number | null
+          updated_at: string
+          view_type: string | null
+        }
+        Insert: {
+          car_parking?: string | null
+          carpet_sqft_max?: number | null
+          carpet_sqft_min?: number | null
+          closing_max_cr?: number | null
+          closing_min_cr?: number | null
+          construction_status?: string | null
+          created_at?: string
+          current_due_pct?: number | null
+          floors?: number | null
+          gcp_view_units?: number | null
+          id?: string
+          oc_date?: string | null
+          project_id: string
+          sold?: number | null
+          sourcing_max_cr?: number | null
+          sourcing_min_cr?: number | null
+          total_inventory?: number | null
+          tower: string
+          typology: string
+          units_per_floor?: number | null
+          unsold?: number | null
+          updated_at?: string
+          view_type?: string | null
+        }
+        Update: {
+          car_parking?: string | null
+          carpet_sqft_max?: number | null
+          carpet_sqft_min?: number | null
+          closing_max_cr?: number | null
+          closing_min_cr?: number | null
+          construction_status?: string | null
+          created_at?: string
+          current_due_pct?: number | null
+          floors?: number | null
+          gcp_view_units?: number | null
+          id?: string
+          oc_date?: string | null
+          project_id?: string
+          sold?: number | null
+          sourcing_max_cr?: number | null
+          sourcing_min_cr?: number | null
+          total_inventory?: number | null
+          tower?: string
+          typology?: string
+          units_per_floor?: number | null
+          unsold?: number | null
+          updated_at?: string
+          view_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tower_inventory_project_id_fkey"
+            columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
             referencedColumns: ["id"]
