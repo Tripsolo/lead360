@@ -136,11 +136,20 @@ export interface AnalysisResult {
     mql_credit_rating?: 'High' | 'Medium' | 'Low' | null;
     overridden_fields?: string[];
     mql_data_available?: boolean;
-    // Cross-sell recommendation
+    // Cross-sell recommendation with guardrails
     cross_sell_recommendation?: {
       recommended_project: 'Primera' | 'Estella' | 'Immensa' | null;
+      recommended_config?: '2 BHK' | '3 BHK' | '4 BHK' | null;
+      price_range_cr?: string;
+      possession_date?: string;
       reason: string;
       talking_point: string;
+      rules_evaluation?: {
+        budget_check: 'PASS' | 'FAIL' | 'N/A';
+        possession_check: 'PASS' | 'FAIL' | 'N/A';
+        size_check: 'PASS' | 'FAIL' | 'N/A';
+        room_check: 'PASS' | 'FAIL' | 'N/A';
+      };
     } | null;
   };
 }

@@ -804,6 +804,198 @@ async function callOpenRouterAPI(
   throw lastError || new Error("OpenRouter API call failed after retries");
 }
 
+// ============= Helper: Extract room count from config string =============
+function extractRoomCount(config: string | null): number | null {
+  if (!config) return null;
+  const match = config.match(/(\d+)\s*BHK/i);
+  return match ? parseInt(match[1]) : null;
+}
+
+// ============= Cross-Sell API (Gemini 3 Flash) =============
+async function callCrossSellAPI(
+  prompt: string,
+  googleApiKey: string,
+  maxRetries: number = 2,
+): Promise<any> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const generationConfig = {
+        temperature: 0.1,  // Lower temperature for more deterministic rule-following
+        topK: 20,
+        topP: 0.9,
+        maxOutputTokens: 2048,
+        responseMimeType: "application/json",
+      };
+
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${googleApiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig,
+          }),
+        },
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+        return JSON.parse(text);
+      }
+
+      const errorText = await response.text();
+      if ((response.status === 503 || response.status === 429) && attempt < maxRetries) {
+        const backoffMs = Math.pow(2, attempt) * 500;
+        console.warn(`Cross-sell API rate limited (attempt ${attempt}), retrying in ${backoffMs}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+        continue;
+      }
+      
+      lastError = new Error(`Cross-sell API failed: ${errorText}`);
+    } catch (fetchError) {
+      lastError = fetchError instanceof Error ? fetchError : new Error(String(fetchError));
+    }
+  }
+  
+  console.error("Cross-sell API failed after retries:", lastError);
+  return { cross_sell_recommendation: null, evaluation_log: "API call failed" };
+}
+
+// ============= STAGE 2.5: Cross-Sell Recommendation Prompt =============
+function buildCrossSellPrompt(
+  analysisResult: any,
+  extractedSignals: any,
+  sisterProjects: any[],
+  projectMetadata: any
+): string {
+  // Build sister projects data with OC dates (NOT RERA dates)
+  const sisterProjectsData = sisterProjects.map((sp: any) => {
+    const meta = sp.metadata || {};
+    const triggers = sp.cross_sell_triggers || {};
+    const configs = meta.configurations || [];
+    
+    // CRITICAL: Use OC date, fallback to RERA only if OC unavailable
+    const possessionDate = meta.oc_date || meta.rera_possession || "N/A";
+    
+    return {
+      name: sp.name,
+      id: sp.id,
+      relationship_type: sp.relationship_type,
+      possession_date: possessionDate,  // OC Date prioritized
+      oc_received: meta.oc_received || null,
+      is_rtmi: meta.oc_received && meta.oc_received.length > 0,
+      unique_selling: meta.unique_selling || "N/A",
+      payment_plan: meta.payment_plan || "N/A",
+      configurations: configs.map((c: any) => ({
+        type: c.type,
+        carpet_sqft_min: c.carpet_sqft?.[0] || null,
+        carpet_sqft_max: c.carpet_sqft?.[1] || null,
+        price_cr_min: c.price_cr?.[0] || null,
+        price_cr_max: c.price_cr?.[1] || null,
+        rooms: extractRoomCount(c.type) // "2 BHK" → 2, "3 BHK" → 3, etc.
+      })),
+      triggers: triggers
+    };
+  });
+  
+  // Extract lead's stated preferences
+  const leadBudget = extractedSignals?.financial_signals?.budget_stated_cr || null;
+  const leadConfig = extractedSignals?.property_preferences?.config_interested || null;
+  const leadCarpetDesired = extractedSignals?.property_preferences?.carpet_area_desired || null;
+  const leadPossessionUrgency = extractedSignals?.engagement_signals?.possession_urgency || null;
+  const leadStagePreference = extractedSignals?.property_preferences?.stage_preference || null;
+  const leadRooms = extractRoomCount(leadConfig);
+  
+  const crossSellPrompt = `# CROSS-SELL RECOMMENDATION EVALUATION
+
+You are evaluating whether a lead should be recommended a sister project from the same township.
+
+## LEAD PROFILE (Extracted from Stage 2)
+- Stated Budget: ${leadBudget ? `₹${leadBudget} Cr` : "Not stated"}
+- Desired Config: ${leadConfig || "Not stated"}
+- Desired Rooms: ${leadRooms || "Unknown"}
+- Desired Carpet Area: ${leadCarpetDesired || "Not stated"}
+- Possession Urgency: ${leadPossessionUrgency || "Not stated"}
+- Stage Preference: ${leadStagePreference || "Not stated"}
+- Persona: ${analysisResult.persona || "Unknown"}
+- Primary Concern: ${analysisResult.primary_concern_category || "Unknown"}
+- Core Motivation: ${analysisResult.extracted_signals?.core_motivation || "Unknown"}
+
+## SISTER PROJECTS AVAILABLE
+${JSON.stringify(sisterProjectsData, null, 2)}
+
+## CROSS-SELL EVALUATION RULES (CRITICAL - ALL MUST PASS)
+
+### RULE 1: BUDGET CEILING (20% MAX)
+- The recommended project's entry price (price_cr_min for matching config) must NOT exceed 120% of the lead's stated budget.
+- Formula: IF (sister_project_price_cr_min > lead_budget * 1.20) THEN REJECT
+- If budget is not stated, this rule passes automatically.
+
+### RULE 2: POSSESSION MARGIN (8 MONTHS MAX)
+- The possession date difference from lead's expectation must be within 8 months.
+- Use OC Date (possession_date field) - NOT RERA date.
+- If lead needs RTMI, only recommend projects with is_rtmi = true OR possession within 8 months from today.
+- If lead has no specific possession urgency, this rule passes automatically.
+
+### RULE 3: SIZE CONSTRAINT (10% SMALLER MAX)
+- The recommended config's carpet area must not be more than 10% smaller than desired.
+- Formula: IF (sister_config_carpet_sqft_max < lead_desired_carpet * 0.90) THEN REJECT
+- If carpet area is not stated, use typical config size comparison.
+
+### RULE 4: ROOM COUNT CONSTRAINT (STRICT)
+- NEVER recommend a config with FEWER rooms than desired.
+- NEVER recommend a config with MORE THAN 1 ADDITIONAL room.
+- Examples:
+  - Lead wants 2 BHK → Can recommend 2 BHK or 3 BHK only (NOT 1 BHK, NOT 4 BHK)
+  - Lead wants 3 BHK → Can recommend 3 BHK or 4 BHK only (NOT 2 BHK, NOT 5 BHK)
+  - Lead wants 4 BHK → Can recommend 4 BHK only (5 BHK if exists, but never smaller)
+
+### RULE 5: MATCH PRIORITY (If multiple pass)
+If multiple sister projects pass all rules, prioritize:
+1. RTMI needs (if lead has urgent possession)
+2. Budget optimization (closest to stated budget)
+3. Config exact match (same room count preferred)
+4. GCP view preference (if lead expressed interest)
+
+## EVALUATION PROCESS
+1. For each sister project, check ALL 4 rules above.
+2. Log which rules pass/fail for each project.
+3. If no project passes all rules, return null.
+4. If one or more pass, select the best match per priority rules.
+
+## OUTPUT STRUCTURE
+Return a JSON object with ONLY these fields:
+{
+  "cross_sell_recommendation": {
+    "recommended_project": "Primera" | "Estella" | "Immensa" | null,
+    "recommended_config": "2 BHK" | "3 BHK" | "4 BHK" | null,
+    "price_range_cr": "₹X.XX - ₹Y.YY Cr",
+    "possession_date": "YYYY-MM",
+    "reason": "Brief explanation of why this is a better fit (max 25 words)",
+    "talking_point": "Specific sales pitch with price/config/possession details (max 25 words)",
+    "rules_evaluation": {
+      "budget_check": "PASS" | "FAIL" | "N/A",
+      "possession_check": "PASS" | "FAIL" | "N/A",
+      "size_check": "PASS" | "FAIL" | "N/A",
+      "room_check": "PASS" | "FAIL" | "N/A"
+    }
+  } | null,
+  "evaluation_log": "Brief log of which projects were considered and why they passed/failed"
+}
+
+If no sister project meets all criteria, return:
+{
+  "cross_sell_recommendation": null,
+  "evaluation_log": "No sister project passed all validation rules. [Reason for each rejection]"
+}`;
+
+  return crossSellPrompt;
+}
+
 // ============= Stage 2 Prompt Split for Claude =============
 function buildStage2PromptMessages(
   extractedSignalsJson: string,
@@ -1459,6 +1651,19 @@ Apply these rules when both CRM and MQL data are available:
 
 If CRM location significantly differs from MQL locality_grade, add "locality_grade" to overridden_fields array`;
 
+    const inventoryFieldExplainer = `# INVENTORY & POSSESSION DATE FIELDS (CRITICAL)
+
+## Possession Date Rules:
+- **OC Date**: The ACTUAL expected possession date for any SKU. USE THIS for possession timeline matching and customer expectations.
+- **RERA Possession Date**: Regulatory deadline only - NOT the actual expected possession. DO NOT use for customer timeline matching.
+
+## RULE: Always use OC Date from inventory/sister project metadata for any possession-related analysis or recommendations.
+
+## OC Status Interpretation:
+- If oc_received array is populated (e.g., ["A", "B"]): Those towers have received Occupancy Certificate = RTMI available
+- If oc_received is empty/null: Project is under construction, use oc_date for expected possession
+- RTMI (Ready-to-Move-In): Only applicable if oc_received contains tower(s)`;
+
 
     const leadScoringModel = `# LEAD SCORING MODEL: PPS (Predictive Probability Score) FRAMEWORK
 
@@ -1841,7 +2046,7 @@ This section provides competitor pricing data for cross-sell recommendation eval
 
 ${competitorPricingMatrix}`;
 
-    // Build Sister Projects context for cross-selling
+    // Build Sister Projects context for cross-selling (Stage 2 context - OC Date prioritized)
     let sisterProjectsContext = "";
     if (sisterProjects && sisterProjects.length > 0) {
       sisterProjectsContext = `# SISTER PROJECTS FOR CROSS-SELLING
@@ -1855,8 +2060,9 @@ ${sisterProjects.map((sp: any) => {
   const configs = meta.configurations || [];
   return `
 ### ${sp.name} (${sp.relationship_type})
-- Possession: ${meta.rera_possession || meta.oc_date || "N/A"}
-- OC Status: ${meta.oc_received ? `OC received for towers ${meta.oc_received.join(", ")}` : "Under construction"}
+- Possession (OC Date): ${meta.oc_date || "Under construction"}
+- RERA Deadline: ${meta.rera_possession || "N/A"}
+- OC Status: ${meta.oc_received ? `OC received for towers ${meta.oc_received.join(", ")}` : "Pending"}
 - Unique Selling: ${meta.unique_selling || "N/A"}
 - Payment Plan: ${meta.payment_plan || "N/A"}
 - Configurations:
@@ -1880,6 +2086,11 @@ ${triggers.investment_buyer ? "- Investment buyer profile" : ""}
 3. Generate cross_sell_recommendation ONLY if a clear match exists
 4. If no match or Eternia is the best fit, set cross_sell_recommendation to null
 5. The talking_point should be specific and include price/config details
+
+## CRITICAL: POSSESSION DATE USAGE
+- ALWAYS use OC Date (not RERA date) for possession timeline matching
+- OC Date = Actual expected delivery date
+- RERA Possession = Regulatory deadline (often later than actual)
 `;
     }
 
@@ -1919,8 +2130,17 @@ Return a JSON object with this EXACT structure:
   "mql_data_available": boolean,
   "cross_sell_recommendation": {
     "recommended_project": "Primera" | "Estella" | "Immensa" | null,
-    "reason": "Brief explanation of why this sister project is a better fit (max 20 words)",
-    "talking_point": "Specific sales pitch with price/config details (max 20 words)"
+    "recommended_config": "2 BHK" | "3 BHK" | "4 BHK" | null,
+    "price_range_cr": "₹X.XX - ₹Y.YY Cr",
+    "possession_date": "YYYY-MM",
+    "reason": "Brief explanation of why this sister project is a better fit (max 25 words)",
+    "talking_point": "Specific sales pitch with price/config/possession details (max 25 words)",
+    "rules_evaluation": {
+      "budget_check": "PASS" | "FAIL" | "N/A",
+      "possession_check": "PASS" | "FAIL" | "N/A",
+      "size_check": "PASS" | "FAIL" | "N/A",
+      "room_check": "PASS" | "FAIL" | "N/A"
+    }
   } | null
 }
 
@@ -2394,6 +2614,41 @@ IMPORTANT SCORING RULES:
         analysisResult.ai_rating = adjustedRating;
       }
 
+      // ===== STAGE 2.5: CROSS-SELL RECOMMENDATION (Gemini 3 Flash) =====
+      let stage25Model = "gemini-3-flash-preview";
+      if (parseSuccess && sisterProjects && sisterProjects.length > 0) {
+        console.log(`Stage 2.5 (Cross-Sell) starting for lead ${lead.id} using ${stage25Model}`);
+        
+        try {
+          // Add small delay before cross-sell call
+          await new Promise((resolve) => setTimeout(resolve, 150));
+          
+          const crossSellPrompt = buildCrossSellPrompt(
+            analysisResult,
+            extractedSignals,
+            sisterProjects,
+            projectMetadata
+          );
+          
+          const crossSellResult = await callCrossSellAPI(crossSellPrompt, googleApiKey!);
+          
+          // Merge cross-sell recommendation into analysis result
+          if (crossSellResult?.cross_sell_recommendation) {
+            analysisResult.cross_sell_recommendation = crossSellResult.cross_sell_recommendation;
+            console.log(`Stage 2.5 complete for lead ${lead.id}: Recommended ${crossSellResult.cross_sell_recommendation.recommended_project}`);
+          } else {
+            analysisResult.cross_sell_recommendation = null;
+            console.log(`Stage 2.5 complete for lead ${lead.id}: No cross-sell recommendation. ${crossSellResult?.evaluation_log || ""}`);
+          }
+        } catch (crossSellError) {
+          stage25Model = "skipped (error)";
+          console.warn(`Stage 2.5 failed for lead ${lead.id}:`, crossSellError);
+          analysisResult.cross_sell_recommendation = null;
+        }
+      } else {
+        stage25Model = "skipped (no sister projects or Stage 2 failed)";
+      }
+
       // ===== STAGE 3: NBA & TALKING POINTS GENERATION (Gemini 3 Flash) =====
       let stage3Model = "gemini-3-flash-preview";
       if (parseSuccess) {
@@ -2495,6 +2750,7 @@ IMPORTANT SCORING RULES:
       analysisResult.models_used = {
         stage1: stage1Model,
         stage2: stage2Model,
+        stage2_5: stage25Model,
         stage3: stage3Model,
       };
 
@@ -2517,7 +2773,7 @@ IMPORTANT SCORING RULES:
     const allResults = [...cachedResults, ...freshResults];
     const successCount = allResults.filter((r) => r.parseSuccess).length;
 
-    console.log(`Analysis complete: ${successCount}/${allResults.length} successful (Gemini 3 Flash Stage 1/3 + Claude Opus 4.5 Stage 2)`);
+    console.log(`Analysis complete: ${successCount}/${allResults.length} successful (Gemini 3 Flash Stage 1/2.5/3 + Claude Opus 4.5 Stage 2)`);
 
     return new Response(
       JSON.stringify({
