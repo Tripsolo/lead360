@@ -1,236 +1,200 @@
 
-# Phase 3: Update Cross-Sell Prompt to Fetch Tower Inventory Data
 
-## Overview
+# Revised Plan: Framework-Aligned Updates
 
-This update modifies the `buildCrossSellPrompt()` function in `supabase/functions/analyze-leads/index.ts` to:
-1. Query the `tower_inventory` table for actual closing prices (Total Value)
-2. Replace the current `sister_projects.metadata.configurations.price_cr` with `tower_inventory.closing_min_cr/closing_max_cr`
-3. Use `tower_inventory.oc_date` for possession timeline validation
-4. Update the Knowledge Base Field Explainer reference in cross-sell evaluation
+## Analysis Summary
 
-## Current State
+After examining the existing framework structure, I've identified:
 
-The `buildCrossSellPrompt()` function (lines 868-997) currently:
-- Extracts configuration data from `sister_projects.metadata.configurations[].price_cr`
-- Uses `meta.oc_date || meta.rera_possession` from sister project metadata
-- Does NOT query `tower_inventory` table for actual closing prices
+**Already Covered (no new TPs needed):**
+- "Not sure on exact area" → TP-DEC-002 exists
+- "Ecosystem rebuild" → TP-LOC-002 exists  
+- "Just Started Exploring" → Matrix entry exists (NBA-FUP-001)
 
-## Changes Required
+**Medium Gap Fixes (update existing TPs):**
+1. TP-ECO-006 - Add "don't say flat no" guidance
+2. TP-ECO-007 - Add competitor comparison requirement
 
-### 1. Fetch Tower Inventory Data
+**Truly Missing (no overlap - create new):**
+1. TP-DEC-006 - Budget discovery (scouting leads who don't know their budget)
+2. TP-DEC-007 - Family location disagreement mediation
 
-Add a query to fetch `tower_inventory` data BEFORE calling `buildCrossSellPrompt()`:
+---
+
+## Part 1: Update Existing TPs (Medium Gaps)
+
+### TP-ECO-006 Update
+
+**Current:**
+```typescript
+talking_point: "Explain business economics transparently, then offer structured alternatives"
+```
+
+**Updated:**
+```typescript
+talking_point: "Don't refuse outright. Discuss cash flow needs first, then suggest bullet plan or custom schedule post management approval"
+```
+
+**Updated logical_argument:**
+```typescript
+"Subvention costs us 2-3% of deal value. We CAN'T offer it free - but we CAN structure: bullet plan aligned to your bonus, or 20:80 with minimal loading. Don't lose this home over payment structure"
+```
+
+---
+
+### TP-ECO-007 Update
+
+**Current:**
+```typescript
+talking_point: "Suggest floor/unit adjustment to absorb deviation cost. DO THIS FACE TO FACE..."
+```
+
+**Updated:**
+```typescript
+talking_point: "Suggest lower floor/unit to cover deviation. DO FACE TO FACE with pre-approved strategy. Show what competition offers at similar deviations"
+```
+
+**Updated logical_argument:**
+```typescript
+"2-floor lower unit saves Rs 4-6L = covers CLP deviation. Compare: [Competitor] with similar deviation charges Rs [X] more. Decision: This unit at [price] vs losing to appreciation delay"
+```
+
+---
+
+## Part 2: Create New TPs (Zero Overlap)
+
+### TP-DEC-006: Budget Discovery
+
+**Why needed:** TP-DEC-002 helps leads who don't know their **area** requirement. This covers leads who don't know their **budget** (just started scouting, no financial clarity).
 
 ```typescript
-// Fetch tower inventory for all sister projects + main project
-const { data: towerInventory } = await supabase
-  .from("tower_inventory")
-  .select("*")
-  .in("project_id", [projectId, ...(sisterProjects?.map((sp: any) => sp.id) || [])]);
-
-// Fetch competitor pricing for cross-sell context
-const { data: competitorPricing } = await supabase
-  .from("competitor_pricing")
-  .select("*");
+"TP-DEC-006": {
+  tp_id: "TP-DEC-006",
+  category: "Decision Process",
+  sub_category: "Budget Discovery",
+  objection_scenario: "Not sure of budget - just started scouting",
+  talking_point: "Work backwards: family size → room need → self-use vs investment → cash flow → budget range",
+  key_data_points: "Family size, Purchase reason, Income range, Existing liabilities, Expected inflows",
+  emotional_hook: "Let me help you figure this out - home buying starts with your family's needs, not spreadsheets",
+  logical_argument: "Step 1: Family size = room count. Step 2: Self-use vs investment = location priority. Step 3: Income - liabilities = EMI capacity. Result: Clear budget range"
+}
 ```
 
-This query should be placed in the main `serve()` function around line 1467-1471, alongside the sister projects fetch.
+---
 
-### 2. Update buildCrossSellPrompt Function Signature
+### TP-DEC-007: Family Location Disagreement
 
-Add `towerInventory` and `competitorPricing` parameters:
+**Why needed:** TP-LOC-002 addresses ecosystem concerns generically. This covers when **family members disagree** on location (spouse wants closer to work vs. established area).
 
 ```typescript
-function buildCrossSellPrompt(
-  analysisResult: any,
-  extractedSignals: any,
-  sisterProjects: any[],
-  projectMetadata: any,
-  towerInventory: any[],    // NEW
-  competitorPricing: any[]  // NEW
-): string
+"TP-DEC-007": {
+  tp_id: "TP-DEC-007",
+  category: "Decision Process",
+  sub_category: "Family Alignment",
+  objection_scenario: "Family disagrees on location - one wants closer to work, other wants established area",
+  talking_point: "Acknowledge both. Township addresses 'established area' (schools, hospitals, retail). Metro addresses 'closer to work'. Schedule joint visit",
+  key_data_points: "Family member preferences, Current commute times, Township infrastructure list, Metro Line 4 timeline",
+  emotional_hook: "Family decisions are hard - let me show how this works for everyone, not just one person",
+  logical_argument: "Spouse A wants established: Township has school, hospital, retail within walking distance. Spouse B wants commute: Metro Line 4 (2027) = 35 min to BKC. Both get what they want"
+}
 ```
 
-### 3. Update Sister Projects Data Building
+---
 
-Replace the current configuration price extraction with tower inventory lookup:
+## Part 3: Create New NBAs (Zero Overlap)
+
+### NBA-COM-014: Budget Discovery Consultation
 
 ```typescript
-// Group tower inventory by project_id for efficient lookup
-const inventoryByProject = towerInventory.reduce((acc: any, inv: any) => {
-  if (!acc[inv.project_id]) acc[inv.project_id] = [];
-  acc[inv.project_id].push(inv);
-  return acc;
-}, {});
-
-const sisterProjectsData = sisterProjects.map((sp: any) => {
-  const meta = sp.metadata || {};
-  const triggers = sp.cross_sell_triggers || {};
-  
-  // Get tower inventory for this sister project
-  const projectInventory = inventoryByProject[sp.id] || [];
-  
-  // Group inventory by typology and get min/max closing prices
-  const configsFromInventory = Object.values(
-    projectInventory.reduce((acc: any, inv: any) => {
-      const key = inv.typology;
-      if (!acc[key]) {
-        acc[key] = {
-          type: inv.typology,
-          carpet_sqft_min: inv.carpet_sqft_min,
-          carpet_sqft_max: inv.carpet_sqft_max,
-          closing_price_min_cr: inv.closing_min_cr,  // TOTAL VALUE - PRIMARY
-          closing_price_max_cr: inv.closing_max_cr,  // TOTAL VALUE - PRIMARY
-          oc_date: inv.oc_date,
-          unsold: inv.unsold,
-          construction_status: inv.construction_status,
-          rooms: extractRoomCount(inv.typology)
-        };
-      } else {
-        // Aggregate: min of mins, max of maxes
-        acc[key].carpet_sqft_min = Math.min(acc[key].carpet_sqft_min, inv.carpet_sqft_min);
-        acc[key].carpet_sqft_max = Math.max(acc[key].carpet_sqft_max, inv.carpet_sqft_max);
-        acc[key].closing_price_min_cr = Math.min(acc[key].closing_price_min_cr, inv.closing_min_cr);
-        acc[key].closing_price_max_cr = Math.max(acc[key].closing_price_max_cr, inv.closing_max_cr);
-        acc[key].unsold += inv.unsold || 0;
-        // Use earliest OC date
-        if (inv.oc_date && (!acc[key].oc_date || new Date(inv.oc_date) < new Date(acc[key].oc_date))) {
-          acc[key].oc_date = inv.oc_date;
-        }
-      }
-      return acc;
-    }, {} as Record<string, any>)
-  );
-  
-  // Fallback to metadata if no inventory data
-  const configs = configsFromInventory.length > 0 
-    ? configsFromInventory 
-    : (meta.configurations || []).map((c: any) => ({
-        type: c.type,
-        carpet_sqft_min: c.carpet_sqft?.[0] || null,
-        carpet_sqft_max: c.carpet_sqft?.[1] || null,
-        closing_price_min_cr: c.price_cr?.[0] || null,  // Fallback to old field
-        closing_price_max_cr: c.price_cr?.[1] || null,
-        rooms: extractRoomCount(c.type)
-      }));
-  
-  // Determine earliest OC date from inventory
-  const earliestOcDate = configsFromInventory.length > 0
-    ? configsFromInventory.reduce((earliest: string | null, cfg: any) => {
-        if (!earliest || (cfg.oc_date && new Date(cfg.oc_date) < new Date(earliest))) {
-          return cfg.oc_date;
-        }
-        return earliest;
-      }, null)
-    : meta.oc_date || meta.rera_possession;
-  
-  // Check RTMI status from inventory
-  const hasRtmi = projectInventory.some((inv: any) => 
-    inv.construction_status?.toLowerCase().includes('oc received') ||
-    (inv.current_due_pct && inv.current_due_pct >= 95)
-  );
-  
-  return {
-    name: sp.name,
-    id: sp.id,
-    relationship_type: sp.relationship_type,
-    possession_date: earliestOcDate,  // From tower inventory OC Date
-    is_rtmi: hasRtmi || (meta.oc_received && meta.oc_received.length > 0),
-    unique_selling: meta.unique_selling || "N/A",
-    payment_plan: meta.payment_plan || "N/A",
-    configurations: configs,
-    triggers: triggers,
-    total_unsold_inventory: projectInventory.reduce((sum: number, inv: any) => sum + (inv.unsold || 0), 0)
-  };
-});
+"NBA-COM-014": {
+  nba_id: "NBA-COM-014",
+  trigger_condition: "IF status = 'Just started scouting' AND budget_unclear = True",
+  data_points_required: "Family size, Purchase reason, Income range (if available)",
+  persona_filter: "All first-time buyers",
+  objection_category: "Decision Process",
+  action_category: "COMMUNICATION",
+  specific_action: "Conduct discovery call: family size → room needs → budget crystallization. Position as guidance, not sales",
+  escalation_trigger: "Client refuses to share details",
+  fallback_action: "Provide budget range bands, let client self-identify",
+  linked_talking_points: ["TP-DEC-006"]
+}
 ```
 
-### 4. Update Cross-Sell Evaluation Rules in Prompt
+---
 
-Update the prompt text to reference `closing_price_min_cr` instead of `price_cr_min`:
+### NBA-COM-015: Family Alignment Visit
 
 ```typescript
-### RULE 1: BUDGET CEILING (20% MAX)
-- The recommended project's entry price (closing_price_min_cr for matching config) must NOT exceed 120% of the lead's stated budget.
-- closing_price_min_cr = All-inclusive Total Value (Base + Floor Rise + GST + Stamp Duty)
-- Formula: IF (closing_price_min_cr > lead_budget * 1.20) THEN REJECT
-- NEVER use base PSF * carpet area as a proxy for budget comparison.
+"NBA-COM-015": {
+  nba_id: "NBA-COM-015",
+  trigger_condition: "IF family_disagreement_detected = True AND objection_category = 'Location'",
+  data_points_required: "Family member preferences, Conflicting requirements, Workplace locations",
+  persona_filter: "All with joint decision makers",
+  objection_category: "Decision Process",
+  action_category: "COMMUNICATION",
+  specific_action: "Schedule joint family visit. Present township as solution for both parties' needs. Address each concern separately",
+  escalation_trigger: "One party refuses to visit",
+  fallback_action: "Send video walkthrough addressing each person's specific concerns",
+  linked_talking_points: ["TP-DEC-007", "TP-LOC-002"]
+}
 ```
 
-### 5. Add Competitor Context for Cross-Sell
+---
 
-Include competitor pricing in the prompt for reference:
+## Part 4: Keyword & Matrix Updates
+
+### New Keywords (Decision Process)
 
 ```typescript
-## COMPETITOR REFERENCE (For Talking Points)
-${competitorPricing.slice(0, 10).map((cp: any) => 
-  `- ${cp.competitor_name} ${cp.project_name} ${cp.config}: ₹${cp.price_min_av}-${cp.price_max_av}L (${cp.avg_psf} PSF)`
-).join('\n')}
+// Budget discovery
+"just started", "scouting", "not sure budget", "don't know budget", "figuring out",
+
+// Family conflict
+"wife wants", "husband wants", "spouse disagrees", "parents want different", "family conflict"
 ```
 
-### 6. Update Stage 2.5 Call Site
+### Matrix Entries (All Personas)
 
-Modify the call to `buildCrossSellPrompt()` in the main loop (around line 2729):
+Add two new objection mappings:
 
 ```typescript
-const crossSellPrompt = buildCrossSellPrompt(
-  analysisResult,
-  extractedSignals,
-  sisterProjects,
-  projectMetadata,
-  towerInventory || [],   // NEW
-  competitorPricing || [] // NEW
-);
+"Budget Not Clear (Scouting)": { 
+  nba_id: "NBA-COM-014", 
+  tp_ids: ["TP-DEC-006"], 
+  action_summary: "Discovery consultation" 
+},
+"Family Location Disagreement": { 
+  nba_id: "NBA-COM-015", 
+  tp_ids: ["TP-DEC-007", "TP-LOC-002"], 
+  action_summary: "Joint family visit" 
+}
 ```
 
-## File Changes Summary
+---
 
-| File | Lines | Change |
-|------|-------|--------|
-| `supabase/functions/analyze-leads/index.ts` | ~1467-1471 | Add `tower_inventory` and `competitor_pricing` fetch queries |
-| `supabase/functions/analyze-leads/index.ts` | ~868-997 | Update `buildCrossSellPrompt()` to use tower inventory data |
-| `supabase/functions/analyze-leads/index.ts` | ~2729-2734 | Update call site to pass new parameters |
+## Files to Modify
 
-## Technical Details
+| File | Section | Change |
+|------|---------|--------|
+| `nba-framework.ts` | TALKING_POINTS (line ~130) | Update TP-ECO-006, TP-ECO-007 |
+| `nba-framework.ts` | TALKING_POINTS (after line 559) | Add TP-DEC-006, TP-DEC-007 |
+| `nba-framework.ts` | NBA_RULES (after line 1213) | Add NBA-COM-014, NBA-COM-015 |
+| `nba-framework.ts` | OBJECTION_DETECTION_KEYWORDS (line ~1341) | Add new keywords |
+| `nba-framework.ts` | PERSONA_OBJECTION_MATRIX (lines 1358+) | Add 2 new entries per persona |
 
-### Data Flow
+---
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│                      Main serve() Handler                    │
-├──────────────────────────────────────────────────────────────┤
-│  1. Fetch project metadata                                   │
-│  2. Fetch sister_projects                                    │
-│  3. Fetch tower_inventory (NEW)                              │
-│  4. Fetch competitor_pricing (NEW)                           │
-│  5. For each lead:                                           │
-│     - Stage 1: Extract Signals                               │
-│     - Stage 2: Score & Persona                               │
-│     - Stage 2.5: Cross-Sell (uses tower_inventory prices)    │
-│     - Stage 3: NBA & Talking Points                          │
-└──────────────────────────────────────────────────────────────┘
-```
+## Format Compliance Checklist
 
-### Price Field Mapping
+| Requirement | TP-DEC-006 | TP-DEC-007 | TP-ECO-006 | TP-ECO-007 |
+|------------|-----------|-----------|-----------|-----------|
+| Talking point is 1-2 lines | Yes | Yes | Yes | Yes |
+| No stitched multi-recommendations | Yes | Yes | Yes | Yes |
+| Follows existing structure | Yes | Yes | Yes | Yes |
 
-| Old Field (sister_projects.metadata) | New Field (tower_inventory) | Description |
-|--------------------------------------|----------------------------|-------------|
-| `configurations[].price_cr[0]` | `closing_min_cr` | All-inclusive min price |
-| `configurations[].price_cr[1]` | `closing_max_cr` | All-inclusive max price |
-| `oc_date` (metadata) | `oc_date` (per tower) | Actual expected possession |
-| N/A | `construction_status` | RTMI detection ("OC Received") |
+| Requirement | NBA-COM-014 | NBA-COM-015 |
+|------------|-------------|-------------|
+| Action-oriented (not descriptive) | Yes | Yes |
+| Follows existing structure | Yes | Yes |
+| Has clear trigger condition | Yes | Yes |
 
-### Fallback Logic
-
-If `tower_inventory` has no data for a sister project:
-1. Fall back to `sister_projects.metadata.configurations[].price_cr`
-2. Log a warning for data gap tracking
-3. Still apply cross-sell rules but with lower confidence
-
-## Expected Outcomes
-
-1. **Accurate Budget Comparisons**: Cross-sell uses `closing_min_cr` (all-inclusive Total Value) instead of agreement value or base PSF estimates
-2. **Precise Possession Matching**: OC dates from `tower_inventory` per tower, not project-level RERA dates
-3. **RTMI Detection**: Based on `construction_status = "OC Received"` from inventory data
-4. **Inventory Awareness**: Cross-sell considers `unsold` count for urgency messaging
