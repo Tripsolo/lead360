@@ -127,21 +127,21 @@ export const TALKING_POINTS: Record<string, TalkingPointDef> = {
     category: "Economic Fit",
     sub_category: "Payment Schedule",
     objection_scenario: "Wants subvention without cost loading",
-    talking_point: "Explain business economics transparently, then offer structured alternatives",
-    key_data_points: "Builder cost of funds, Subvention loading calculation, Alternative payment structures",
-    emotional_hook: "I understand you want financial ease. Let me show you how we can structure this intelligently",
-    logical_argument: "Pure subvention costs us ~2-3% of deal value. We can offer custom payment plans that reduce your outflow without this loading",
+    talking_point: "Don't refuse outright. Discuss cash flow needs first, then suggest bullet plan or custom schedule post management approval",
+    key_data_points: "Client's cash flow timing, Builder cost of funds (~2-3%), Bullet plan options, 20:80 structures, Management-approved deviations",
+    emotional_hook: "I hear you - let's find a way that works for your cash flow without you missing out on this home",
+    logical_argument: "Subvention costs us 2-3% of deal value. We CAN'T offer it free - but we CAN structure: bullet plan aligned to your bonus, or 20:80 with minimal loading. Don't lose this home over payment structure",
   },
   "TP-ECO-007": {
     tp_id: "TP-ECO-007",
     category: "Economic Fit",
     sub_category: "Payment Schedule",
     objection_scenario: "CLP deviation making price go beyond budget",
-    talking_point: "Suggest floor/unit adjustment to absorb deviation cost. DO THIS FACE TO FACE. Make strategy of what to offer BEFOREHAND post taking MANAGEMENT APPROVAL. Show what competition offers at similar deviations",
-    key_data_points: "Floor premium rates, Unit alternatives with payment flexibility, Competition pricing with similar deviations, Management-approved deviation options",
-    emotional_hook: "Let's find the sweet spot where your budget works and you don't compromise on your home",
-    logical_argument: "A 2-floor lower unit saves ₹4-6L which covers the CLP deviation. Same view, same layout, better terms. Compare with what competition offers with such deviations",
-    competitor_counter: "Competition may offer lower loading but check their construction progress and delay history",
+    talking_point: "Suggest lower floor/unit to cover deviation. DO FACE TO FACE with pre-approved strategy. Show what competition offers at similar deviations",
+    key_data_points: "Floor premium rates (₹X per floor), Alternative units matching requirements, Competition pricing WITH deviations, Management-approved deviation options, Price appreciation if delayed",
+    emotional_hook: "Let's find the sweet spot where your budget works without compromising on what matters to your family",
+    logical_argument: "2-floor lower unit saves ₹4-6L = covers CLP deviation. Compare: [Competitor] with similar deviation charges ₹[X] more. Decision: This unit at [price] vs losing to appreciation delay",
+    competitor_counter: "Competition may offer lower loading but check their construction progress, delay history, and what they charge for similar deviations",
   },
   "TP-ECO-008": {
     tp_id: "TP-ECO-008",
@@ -556,6 +556,26 @@ export const TALKING_POINTS: Record<string, TalkingPointDef> = {
     key_data_points: "Token amount (refundable), Site visit policy, Price lock benefit with token, Unit availability status",
     emotional_hook: "I want you to see everything. Here's how we can make that happen",
     logical_argument: "Site visit to construction area is only possible after token booking (₹[X], refundable). This also LOCKS YOUR PRICE and secures your exact unit. Once token is done, I'll personally take you for a complete site walkthrough",
+  },
+  "TP-DEC-006": {
+    tp_id: "TP-DEC-006",
+    category: "Decision Process",
+    sub_category: "Budget Discovery",
+    objection_scenario: "Not sure of budget - just started scouting",
+    talking_point: "Work backwards: family size → room need → self-use vs investment → cash flow → budget range",
+    key_data_points: "Family size, Purchase reason (self-use/investment), Income range, Existing liabilities, Expected inflows (bonus/appraisal)",
+    emotional_hook: "Let me help you figure this out - home buying starts with your family's needs, not spreadsheets",
+    logical_argument: "Step 1: Family size = room count. Step 2: Self-use vs investment = location priority. Step 3: Income - liabilities = EMI capacity. Result: Clear budget range",
+  },
+  "TP-DEC-007": {
+    tp_id: "TP-DEC-007",
+    category: "Decision Process",
+    sub_category: "Family Alignment",
+    objection_scenario: "Family disagrees on location - one wants closer to work, other wants established area",
+    talking_point: "Acknowledge both. Township addresses 'established area' (schools, hospitals, retail). Metro addresses 'closer to work'. Schedule joint visit",
+    key_data_points: "Family member preferences, Current commute times, Township infrastructure (school, hospital, retail), Metro Line 4 timeline (2027)",
+    emotional_hook: "Family decisions are hard - let me show how this works for everyone, not just one person",
+    logical_argument: "Spouse A wants established: Township has school, hospital, retail within walking distance. Spouse B wants commute: Metro Line 4 (2027) = 35 min to BKC. Both get what they want",
   },
 };
 
@@ -1283,6 +1303,30 @@ export const NBA_RULES: Record<string, NBARule> = {
     fallback_action: "Offer best approved deviation, highlight delivery confidence",
     linked_talking_points: ["TP-COMP-006"],
   },
+  "NBA-COM-014": {
+    nba_id: "NBA-COM-014",
+    trigger_condition: "IF status = 'Just started scouting' AND budget_unclear = True",
+    data_points_required: "Family size, Purchase reason, Income range (if available)",
+    persona_filter: "All first-time buyers",
+    objection_category: "Decision Process",
+    action_category: "COMMUNICATION",
+    specific_action: "Conduct discovery call: family size → room needs → budget crystallization. Position as guidance, not sales",
+    escalation_trigger: "Client refuses to share details",
+    fallback_action: "Provide budget range bands, let client self-identify",
+    linked_talking_points: ["TP-DEC-006"],
+  },
+  "NBA-COM-015": {
+    nba_id: "NBA-COM-015",
+    trigger_condition: "IF family_disagreement_detected = True AND objection_category = 'Location'",
+    data_points_required: "Family member preferences, Conflicting requirements, Workplace locations",
+    persona_filter: "All with joint decision makers",
+    objection_category: "Decision Process",
+    action_category: "COMMUNICATION",
+    specific_action: "Schedule joint family visit. Present township as solution for both parties' needs. Address each concern separately",
+    escalation_trigger: "One party refuses to visit",
+    fallback_action: "Send video walkthrough addressing each person's specific concerns",
+    linked_talking_points: ["TP-DEC-007", "TP-LOC-002"],
+  },
 };
 
 // ============= OBJECTION DETECTION KEYWORDS =============
@@ -1342,9 +1386,13 @@ export const OBJECTION_DETECTION_KEYWORDS: Record<ObjectionCategory, string[]> =
     "discuss", "family", "parents", "spouse", "wife", "husband", "children",
     "decision maker", "exploring", "just started", "not sure", "thinking",
     "bring", "visit again",
-    // New: Influencers, site visit, token
+    // Influencers, site visit, token
     "influencer", "bring parents", "bring father", "bring mother",
-    "site visit", "see unit", "see site", "token", "closure"
+    "site visit", "see unit", "see site", "token", "closure",
+    // Budget discovery (scouting)
+    "scouting", "not sure budget", "don't know budget", "figuring out", "haven't decided",
+    // Family conflict
+    "wife wants", "husband wants", "spouse disagrees", "parents want different", "family conflict"
   ],
   "Special Scenarios": [
     "Amara", "existing customer", "Immensa rental", "NRI", "Hyderabad",
@@ -1371,6 +1419,8 @@ export const PERSONA_OBJECTION_MATRIX: Record<string, Record<string, MatrixEntry
     "Competitor Location Better": { nba_id: "NBA-COL-001", tp_ids: ["TP-LOC-003"], action_summary: "Infrastructure growth" },
     "Multiple Decision Makers": { nba_id: "NBA-COM-004", tp_ids: ["TP-DEC-001"], action_summary: "Senior connect" },
     "Just Started Exploring": { nba_id: "NBA-FUP-001", tp_ids: ["TP-DEC-002"], action_summary: "Educate + nurture" },
+    "Budget Not Clear (Scouting)": { nba_id: "NBA-COM-014", tp_ids: ["TP-DEC-006"], action_summary: "Discovery consultation" },
+    "Family Location Disagreement": { nba_id: "NBA-COM-015", tp_ids: ["TP-DEC-007", "TP-LOC-002"], action_summary: "Joint family visit" },
   },
   "Aspirant Upgrader": {
     "Budget Gap (<15%)": { nba_id: "NBA-OFF-001", tp_ids: ["TP-ECO-007"], action_summary: "Lower floor/unit" },
@@ -1387,6 +1437,8 @@ export const PERSONA_OBJECTION_MATRIX: Record<string, Record<string, MatrixEntry
     "Competitor Location Better": { nba_id: "NBA-COL-001", tp_ids: ["TP-LOC-003"], action_summary: "Future appreciation" },
     "Multiple Decision Makers": { nba_id: "NBA-COM-004", tp_ids: ["TP-DEC-002"], action_summary: "Family visit scheduling" },
     "Just Started Exploring": { nba_id: "NBA-FUP-001", tp_ids: ["TP-DEC-002"], action_summary: "Size + budget guidance" },
+    "Budget Not Clear (Scouting)": { nba_id: "NBA-COM-014", tp_ids: ["TP-DEC-006"], action_summary: "Discovery consultation" },
+    "Family Location Disagreement": { nba_id: "NBA-COM-015", tp_ids: ["TP-DEC-007", "TP-LOC-002"], action_summary: "Joint family visit" },
   },
   "Asset-Locked Upgrader": {
     "Budget Gap (<15%)": { nba_id: "NBA-OFF-003", tp_ids: ["TP-ECO-010"], action_summary: "Conditional booking" },
@@ -1403,6 +1455,8 @@ export const PERSONA_OBJECTION_MATRIX: Record<string, Record<string, MatrixEntry
     "Competitor Location Better": { nba_id: "NBA-COL-001", tp_ids: ["TP-LOC-003"], action_summary: "Growth potential" },
     "Multiple Decision Makers": { nba_id: "NBA-COM-004", tp_ids: ["TP-DEC-001"], action_summary: "SOP + family timeline" },
     "Just Started Exploring": { nba_id: "NBA-FUP-001", tp_ids: ["TP-DEC-002"], action_summary: "SOP timing discussion" },
+    "Budget Not Clear (Scouting)": { nba_id: "NBA-COM-014", tp_ids: ["TP-DEC-006"], action_summary: "Discovery consultation" },
+    "Family Location Disagreement": { nba_id: "NBA-COM-015", tp_ids: ["TP-DEC-007", "TP-LOC-002"], action_summary: "Joint family visit" },
   },
   "Vastu-Rigid Buyer": {
     "Budget Gap (<15%)": { nba_id: "NBA-OFF-006", tp_ids: ["TP-INV-004"], action_summary: "Vastu premium may justify" },
@@ -1419,6 +1473,8 @@ export const PERSONA_OBJECTION_MATRIX: Record<string, Record<string, MatrixEntry
     "Competitor Location Better": { nba_id: "NBA-COL-001", tp_ids: ["TP-LOC-003"], action_summary: "Location + vastu" },
     "Multiple Decision Makers": { nba_id: "NBA-COM-004", tp_ids: ["TP-DEC-001"], action_summary: "Elder consultation" },
     "Just Started Exploring": { nba_id: "NBA-FUP-001", tp_ids: ["TP-INV-004"], action_summary: "Vastu early qualification" },
+    "Budget Not Clear (Scouting)": { nba_id: "NBA-COM-014", tp_ids: ["TP-DEC-006"], action_summary: "Discovery consultation" },
+    "Family Location Disagreement": { nba_id: "NBA-COM-015", tp_ids: ["TP-DEC-007", "TP-LOC-002"], action_summary: "Joint family visit" },
   },
   "Settlement Seeker": {
     "Budget Gap (<15%)": { nba_id: "NBA-ESC-004", tp_ids: ["TP-SPEC-005"], action_summary: "Redirect to RTMI" },
@@ -1435,6 +1491,8 @@ export const PERSONA_OBJECTION_MATRIX: Record<string, Record<string, MatrixEntry
     "Competitor Location Better": { nba_id: "NBA-ESC-004", tp_ids: ["TP-SPEC-005"], action_summary: "Redirect to RTMI" },
     "Multiple Decision Makers": { nba_id: "NBA-ESC-004", tp_ids: ["TP-SPEC-005"], action_summary: "Redirect to RTMI" },
     "Just Started Exploring": { nba_id: "NBA-ESC-004", tp_ids: ["TP-SPEC-005"], action_summary: "Redirect to RTMI" },
+    "Budget Not Clear (Scouting)": { nba_id: "NBA-ESC-004", tp_ids: ["TP-SPEC-005"], action_summary: "Redirect to RTMI" },
+    "Family Location Disagreement": { nba_id: "NBA-ESC-004", tp_ids: ["TP-SPEC-005"], action_summary: "Redirect to RTMI" },
   },
   "Pragmatic Investor": {
     "Budget Gap (<15%)": { nba_id: "NBA-COL-006", tp_ids: ["TP-INV-006"], action_summary: "ROI justifies premium" },
@@ -1451,6 +1509,8 @@ export const PERSONA_OBJECTION_MATRIX: Record<string, Record<string, MatrixEntry
     "Competitor Location Better": { nba_id: "NBA-COL-001", tp_ids: ["TP-LOC-003"], action_summary: "ROI comparison" },
     "Multiple Decision Makers": { nba_id: "NBA-COM-004", tp_ids: ["TP-DEC-001"], action_summary: "Data for discussion" },
     "Just Started Exploring": { nba_id: "NBA-FUP-004", tp_ids: ["TP-INV-006"], action_summary: "Market education" },
+    "Budget Not Clear (Scouting)": { nba_id: "NBA-COM-014", tp_ids: ["TP-DEC-006", "TP-INV-006"], action_summary: "ROI-focused discovery" },
+    "Family Location Disagreement": { nba_id: "NBA-COM-015", tp_ids: ["TP-DEC-007", "TP-LOC-002"], action_summary: "Joint family visit" },
   },
   "Business Owner": {
     "Budget Gap (<15%)": { nba_id: "NBA-OFF-001", tp_ids: ["TP-ECO-007", "TP-ECO-003"], action_summary: "Floor adjustment + value proposition" },
@@ -1467,6 +1527,8 @@ export const PERSONA_OBJECTION_MATRIX: Record<string, Record<string, MatrixEntry
     "Competitor Location Better": { nba_id: "NBA-COL-001", tp_ids: ["TP-LOC-003"], action_summary: "Growth potential + infrastructure" },
     "Multiple Decision Makers": { nba_id: "NBA-COM-004", tp_ids: ["TP-DEC-001"], action_summary: "Quick senior connect" },
     "Just Started Exploring": { nba_id: "NBA-FUP-001", tp_ids: ["TP-DEC-002", "TP-ECO-003"], action_summary: "Time-efficient education" },
+    "Budget Not Clear (Scouting)": { nba_id: "NBA-COM-014", tp_ids: ["TP-DEC-006"], action_summary: "Discovery consultation" },
+    "Family Location Disagreement": { nba_id: "NBA-COM-015", tp_ids: ["TP-DEC-007", "TP-LOC-002"], action_summary: "Joint family visit" },
   },
   "Amara Density Escaper": {
     "Budget Gap (<15%)": { nba_id: "NBA-SPEC-001", tp_ids: ["TP-SPEC-001"], action_summary: "Density value justifies" },
@@ -1483,6 +1545,8 @@ export const PERSONA_OBJECTION_MATRIX: Record<string, Record<string, MatrixEntry
     "Competitor Location Better": { nba_id: "NBA-COL-001", tp_ids: ["TP-LOC-001"], action_summary: "Same location as current" },
     "Multiple Decision Makers": { nba_id: "NBA-COM-004", tp_ids: ["TP-DEC-001"], action_summary: "Bring family from Amara" },
     "Just Started Exploring": { nba_id: "NBA-FUP-001", tp_ids: ["TP-SPEC-001"], action_summary: "Leverage Amara experience" },
+    "Budget Not Clear (Scouting)": { nba_id: "NBA-COM-014", tp_ids: ["TP-DEC-006", "TP-SPEC-001"], action_summary: "Discovery + density comparison" },
+    "Family Location Disagreement": { nba_id: "NBA-COM-015", tp_ids: ["TP-DEC-007", "TP-LOC-002"], action_summary: "Joint family visit" },
   },
   "Kalpataru Loyalist Upgrader": {
     "Budget Gap (<15%)": { nba_id: "NBA-SPEC-002", tp_ids: ["TP-SPEC-002"], action_summary: "Loyalty benefits" },
@@ -1499,6 +1563,8 @@ export const PERSONA_OBJECTION_MATRIX: Record<string, Record<string, MatrixEntry
     "Competitor Location Better": { nba_id: "NBA-COL-001", tp_ids: ["TP-LOC-002"], action_summary: "Township benefits" },
     "Multiple Decision Makers": { nba_id: "NBA-COM-004", tp_ids: ["TP-DEC-001"], action_summary: "Existing experience" },
     "Just Started Exploring": { nba_id: "NBA-FUP-001", tp_ids: ["TP-SPEC-002"], action_summary: "Upgrade path education" },
+    "Budget Not Clear (Scouting)": { nba_id: "NBA-COM-014", tp_ids: ["TP-DEC-006", "TP-SPEC-002"], action_summary: "Discovery + loyalty benefits" },
+    "Family Location Disagreement": { nba_id: "NBA-COM-015", tp_ids: ["TP-DEC-007", "TP-LOC-002"], action_summary: "Joint family visit" },
   },
   "Parkcity Rental Converter": {
     "Budget Gap (<15%)": { nba_id: "NBA-SPEC-003", tp_ids: ["TP-SPEC-004"], action_summary: "Own vs rent math" },
@@ -1515,6 +1581,8 @@ export const PERSONA_OBJECTION_MATRIX: Record<string, Record<string, MatrixEntry
     "Competitor Location Better": { nba_id: "NBA-COL-001", tp_ids: ["TP-LOC-001"], action_summary: "They know location" },
     "Multiple Decision Makers": { nba_id: "NBA-COM-004", tp_ids: ["TP-DEC-001"], action_summary: "Family walkthrough" },
     "Just Started Exploring": { nba_id: "NBA-FUP-001", tp_ids: ["TP-SPEC-004"], action_summary: "Own vs rent education" },
+    "Budget Not Clear (Scouting)": { nba_id: "NBA-COM-014", tp_ids: ["TP-DEC-006", "TP-SPEC-004"], action_summary: "Discovery + rent vs own" },
+    "Family Location Disagreement": { nba_id: "NBA-COM-015", tp_ids: ["TP-DEC-007", "TP-LOC-002"], action_summary: "Joint family visit" },
   },
   "NRI/Out-of-City Relocator": {
     "Budget Gap (<15%)": { nba_id: "NBA-COM-005", tp_ids: ["TP-SPEC-003"], action_summary: "Virtual walkthrough" },
@@ -1531,6 +1599,8 @@ export const PERSONA_OBJECTION_MATRIX: Record<string, Record<string, MatrixEntry
     "Competitor Location Better": { nba_id: "NBA-COL-001", tp_ids: ["TP-LOC-001"], action_summary: "Metro connectivity" },
     "Multiple Decision Makers": { nba_id: "NBA-COM-005", tp_ids: ["TP-DEC-003"], action_summary: "VC with family" },
     "Just Started Exploring": { nba_id: "NBA-FUP-001", tp_ids: ["TP-SPEC-003"], action_summary: "Virtual education series" },
+    "Budget Not Clear (Scouting)": { nba_id: "NBA-COM-014", tp_ids: ["TP-DEC-006", "TP-SPEC-003"], action_summary: "Virtual discovery" },
+    "Family Location Disagreement": { nba_id: "NBA-COM-015", tp_ids: ["TP-DEC-007", "TP-LOC-002"], action_summary: "Virtual joint family call" },
   },
   "First-Time Investor": {
     "Budget Gap (<15%)": { nba_id: "NBA-OFF-001", tp_ids: ["TP-ECO-007"], action_summary: "Entry unit" },
@@ -1547,6 +1617,8 @@ export const PERSONA_OBJECTION_MATRIX: Record<string, Record<string, MatrixEntry
     "Competitor Location Better": { nba_id: "NBA-COL-001", tp_ids: ["TP-LOC-001"], action_summary: "Work commute focus" },
     "Multiple Decision Makers": { nba_id: "NBA-COM-004", tp_ids: ["TP-DEC-002"], action_summary: "Parents visit" },
     "Just Started Exploring": { nba_id: "NBA-FUP-001", tp_ids: ["TP-DEC-002"], action_summary: "First-timer guidance" },
+    "Budget Not Clear (Scouting)": { nba_id: "NBA-COM-014", tp_ids: ["TP-DEC-006"], action_summary: "Discovery consultation" },
+    "Family Location Disagreement": { nba_id: "NBA-COM-015", tp_ids: ["TP-DEC-007", "TP-LOC-002"], action_summary: "Joint family visit" },
   },
   "Senior Citizen Self-Use": {
     "Budget Gap (<15%)": { nba_id: "NBA-OFF-001", tp_ids: ["TP-ECO-003"], action_summary: "Value focus" },
@@ -1563,6 +1635,8 @@ export const PERSONA_OBJECTION_MATRIX: Record<string, Record<string, MatrixEntry
     "Competitor Location Better": { nba_id: "NBA-COL-001", tp_ids: ["TP-LOC-002"], action_summary: "Medical proximity" },
     "Multiple Decision Makers": { nba_id: "NBA-COM-004", tp_ids: ["TP-DEC-001"], action_summary: "Children/spouse visit" },
     "Just Started Exploring": { nba_id: "NBA-FUP-001", tp_ids: ["TP-DEC-002"], action_summary: "Retirement planning" },
+    "Budget Not Clear (Scouting)": { nba_id: "NBA-COM-014", tp_ids: ["TP-DEC-006"], action_summary: "Discovery consultation" },
+    "Family Location Disagreement": { nba_id: "NBA-COM-015", tp_ids: ["TP-DEC-007", "TP-LOC-002"], action_summary: "Joint family visit" },
   },
 };
 
