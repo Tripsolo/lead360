@@ -870,35 +870,114 @@ function buildCrossSellPrompt(
   analysisResult: any,
   extractedSignals: any,
   sisterProjects: any[],
-  projectMetadata: any
+  projectMetadata: any,
+  towerInventory: any[],      // NEW: Tower inventory data
+  competitorPricing: any[]    // NEW: Competitor pricing data
 ): string {
-  // Build sister projects data with OC dates (NOT RERA dates)
+  // Group tower inventory by project_id for efficient lookup
+  const inventoryByProject = (towerInventory || []).reduce((acc: any, inv: any) => {
+    if (!acc[inv.project_id]) acc[inv.project_id] = [];
+    acc[inv.project_id].push(inv);
+    return acc;
+  }, {} as Record<string, any[]>);
+
+  // Build sister projects data with CLOSING PRICES from tower inventory
   const sisterProjectsData = sisterProjects.map((sp: any) => {
     const meta = sp.metadata || {};
     const triggers = sp.cross_sell_triggers || {};
-    const configs = meta.configurations || [];
     
-    // CRITICAL: Use OC date, fallback to RERA only if OC unavailable
-    const possessionDate = meta.oc_date || meta.rera_possession || "N/A";
+    // Get tower inventory for this sister project
+    const projectInventory = inventoryByProject[sp.id] || [];
+    
+    // Group inventory by typology and get min/max closing prices (TOTAL VALUE)
+    const configsFromInventory = Object.values(
+      projectInventory.reduce((acc: any, inv: any) => {
+        const key = inv.typology;
+        if (!key) return acc;
+        
+        if (!acc[key]) {
+          acc[key] = {
+            type: inv.typology,
+            carpet_sqft_min: inv.carpet_sqft_min,
+            carpet_sqft_max: inv.carpet_sqft_max,
+            closing_price_min_cr: inv.closing_min_cr,  // TOTAL VALUE - PRIMARY FOR BUDGET
+            closing_price_max_cr: inv.closing_max_cr,  // TOTAL VALUE - PRIMARY FOR BUDGET
+            oc_date: inv.oc_date,
+            unsold: inv.unsold || 0,
+            construction_status: inv.construction_status,
+            rooms: extractRoomCount(inv.typology)
+          };
+        } else {
+          // Aggregate: min of mins, max of maxes across towers
+          if (inv.carpet_sqft_min && (!acc[key].carpet_sqft_min || inv.carpet_sqft_min < acc[key].carpet_sqft_min)) {
+            acc[key].carpet_sqft_min = inv.carpet_sqft_min;
+          }
+          if (inv.carpet_sqft_max && (!acc[key].carpet_sqft_max || inv.carpet_sqft_max > acc[key].carpet_sqft_max)) {
+            acc[key].carpet_sqft_max = inv.carpet_sqft_max;
+          }
+          if (inv.closing_min_cr && (!acc[key].closing_price_min_cr || inv.closing_min_cr < acc[key].closing_price_min_cr)) {
+            acc[key].closing_price_min_cr = inv.closing_min_cr;
+          }
+          if (inv.closing_max_cr && (!acc[key].closing_price_max_cr || inv.closing_max_cr > acc[key].closing_price_max_cr)) {
+            acc[key].closing_price_max_cr = inv.closing_max_cr;
+          }
+          acc[key].unsold += inv.unsold || 0;
+          // Use earliest OC date for possession timeline
+          if (inv.oc_date && (!acc[key].oc_date || new Date(inv.oc_date) < new Date(acc[key].oc_date))) {
+            acc[key].oc_date = inv.oc_date;
+          }
+        }
+        return acc;
+      }, {} as Record<string, any>)
+    );
+    
+    // Fallback to metadata if no inventory data for this project
+    const configs = configsFromInventory.length > 0 
+      ? configsFromInventory 
+      : (meta.configurations || []).map((c: any) => ({
+          type: c.type,
+          carpet_sqft_min: c.carpet_sqft?.[0] || null,
+          carpet_sqft_max: c.carpet_sqft?.[1] || null,
+          closing_price_min_cr: c.price_cr?.[0] || null,  // Fallback to old field
+          closing_price_max_cr: c.price_cr?.[1] || null,
+          rooms: extractRoomCount(c.type)
+        }));
+    
+    if (configsFromInventory.length === 0 && projectInventory.length === 0) {
+      console.warn(`No tower inventory data for sister project ${sp.id} (${sp.name}), using metadata fallback`);
+    }
+    
+    // Determine earliest OC date from inventory
+    const earliestOcDate = configsFromInventory.length > 0
+      ? (configsFromInventory as any[]).reduce((earliest: string | null, cfg: any) => {
+          if (!earliest || (cfg.oc_date && new Date(cfg.oc_date) < new Date(earliest))) {
+            return cfg.oc_date;
+          }
+          return earliest;
+        }, null as string | null)
+      : meta.oc_date || meta.rera_possession;
+    
+    // Check RTMI status from inventory (OC Received or >95% current_due)
+    const hasRtmi = projectInventory.some((inv: any) => 
+      inv.construction_status?.toLowerCase().includes('oc received') ||
+      (inv.current_due_pct && inv.current_due_pct >= 95)
+    );
+    
+    // Calculate total unsold inventory
+    const totalUnsold = projectInventory.reduce((sum: number, inv: any) => sum + (inv.unsold || 0), 0);
     
     return {
       name: sp.name,
       id: sp.id,
       relationship_type: sp.relationship_type,
-      possession_date: possessionDate,  // OC Date prioritized
-      oc_received: meta.oc_received || null,
-      is_rtmi: meta.oc_received && meta.oc_received.length > 0,
+      possession_date: earliestOcDate,  // From tower inventory OC Date (prioritized)
+      is_rtmi: hasRtmi || (meta.oc_received && meta.oc_received.length > 0),
       unique_selling: meta.unique_selling || "N/A",
       payment_plan: meta.payment_plan || "N/A",
-      configurations: configs.map((c: any) => ({
-        type: c.type,
-        carpet_sqft_min: c.carpet_sqft?.[0] || null,
-        carpet_sqft_max: c.carpet_sqft?.[1] || null,
-        price_cr_min: c.price_cr?.[0] || null,
-        price_cr_max: c.price_cr?.[1] || null,
-        rooms: extractRoomCount(c.type) // "2 BHK" → 2, "3 BHK" → 3, etc.
-      })),
-      triggers: triggers
+      configurations: configs,
+      triggers: triggers,
+      total_unsold_inventory: totalUnsold,
+      data_source: configsFromInventory.length > 0 ? "tower_inventory" : "metadata_fallback"
     };
   });
   
@@ -910,9 +989,27 @@ function buildCrossSellPrompt(
   const leadStagePreference = extractedSignals?.property_preferences?.stage_preference || null;
   const leadRooms = extractRoomCount(leadConfig);
   
+  // Build competitor reference section (top 10 for context)
+  const competitorRef = (competitorPricing || []).slice(0, 10).map((cp: any) => 
+    `- ${cp.competitor_name} ${cp.project_name} ${cp.config}: ₹${cp.price_min_av || 'N/A'}-${cp.price_max_av || 'N/A'}L (${cp.avg_psf || 'N/A'} PSF)`
+  ).join('\n');
+  
   const crossSellPrompt = `# CROSS-SELL RECOMMENDATION EVALUATION
 
 You are evaluating whether a lead should be recommended a sister project from the same township.
+
+## KNOWLEDGE BASE FIELD EXPLAINER (CRITICAL - PRICING RULES)
+
+### PRICING HIERARCHY
+- **closing_price_min_cr / closing_price_max_cr**: ALL-INCLUSIVE Total Value (Base + Floor Rise + Facing Premium + GST + Stamp Duty)
+- This is the PRIMARY field for budget comparison - the actual amount customer will pay
+- NEVER use base PSF * carpet area as a proxy for budget comparison
+- If closing_price fields are null, the data source is "metadata_fallback" and has lower confidence
+
+### POSSESSION HIERARCHY
+- **oc_date**: Actual expected possession date per tower (PRIMARY)
+- **is_rtmi**: True if construction_status = "OC Received" or current_due >= 95%
+- RERA date is regulatory deadline only - never use for customer timeline
 
 ## LEAD PROFILE (Extracted from Stage 2)
 - Stated Budget: ${leadBudget ? `₹${leadBudget} Cr` : "Not stated"}
@@ -925,25 +1022,30 @@ You are evaluating whether a lead should be recommended a sister project from th
 - Primary Concern: ${analysisResult.primary_concern_category || "Unknown"}
 - Core Motivation: ${analysisResult.extracted_signals?.core_motivation || "Unknown"}
 
-## SISTER PROJECTS AVAILABLE
+## SISTER PROJECTS AVAILABLE (with CLOSING PRICES from Tower Inventory)
 ${JSON.stringify(sisterProjectsData, null, 2)}
+
+## COMPETITOR REFERENCE (For Talking Points)
+${competitorRef || "No competitor data available"}
 
 ## CROSS-SELL EVALUATION RULES (CRITICAL - ALL MUST PASS)
 
 ### RULE 1: BUDGET CEILING (20% MAX)
-- The recommended project's entry price (price_cr_min for matching config) must NOT exceed 120% of the lead's stated budget.
-- Formula: IF (sister_project_price_cr_min > lead_budget * 1.20) THEN REJECT
+- The recommended project's entry price (closing_price_min_cr for matching config) must NOT exceed 120% of the lead's stated budget.
+- **closing_price_min_cr = All-inclusive Total Value (Base + Floor Rise + GST + Stamp Duty)**
+- Formula: IF (closing_price_min_cr > lead_budget * 1.20) THEN REJECT
+- NEVER use base PSF * carpet area as a proxy for budget comparison.
 - If budget is not stated, this rule passes automatically.
 
 ### RULE 2: POSSESSION MARGIN (8 MONTHS MAX)
 - The possession date difference from lead's expectation must be within 8 months.
-- Use OC Date (possession_date field) - NOT RERA date.
+- Use oc_date (possession_date field) - NOT RERA date.
 - If lead needs RTMI, only recommend projects with is_rtmi = true OR possession within 8 months from today.
 - If lead has no specific possession urgency, this rule passes automatically.
 
 ### RULE 3: SIZE CONSTRAINT (10% SMALLER MAX)
 - The recommended config's carpet area must not be more than 10% smaller than desired.
-- Formula: IF (sister_config_carpet_sqft_max < lead_desired_carpet * 0.90) THEN REJECT
+- Formula: IF (carpet_sqft_max < lead_desired_carpet * 0.90) THEN REJECT
 - If carpet area is not stated, use typical config size comparison.
 
 ### RULE 4: ROOM COUNT CONSTRAINT (STRICT)
@@ -960,12 +1062,14 @@ If multiple sister projects pass all rules, prioritize:
 2. Budget optimization (closest to stated budget)
 3. Config exact match (same room count preferred)
 4. GCP view preference (if lead expressed interest)
+5. Inventory urgency (lower unsold = higher priority for urgency messaging)
 
 ## EVALUATION PROCESS
 1. For each sister project, check ALL 4 rules above.
-2. Log which rules pass/fail for each project.
-3. If no project passes all rules, return null.
-4. If one or more pass, select the best match per priority rules.
+2. Use closing_price_min_cr (Total Value) for budget comparison - NOT agreement value or base PSF.
+3. Log which rules pass/fail for each project.
+4. If no project passes all rules, return null.
+5. If one or more pass, select the best match per priority rules.
 
 ## OUTPUT STRUCTURE
 Return a JSON object with ONLY these fields:
@@ -1468,6 +1572,22 @@ serve(async (req) => {
       .from("sister_projects")
       .select("*")
       .eq("parent_project_id", projectId);
+
+    // Fetch tower inventory for all sister projects + main project (for cross-sell pricing)
+    const sisterProjectIds = sisterProjects?.map((sp: any) => sp.id) || [];
+    const allProjectIds = [projectId, ...sisterProjectIds];
+    
+    const { data: towerInventory } = await supabase
+      .from("tower_inventory")
+      .select("*")
+      .in("project_id", allProjectIds);
+    
+    // Fetch competitor pricing for cross-sell context
+    const { data: competitorPricing } = await supabase
+      .from("competitor_pricing")
+      .select("*");
+    
+    console.log(`Fetched ${towerInventory?.length || 0} inventory records, ${competitorPricing?.length || 0} competitor records`);
 
     console.log(`Processing ${leads.length} leads for project ${projectId}, ${sisterProjects?.length || 0} sister projects available`);
 
@@ -2730,7 +2850,9 @@ IMPORTANT SCORING RULES:
             analysisResult,
             extractedSignals,
             sisterProjects,
-            projectMetadata
+            projectMetadata,
+            towerInventory || [],
+            competitorPricing || []
           );
           
           const crossSellResult = await callCrossSellAPI(crossSellPrompt, googleApiKey!);
