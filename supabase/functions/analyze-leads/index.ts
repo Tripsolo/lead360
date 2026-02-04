@@ -6,6 +6,12 @@ import {
   getNBARuleDef,
   type NBAActionType
 } from "./nba-framework.ts";
+import {
+  evaluateOutputs,
+  type TowerInventoryRow,
+  type CompetitorPricingRow,
+  type SisterProjectRow,
+} from "./evaluator.ts";
 
 // Declare EdgeRuntime for background task processing
 declare const EdgeRuntime: {
@@ -2971,12 +2977,72 @@ IMPORTANT SCORING RULES:
         stage3Model = "skipped (Stage 2 failed)";
       }
 
+      // ===== STAGE 4: OUTPUT EVALUATOR (Claude Sonnet 4.5 via OpenRouter) =====
+      let stage4Model = "claude-sonnet-4.5";
+      const openRouterKey = Deno.env.get("OPENROUTER_API_KEY");
+      if (parseSuccess && analysisResult.next_best_action && openRouterKey) {
+        console.log(`Stage 4 (Evaluator) starting for lead ${lead.id} using ${stage4Model}`);
+        
+        // Add 200ms delay before Stage 4
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        
+        try {
+          const evaluatedOutput = await evaluateOutputs(
+            {
+              persona: analysisResult.persona,
+              next_best_action: analysisResult.next_best_action,
+              talking_points: analysisResult.talking_points,
+              objection_categories_detected: analysisResult.objection_categories_detected,
+              primary_objection: analysisResult.primary_objection,
+              safety_check_triggered: analysisResult.safety_check_triggered,
+            },
+            analysisResult.cross_sell_recommendation,
+            extractedSignals,
+            (towerInventory || []) as TowerInventoryRow[],
+            (competitorPricing || []) as CompetitorPricingRow[],
+            (sisterProjects || []) as SisterProjectRow[],
+            projectMetadata || {},
+            openRouterKey
+          );
+          
+          if (evaluatedOutput) {
+            // Merge validated outputs back into analysis result
+            if (evaluatedOutput.final_output?.next_best_action) {
+              analysisResult.next_best_action = evaluatedOutput.final_output.next_best_action;
+            }
+            if (evaluatedOutput.final_output?.talking_points) {
+              analysisResult.talking_points = evaluatedOutput.final_output.talking_points;
+            }
+            // Update cross-sell if evaluator made corrections
+            if (evaluatedOutput.final_output?.cross_sell_recommendation !== undefined) {
+              analysisResult.cross_sell_recommendation = evaluatedOutput.final_output.cross_sell_recommendation;
+            }
+            
+            // Store validation audit trail
+            analysisResult.validation_summary = evaluatedOutput.validation_summary;
+            analysisResult.corrections_made = evaluatedOutput.corrections_made;
+            
+            console.log(`Stage 4 complete for lead ${lead.id}: ${evaluatedOutput.corrections_made?.length || 0} corrections made`);
+          } else {
+            stage4Model = "skipped (evaluator returned null)";
+            console.log(`Stage 4 skipped for lead ${lead.id}: evaluator returned null`);
+          }
+        } catch (stage4Error) {
+          stage4Model = "skipped (error)";
+          console.warn(`Stage 4 failed for lead ${lead.id}:`, stage4Error);
+          // Continue with Stage 3 output without validation
+        }
+      } else {
+        stage4Model = parseSuccess ? "skipped (no NBA output)" : "skipped (Stage 3 failed)";
+      }
+
       // Add models_used metadata to track which model processed each stage
       analysisResult.models_used = {
         stage1: stage1Model,
         stage2: stage2Model,
         stage2_5: stage25Model,
         stage3: stage3Model,
+        stage4_evaluator: stage4Model,
       };
 
       const result = {
