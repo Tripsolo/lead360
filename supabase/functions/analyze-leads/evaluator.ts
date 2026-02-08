@@ -283,7 +283,15 @@ CORRECT: Replace with TP-INV-006 or appropriate investment TP
 ### Rule 9: NBA-ID Validity
 - The nba_id MUST exist in NBA_RULES definitions
 - The trigger_condition in the rule must be plausibly satisfied by the lead context
-- If the NBA-ID doesn't match the lead's objection category, FLAG as mismatch`;
+- If the NBA-ID doesn't match the lead's objection category, FLAG as mismatch
+
+### Rule 10: PPS Score Exclusion in Rating Rationale (NON-NEGOTIABLE)
+The PPS Score number MUST NEVER appear in any text output field, especially rating_rationale.
+- If rating_rationale contains "PPS Score", "PPS: ", "scored X/100", or any numerical PPS reference → REMOVE IT
+- This is a non-negotiable rule that must never be broken under any circumstances
+- CORRECT: Replace with qualitative description of scoring factors (capability, intent, urgency)
+- The PPS score is displayed separately in the UI and must not appear in text fields
+- Add to corrections_made array with reason: "PPS score removed from rationale per non-negotiable rule"`;
 
   const knowledgeBaseSection = `
 ## KNOWLEDGE BASE (SOURCE OF TRUTH)
@@ -435,7 +443,14 @@ IMPORTANT:
 - If no corrections needed, return the original output unchanged with empty corrections_made array
 - If cross_sell fails validation, set cross_sell_recommendation to null
 - All corrections must reference actual data from the knowledge base
-- Keep talking points under 20 words and NBA actions under 15 words`;
+- Keep talking points under 20 words and NBA actions under 15 words
+
+## PPS SCORE VALIDATION (NON-NEGOTIABLE - ABSOLUTE REQUIREMENT)
+Before returning final_output, verify:
+- rating_rationale does NOT contain "PPS Score", "PPS:", "scored X/100", or any numerical score reference
+- If found, CORRECT by removing the PPS reference and keeping only qualitative factors
+- Add to corrections_made array with reason: "PPS score removed from rationale per non-negotiable rule"
+- This validation is ABSOLUTE and must never be skipped`;
 
   return `${systemPrompt}
 

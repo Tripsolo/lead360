@@ -2225,7 +2225,19 @@ The output text must NEVER reveal that credit, loan, or EMI data was considered 
 Violations of this rule are unacceptable under any circumstances.`;
 
     const outputConstraints = `# OUTPUT CONSTRAINTS (CRITICAL - STRICTLY ENFORCE):
-- Rating rationale should start with "**PPS Score: X/100.**" in bold, followed by key scoring factors. Do NOT include rating label like "(Hot)" or "(Warm)" in the rationale - that's shown separately
+
+## PPS SCORE EXCLUSION RULE (NON-NEGOTIABLE - ABSOLUTE REQUIREMENT):
+The PPS Score number MUST NEVER appear in the rating_rationale field. This is a non-negotiable rule that must never be broken under any circumstances.
+- ❌ NEVER write "PPS Score: X/100" or any variant
+- ❌ NEVER mention specific PPS values (e.g., "scored 85", "PPS of 72", "score of 90")
+- ❌ NEVER reference the numerical score in any form
+- ✅ Focus ONLY on the qualitative factors: financial capability, intent signals, timeline urgency
+- The PPS score is calculated internally and displayed separately in the UI - it must NOT appear in text output
+
+This rule is ABSOLUTE. Violations are unacceptable under any circumstances.
+
+## Other Constraints:
+- Rating rationale: 2-3 sentences focusing on key scoring factors (capability, intent, urgency). NO PPS numbers.
 - Summary: Maximum 30 words. Be concise and focused.
 - Next Best Action: Maximum 15 words. Keep it actionable and specific.`;
 
@@ -2336,7 +2348,7 @@ Return a JSON object with this EXACT structure:
     "product_market_fit": 0-15,
     "authority_dynamics": 0-10
   },
-  "rating_rationale": "Brief 2-3 sentence explanation of key scoring factors that determined this lead's rating. Focus on financial capability, intent signals, and timeline urgency. Do NOT include the PPS score value - it is displayed separately.",
+  "rating_rationale": "Brief 2-3 sentence explanation of key scoring factors that determined this lead's rating. Focus on financial capability, intent signals, and timeline urgency. NEVER include the PPS score value - this is a non-negotiable rule.",
   "persona": "Persona label",
   "persona_description": "2-line description focusing on: (1) demographics - age, gender, family composition; (2) financial/professional profile - occupation, designation, income capability; (3) primary buying motivation. For business owners, mention scale abstractly (e.g., 'established manufacturing business') without specific turnover figures. DO NOT include visit details, property preferences, or concerns here.",
   "summary": "Summarize the lead's visit notes: what they are looking for, visit experience/feedback, decision factors and timelines mentioned. DO NOT repeat demographic or professional details. Max 30 words.",
