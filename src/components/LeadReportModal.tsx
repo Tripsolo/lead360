@@ -13,21 +13,29 @@ import { standardizeLead } from '@/utils/leadStandardization';
 // Helper to convert snake_case to readable text
 const formatSnakeCase = (text: string) => text.replace(/_/g, ' ');
 
-// Helper to format budget in ₹ X.XX Cr format
+// Helper to format budget - smart display based on value
+// If < 1 Cr: Display as "XY Lacs"
+// If >= 1 Cr: Display as "X.YY Cr"
 const formatBudget = (value: number | string | null | undefined): string => {
   if (value == null || value === '' || value === 0) return 'No data available';
   
-  const numValue = typeof value === 'string' ? parseFloat(value) : value;
+  let numValue = typeof value === 'string' ? parseFloat(value) : value;
   if (isNaN(numValue) || numValue === 0) return 'No data available';
   
-  // If value is already in crores format (< 100, like 1.3, 2.5)
-  if (numValue < 100) {
-    return `₹ ${numValue.toFixed(2)} Cr`;
+  // Handle raw rupee values (>100 means it's likely in rupees, not crores)
+  if (numValue >= 100) {
+    numValue = numValue / 10000000; // Convert to crores
   }
   
-  // Convert raw amount to crores (e.g., 30000000 → 3.00 Cr)
-  const croreValue = numValue / 10000000; // 1 Cr = 10,000,000
-  return `₹ ${croreValue.toFixed(2)} Cr`;
+  // Format based on value
+  if (numValue < 1) {
+    // Less than 1 Cr: Display in Lacs format
+    const lacsValue = numValue * 100;
+    return `₹ ${lacsValue.toFixed(1)} Lacs`;
+  } else {
+    // 1 Cr or more: Display in Cr format
+    return `₹ ${numValue.toFixed(2)} Cr`;
+  }
 };
 
 // Helper to format in-hand funds as percentage

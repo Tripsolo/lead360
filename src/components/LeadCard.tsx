@@ -194,7 +194,17 @@ export const LeadCard = ({ lead }: LeadCardProps) => {
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     {analysis.extracted_signals.budget_stated && (
                       <div>
-                        <span className="font-medium">Budget:</span> ₹{(analysis.extracted_signals.budget_stated / 10000000).toFixed(2)}Cr
+                        <span className="font-medium">Budget:</span> {(() => {
+                          let val = analysis.extracted_signals.budget_stated;
+                          // Handle raw rupee values (>100 means rupees, not crores)
+                          if (val >= 100) val = val / 10000000;
+                          // Format based on value
+                          if (val < 1) {
+                            return `₹ ${(val * 100).toFixed(1)} Lacs`;
+                          } else {
+                            return `₹ ${val.toFixed(2)} Cr`;
+                          }
+                        })()}
                       </div>
                     )}
                     {analysis.extracted_signals.in_hand_funds && (

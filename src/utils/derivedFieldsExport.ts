@@ -160,9 +160,20 @@ export const exportDerivedFieldsToCSV = async (projectId?: string): Promise<void
     const complianceFlags = cisData?.compliance_flags || {};
     const insightFlags = cisData?.insight_flags || {};
     
-    // Format budget as crores
+    // Format budget - smart display based on value
     const budgetStated = extractedSignals?.budget_stated;
-    const budgetCr = budgetStated ? `₹${(Number(budgetStated)).toFixed(2)} Cr` : '';
+    let budgetCr = '';
+    if (budgetStated) {
+      let numVal = Number(budgetStated);
+      // Handle raw rupee values (>100 means rupees, not crores)
+      if (numVal >= 100) numVal = numVal / 10000000;
+      // Format based on value
+      if (numVal < 1) {
+        budgetCr = `₹ ${(numVal * 100).toFixed(1)} Lacs`;
+      } else {
+        budgetCr = `₹ ${numVal.toFixed(2)} Cr`;
+      }
+    }
     
     // Format in-hand funds as percentage
     const inHandFunds = extractedSignals?.in_hand_funds;
