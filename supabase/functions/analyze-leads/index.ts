@@ -73,6 +73,44 @@ Extract structured signals from the CRM and MQL data provided. Transform raw val
 4. Parse visit_comments for: budget, in-hand funds %, finalization timeline, spot closure response, sample feedback, core motivation
 5. Summarize all visit notes into a concise 30-word summary
 
+### Budget Parsing (CRITICAL - STANDARDIZATION REQUIRED):
+Parse budget from visit comments and ALWAYS convert to Crores as a decimal number.
+
+## PARSING PATTERNS (All must be converted to Crore decimal):
+
+| Input Pattern | Interpretation | Output (budget_stated_cr) |
+|--------------|----------------|--------------------------|
+| "1.5Cr", "1.5 Crore", "1.5 cr", "1.5CR" | 1.5 Crores | 1.5 |
+| "150 lacs", "150 lakhs", "150L", "150 lac" | 150 Lakhs | 1.5 |
+| "1,50,00,000", "15000000" | 1.5 Crore rupees | 1.5 |
+| "82 lacs", "82L", "82 lakhs" | 82 Lakhs | 0.82 |
+| "85-90 lacs" | Range: take midpoint (87.5L) | 0.875 |
+| "1-1.2 Cr" | Range: take midpoint (1.1 Cr) | 1.1 |
+| "1.3 to 1.5 cr" | Range: take midpoint | 1.4 |
+| "around 2Cr", "approx 2 crore" | 2 Crores | 2.0 |
+| "budget 2" (context shows Cr) | 2 Crores (assume Cr if >0 and <10) | 2.0 |
+| "budget 150" (context shows L) | 150 Lakhs (assume L if 10-999) | 1.5 |
+
+## CONVERSION RULES:
+1. ALWAYS output budget_stated_cr in CRORES as a decimal number
+2. 1 Crore = 100 Lakhs = 10,000,000 rupees
+3. To convert Lakhs to Crores: divide by 100 (e.g., 150L → 1.5Cr)
+4. To convert raw rupees to Crores: divide by 10,000,000
+5. For ranges, use the midpoint value
+6. For ambiguous numbers (just "2" or "150"):
+   - If 0-10: Assume Crores (e.g., "2" → 2.0 Cr)
+   - If 10-999: Assume Lakhs (e.g., "150" → 1.5 Cr)
+   - If 1000+: Assume raw rupees (e.g., "15000000" → 1.5 Cr)
+
+## EXAMPLES FROM REAL CRM COMMENTS:
+- "budget is 1.2-1.3 Cr" → 1.25
+- "looking in 90 lacs range" → 0.9
+- "can stretch to 1.5 cr max" → 1.5
+- "budget around 1,30,00,000" → 1.3
+- "80-90 L budget" → 0.85
+- "2 crore budget" → 2.0
+- "budget 1.75" → 1.75 (assume Cr since <10)
+
 ## FIELD PRECEDENCE RULES (CRITICAL - STANDARDIZED):
 When both CRM and MQL data are available, apply these rules:
 
