@@ -4,11 +4,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Lead } from '@/types/lead';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Mail, Phone, Briefcase, MapPin, Home, DollarSign, Target, AlertCircle, MessageSquare, Users, Lightbulb, User, Building2, ArrowRightCircle } from 'lucide-react';
 import { standardizeLead } from '@/utils/leadStandardization';
+import { MqlRawDataTab } from './MqlRawDataTab';
 
 // Helper to convert snake_case to readable text
 const formatSnakeCase = (text: string) => text.replace(/_/g, ' ');
@@ -159,9 +161,15 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
           </div>
         </DialogHeader>
 
-        <div className="space-y-6">
-          {/* Ratings Section - Restructured Layout */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 items-start">
+        <Tabs defaultValue="overview" className="w-full">
+          <TabsList className="mb-4">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="mql-raw">MQL Raw Data</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="overview" className="space-y-6">
+            {/* Ratings Section - Restructured Layout */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 items-start">
             {/* Left column: AI Rating + MQL Rating stacked */}
             <div className="space-y-3">
               <div className="p-2.5 bg-muted/30 rounded-lg">
@@ -483,7 +491,12 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
               </div>
             )}
           </div>
-        </div>
+          </TabsContent>
+
+          <TabsContent value="mql-raw">
+            <MqlRawDataTab lead={lead} />
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );
