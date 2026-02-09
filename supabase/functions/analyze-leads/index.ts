@@ -1079,13 +1079,14 @@ ${competitorRef || "No competitor data available"}
 - **closing_price_min_cr = All-inclusive Total Value (Base + Floor Rise + GST + Stamp Duty)**
 - Formula: IF (closing_price_min_cr > lead_budget * 1.20) THEN REJECT
 - NEVER use base PSF * carpet area as a proxy for budget comparison.
-- If budget is not stated, this rule passes automatically.
+- If budget is not stated (null), this rule FAILS. You cannot validate budget fit without a stated budget. Set budget_check to "FAIL" and do NOT recommend a cross-sell project. The sales team should first discover the customer's budget before making cross-sell recommendations.
 
 ### RULE 2: POSSESSION MARGIN (8 MONTHS MAX)
 - The possession date difference from lead's expectation must be within 8 months.
 - Use oc_date (possession_date field) - NOT RERA date.
 - If lead needs RTMI, only recommend projects with is_rtmi = true OR possession within 8 months from today.
 - If lead has no specific possession urgency, this rule passes automatically.
+- However, if lead explicitly needs RTMI and no sister project has is_rtmi=true AND earliest oc_date > 8 months from today, this rule FAILS.
 
 ### RULE 3: SIZE CONSTRAINT (10% SMALLER MAX)
 - The recommended config's carpet area must not be more than 10% smaller than desired.
@@ -1139,6 +1140,12 @@ If no sister project meets all criteria, return:
 {
   "cross_sell_recommendation": null,
   "evaluation_log": "No sister project passed all validation rules. [Reason for each rejection]"
+}
+
+If budget_stated is null/not available, return:
+{
+  "cross_sell_recommendation": null,
+  "evaluation_log": "Budget not stated - cannot validate cross-sell affordability. Discover budget first."
 }`;
 
   return crossSellPrompt;
