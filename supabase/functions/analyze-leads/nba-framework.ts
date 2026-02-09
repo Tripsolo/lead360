@@ -1688,47 +1688,113 @@ export function detectObjectionCategories(
 export function normalizePersona(persona: string): string {
   const personaLower = (persona || "").toLowerCase();
 
-  if (personaLower.includes("lifestyle") || personaLower.includes("connoisseur")) {
+  // --- Highest priority: exact/partial matches to matrix personas ---
+  
+  if (personaLower.includes("lifestyle") || personaLower.includes("connoisseur") || 
+      personaLower.includes("luxury") || personaLower.includes("hni") ||
+      personaLower.includes("high net worth")) {
     return "Lifestyle Connoisseur";
   }
-  if (personaLower.includes("aspirant") || personaLower.includes("first-time buyer")) {
-    return "Aspirant Upgrader";
-  }
-  if (personaLower.includes("asset") || personaLower.includes("locked")) {
+  
+  if (personaLower.includes("asset") || personaLower.includes("locked") ||
+      personaLower.includes("sop") || personaLower.includes("sale of property")) {
     return "Asset-Locked Upgrader";
   }
+  
   if (personaLower.includes("vastu")) {
     return "Vastu-Rigid Buyer";
   }
-  if (personaLower.includes("settlement") || personaLower.includes("retirement planner")) {
+  
+  if (personaLower.includes("settlement") || 
+      personaLower.includes("retirement planner") ||
+      personaLower.includes("retired") || personaLower.includes("senior citizen")) {
     return "Settlement Seeker";
   }
-  if (personaLower.includes("investor") && personaLower.includes("pragmatic")) {
+  
+  // Investor: check "pragmatic" first, then "first-time", then generic "investor"
+  if (personaLower.includes("pragmatic") && personaLower.includes("investor")) {
     return "Pragmatic Investor";
-  }
-  if (personaLower.includes("business") && personaLower.includes("owner")) {
-    return "Business Owner";
-  }
-  if (personaLower.includes("amara") || personaLower.includes("density")) {
-    return "Amara Density Escaper";
-  }
-  if (personaLower.includes("loyalist") || personaLower.includes("kalpataru")) {
-    return "Kalpataru Loyalist Upgrader";
-  }
-  if (personaLower.includes("parkcity") || personaLower.includes("rental converter")) {
-    return "Parkcity Rental Converter";
-  }
-  if (personaLower.includes("nri") || personaLower.includes("out-of-city") || personaLower.includes("relocator")) {
-    return "NRI/Out-of-City Relocator";
   }
   if (personaLower.includes("first-time") && personaLower.includes("investor")) {
     return "First-Time Investor";
   }
-  if (personaLower.includes("senior") || personaLower.includes("retired")) {
+  if (personaLower.includes("investor") || personaLower.includes("investment")) {
+    return "Pragmatic Investor";
+  }
+  
+  if (personaLower.includes("business") && (personaLower.includes("owner") || 
+      personaLower.includes("entrepreneur") || personaLower.includes("self-employed") ||
+      personaLower.includes("proprietor"))) {
+    return "Business Owner";
+  }
+  
+  if (personaLower.includes("amara") || personaLower.includes("density") ||
+      personaLower.includes("density escaper")) {
+    return "Amara Density Escaper";
+  }
+  
+  if (personaLower.includes("loyalist") || personaLower.includes("kalpataru") ||
+      personaLower.includes("existing customer")) {
+    return "Kalpataru Loyalist Upgrader";
+  }
+  
+  if (personaLower.includes("parkcity") || personaLower.includes("rental converter") ||
+      personaLower.includes("immensa rental")) {
+    return "Parkcity Rental Converter";
+  }
+  
+  if (personaLower.includes("nri") || personaLower.includes("out-of-city") || 
+      personaLower.includes("relocator") || personaLower.includes("overseas") ||
+      personaLower.includes("abroad") || personaLower.includes("gulf") ||
+      personaLower.includes("dubai") || personaLower.includes("expat")) {
+    return "NRI/Out-of-City Relocator";
+  }
+  
+  if (personaLower.includes("senior") && personaLower.includes("self-use")) {
     return "Senior Citizen Self-Use";
   }
 
-  // Default fallback
+  // --- Medium priority: common Stage 2 freeform labels ---
+  
+  // Family-oriented personas → Lifestyle Connoisseur (they care about amenities, community)
+  if (personaLower.includes("growing family") || personaLower.includes("family") ||
+      personaLower.includes("young couple") || personaLower.includes("couple with")) {
+    return "Lifestyle Connoisseur";
+  }
+  
+  // Professional/corporate personas → Aspirant Upgrader (upwardly mobile, upgrade-focused)
+  if (personaLower.includes("corporate") || personaLower.includes("professional") ||
+      personaLower.includes("it professional") || personaLower.includes("mid-career") ||
+      personaLower.includes("executive") || personaLower.includes("manager")) {
+    return "Aspirant Upgrader";
+  }
+  
+  // Upgrade-focused personas
+  if (personaLower.includes("upgrade") || personaLower.includes("upgrader") ||
+      personaLower.includes("seeker") || personaLower.includes("aspirant")) {
+    return "Aspirant Upgrader";
+  }
+  
+  // First-time buyer (non-investor) → First-Time Investor (closest match for entry-level)
+  if (personaLower.includes("first-time buyer") || personaLower.includes("first home") ||
+      personaLower.includes("first time")) {
+    return "First-Time Investor";
+  }
+  
+  // Healthcare / Doctor personas → Lifestyle Connoisseur (high income, quality-focused)
+  if (personaLower.includes("doctor") || personaLower.includes("healthcare") ||
+      personaLower.includes("medical")) {
+    return "Lifestyle Connoisseur";
+  }
+  
+  // Business-related without "owner" keyword
+  if (personaLower.includes("business") || personaLower.includes("trader") ||
+      personaLower.includes("merchant") || personaLower.includes("industrialist")) {
+    return "Business Owner";
+  }
+
+  // --- Default fallback ---
+  console.warn(`normalizePersona: No match for "${persona}", defaulting to Aspirant Upgrader`);
   return "Aspirant Upgrader";
 }
 
