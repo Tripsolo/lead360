@@ -2060,6 +2060,72 @@ export function buildFrameworkSubset(
   };
 }
 
+// ============= KNOWLEDGE BASE FORMATTER FOR STAGE 3 =============
+
+function formatKBForStage3(
+  towerInventory: any[],
+  competitorPricing: any[],
+  projectMetadata: any
+): string {
+  let kb = `\n# KNOWLEDGE BASE (SOURCE OF TRUTH - Use for all numbers)\n`;
+  
+  // Format Eternia inventory summary
+  if (towerInventory && towerInventory.length > 0) {
+    kb += `\n## ETERNIA & SISTER PROJECT INVENTORY\n`;
+    kb += `| Project | Tower | Typology | Carpet (sqft) | Closing Price (Cr) | OC Date | Unsold |\n`;
+    kb += `|---------|-------|----------|---------------|-------------------|---------|--------|\n`;
+    
+    for (const row of towerInventory) {
+      const projectName = row.project_id?.toLowerCase().includes("eternia") ? "Eternia" :
+                         row.project_id?.toLowerCase().includes("primera") ? "Primera" :
+                         row.project_id?.toLowerCase().includes("estella") ? "Estella" :
+                         row.project_id?.toLowerCase().includes("immensa") ? "Immensa" : row.project_id;
+      const carpet = row.carpet_sqft_min && row.carpet_sqft_max 
+        ? `${row.carpet_sqft_min}-${row.carpet_sqft_max}` 
+        : row.carpet_sqft_min || row.carpet_sqft_max || "N/A";
+      const closingMin = row.closing_min_cr ? `₹${row.closing_min_cr.toFixed(2)}` : "N/A";
+      const closingMax = row.closing_max_cr ? `₹${row.closing_max_cr.toFixed(2)}` : "N/A";
+      kb += `| ${projectName} | ${row.tower || "?"} | ${row.typology || "N/A"} | ${carpet} | ${closingMin}-${closingMax} | ${row.oc_date || "TBD"} | ${row.unsold ?? "N/A"} |\n`;
+    }
+  }
+  
+  // Format competitor pricing
+  if (competitorPricing && competitorPricing.length > 0) {
+    kb += `\n## COMPETITOR PRICING (Use these numbers, NOT framework examples)\n`;
+    kb += `| Competitor | Project | Config | Carpet (sqft) | Price (Lakhs) | PSF | vs Eternia |\n`;
+    kb += `|------------|---------|--------|---------------|---------------|-----|------------|\n`;
+    
+    for (const row of competitorPricing) {
+      const carpet = row.carpet_sqft_min && row.carpet_sqft_max 
+        ? `${row.carpet_sqft_min}-${row.carpet_sqft_max}` 
+        : row.carpet_sqft_min || row.carpet_sqft_max || "N/A";
+      const priceMin = row.price_min_av ? `₹${(row.price_min_av / 100000).toFixed(0)}L` : "N/A";
+      const priceMax = row.price_max_av ? `₹${(row.price_max_av / 100000).toFixed(0)}L` : "N/A";
+      kb += `| ${row.competitor_name || "?"} | ${row.project_name || "N/A"} | ${row.config || "N/A"} | ${carpet} | ${priceMin}-${priceMax} | ₹${row.avg_psf?.toLocaleString() || "N/A"} | ${row.vs_eternia || "N/A"} |\n`;
+    }
+  }
+  
+  // Format key project facts
+  if (projectMetadata) {
+    kb += `\n## KEY PROJECT FACTS\n`;
+    kb += `- Project: ${projectMetadata.project_name || "Kalpataru Parkcity Eternia"}\n`;
+    kb += `- Township: ${projectMetadata.township?.total_area_acres || 100} acres\n`;
+    kb += `- Grand Central Park: ${projectMetadata.township?.grand_central_park?.area_acres || 20.5} acres\n`;
+    kb += `- Towers in Eternia: 10\n`;
+    
+    if (projectMetadata.inventory?.configurations) {
+      kb += `\n### Eternia Configurations:\n`;
+      for (const config of projectMetadata.inventory.configurations) {
+        kb += `- ${config.type}: ${config.carpet_sqft_range?.[0]}-${config.carpet_sqft_range?.[1]} sqft, ₹${config.price_range_cr?.[0]}-${config.price_range_cr?.[1]} Cr\n`;
+      }
+    }
+  }
+  
+  kb += `\n## CRITICAL RULE: When contextualizing talking points, use ONLY numbers from the tables above. NEVER use example numbers from the framework talking point definitions.\n`;
+  
+  return kb;
+}
+
 // ============= STAGE 3 PROMPT BUILDER =============
 
 /**
@@ -2069,7 +2135,10 @@ export function buildFrameworkSubset(
 export function buildStage3Prompt(
   stage2Result: any,
   extractedSignals: any,
-  visitComments: string
+  visitComments: string,
+  towerInventory?: any[],
+  competitorPricing?: any[],
+  projectMetadata?: any
 ): string {
   const persona = stage2Result?.persona || "Unknown";
   const primaryConcern = stage2Result?.primary_concern_category || null;
