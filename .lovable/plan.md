@@ -1,97 +1,54 @@
 
-# Plan: Add MQL Raw Data Tab to Lead Report Modal
+# Plan: Expand `normalizePersona()` Coverage (Patch 3)
 
-## Overview
+## Problem
 
-Add a new tabbed interface to the LeadReportModal that displays the exhaustive raw MQL enrichment data received from the MQL service. This will allow comparison against CRM inputs to verify extraction and scoring accuracy.
+The current `normalizePersona()` function (lines 1688-1733) handles only 13 basic patterns. Stage 2 (Claude Opus) generates freeform persona labels like "Corporate Professional", "Growing Family", "IT Professional", "Young Couple", "Doctor", "Overseas Buyer", etc. These fall through to the default "Aspirant Upgrader", causing ~30-40% of leads to receive generic, irrelevant talking points.
 
-## Technical Implementation
+## Changes
 
-### File: `src/components/LeadReportModal.tsx`
+### File: `supabase/functions/analyze-leads/nba-framework.ts`
 
-#### Changes Required:
+**Replace the `normalizePersona()` function body (lines 1688-1733)** with the patch-provided version that:
 
-1. **Import Tabs components** (line ~1-11)
-   - Add import for `Tabs, TabsList, TabsTrigger, TabsContent` from `@/components/ui/tabs`
+**1. Expands existing patterns with more keywords:**
 
-2. **Add new helper function** (after line ~75)
-   - Create `formatMqlValue()` helper to display MQL values with proper formatting for different data types (numbers, dates, arrays, objects, booleans)
+| Existing Persona | New Keywords Added |
+|---|---|
+| Lifestyle Connoisseur | `luxury`, `hni`, `high net worth` |
+| Asset-Locked Upgrader | `sop`, `sale of property` |
+| Settlement Seeker | `retired`, `senior citizen` |
+| Business Owner | `entrepreneur`, `self-employed`, `proprietor` |
+| Kalpataru Loyalist Upgrader | `existing customer` |
+| Parkcity Rental Converter | `immensa rental` |
+| NRI/Out-of-City Relocator | `overseas`, `abroad`, `gulf`, `dubai`, `expat` |
 
-3. **Wrap main content in Tabs structure** (around line ~162)
-   - Replace the current `<div className="space-y-6">` with a Tabs container
-   - Create two tabs: "Overview" (existing content) and "MQL Raw Data" (new)
-   - Move all existing modal content into "Overview" tab
+**2. Fixes ordering bugs:**
+- Moves `first-time investor` check AFTER `pragmatic investor` (currently it's unreachable at line 1724 because `investor` match on line 1706 catches it first)
+- Adds generic `investor`/`investment` catch-all after specific investor types
+- Separates `senior citizen self-use` (requires both "senior" + "self-use") from `retired`/`senior citizen` (now maps to Settlement Seeker)
 
-4. **Create MQL Raw Data tab content** (new section)
-   - Display data organized by MQL response sections:
-     - **Person Info**: rating, age, gender, locality_grade, lifestyle, capability
-     - **Demography**: location, designation, etc.
-     - **Income**: final_income_lacs, pre_tax_income_lacs
-     - **Banking Summary**: total_loans, active_loans, home_loans, auto_loans
-     - **Banking Loans**: Array table showing each loan's details (type, sanction_date, sanction_amount, emi_amount, current_balance, status)
-     - **Banking Cards**: Array table showing card details
-     - **Business Details**: gst_number, business_name, business_type, industry, turnover_slab
-     - **Employment Details**: Array of employment history
-     - **Credit Score**: credit_score value
-   - Handle cases where MQL data is not available (show "No MQL data available" message)
+**3. Adds new medium-priority freeform label mappings:**
 
-### Data Source
+| Stage 2 Output Pattern | Maps To |
+|---|---|
+| `growing family`, `young couple`, `couple with`, `family` | Lifestyle Connoisseur |
+| `corporate`, `professional`, `executive`, `manager`, `mid-career` | Aspirant Upgrader |
+| `upgrade`, `upgrader`, `seeker` | Aspirant Upgrader |
+| `first-time buyer`, `first home`, `first time` | First-Time Investor |
+| `doctor`, `healthcare`, `medical` | Lifestyle Connoisseur |
+| `trader`, `merchant`, `industrialist` | Business Owner |
 
-The MQL raw response is available at `lead.mqlEnrichment?.rawResponse` which contains the full `batchResponse` object stored during enrichment. The structure is:
+**4. Adds monitoring:**
+- `console.warn` on default fallback to log unmapped personas for future coverage expansion
 
-```
-rawResponse: {
-  leads: [{
-    person_info: { rating, age, gender, locality_grade, lifestyle, capability, ... },
-    demography: { location, designation, ... },
-    income: { final_income_lacs, pre_tax_income_lacs, ... },
-    banking_summary: { total_loans, active_loans, home_loans, auto_loans, ... },
-    banking_loans: [{ loan_type, sanction_date, sanction_amount, emi_amount, ... }],
-    banking_cards: [{ card_type, usage_percent, ... }],
-    business_details: { gst_number, business_name, industry, turnover_slab, ... },
-    employment_details: [{ employer_name, designation, ... }],
-    linkedin_details: { ... },
-    credit_score: number
-  }]
-}
-```
+## Ordering Strategy
 
-### UI Design
+The patch follows a strict priority order:
+1. **Highest priority** -- Direct matrix persona matches (Lifestyle Connoisseur, Asset-Locked, Vastu, Settlement, Investors, Business Owner, Amara, Loyalist, Parkcity, NRI, Senior Self-Use)
+2. **Medium priority** -- Common freeform labels (family-oriented, professional/corporate, upgrade-focused, first-time buyers, healthcare, business-related)
+3. **Default fallback** -- Aspirant Upgrader with console.warn
 
-**Tab Layout**:
-```
-+-------------+------------------+
-| Overview    | MQL Raw Data     |   <- TabsList at top of modal
-+-------------+------------------+
-|                                |
-|  (Tab Content Area)            |
-|                                |
-+--------------------------------+
-```
+## No other files changed
 
-**MQL Raw Data Tab Layout**:
-- Organized into collapsible sections with headers
-- Each section displays key-value pairs in a grid format
-- Arrays (loans, cards, employment) shown as mini-tables
-- Use `ScrollArea` for sections with many items
-- Show "N/A" or "Not available" for missing fields
-- Include enriched_at timestamp at the top
-
-### Visual Styling
-
-- Section headers: Bold text with separator lines
-- Key-value pairs: Label in muted color, value in normal weight
-- Arrays: Compact table with alternating row backgrounds
-- Empty states: "No data" in muted foreground color
-- Tab when no MQL data: Show centered message with Database icon
-
----
-
-## Summary
-
-| Location | Change |
-|----------|--------|
-| Imports (line 1-11) | Add Tabs, TabsList, TabsTrigger, TabsContent imports |
-| Helper functions (line ~75) | Add formatMqlValue() utility |
-| Main content (line ~162) | Wrap in Tabs container with "Overview" and "MQL Raw Data" tabs |
-| New section | Create MQL Raw Data tab content with organized sections |
+This is a self-contained change to a single function in `nba-framework.ts`. The function signature and return types remain identical.
