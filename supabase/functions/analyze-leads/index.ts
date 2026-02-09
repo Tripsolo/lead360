@@ -3007,7 +3007,9 @@ IMPORTANT SCORING RULES:
             visitComments,
             towerInventory || [],
             competitorPricing || [],
-            projectMetadata
+            projectMetadata,
+            preSelectedNba,
+            preSelectedTpIds
           );
           
           const stage3Response = await callGemini3FlashAPI(stage3Prompt, googleApiKey!, true);
