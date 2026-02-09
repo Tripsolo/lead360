@@ -4,6 +4,11 @@ import {
   buildStage3Prompt, 
   checkSafetyConditions,
   getNBARuleDef,
+  normalizePersona,
+  detectObjectionCategories,
+  mapToMatrixObjection,
+  lookupMatrixEntry,
+  getTalkingPointDef,
   type NBAActionType
 } from "./nba-framework.ts";
 import {
