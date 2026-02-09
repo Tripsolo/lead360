@@ -2954,7 +2954,10 @@ IMPORTANT SCORING RULES:
           const stage3Prompt = buildStage3Prompt(
             analysisResult,
             extractedSignals,
-            visitComments
+            visitComments,
+            towerInventory || [],
+            competitorPricing || [],
+            projectMetadata
           );
           
           const stage3Response = await callGemini3FlashAPI(stage3Prompt, googleApiKey!, true);
