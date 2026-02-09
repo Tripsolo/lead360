@@ -291,7 +291,18 @@ The PPS Score number MUST NEVER appear in any text output field, especially rati
 - This is a non-negotiable rule that must never be broken under any circumstances
 - CORRECT: Replace with qualitative description of scoring factors (capability, intent, urgency)
 - The PPS score is displayed separately in the UI and must not appear in text fields
-- Add to corrections_made array with reason: "PPS score removed from rationale per non-negotiable rule"`;
+- Add to corrections_made array with reason: "PPS score removed from rationale per non-negotiable rule"
+
+### Rule 11: Budget Standardization Validation 
+**VALIDATION RULES:**
+- If budget_stated >= 10 AND <= 100 → WARNING: Likely in Lakhs, should be divided by 100
+- VALID range: ₹30 Lac to ₹20 Cr - typical residential budget)
+- null or 0: WARNING - No budget extracted from CRM comments
+
+**EXPECTED STANDARDIZED FORMAT:**
+- ₹82.5 Lacs → budget_stated_cr: 0.825 (display as "₹ 82.5 Lacs")
+- ₹1.25 Cr → budget_stated_cr: 1.25 (display as "₹ 1.25 Cr")
+- ₹2 Cr → budget_stated_cr: 2.0 (display as "₹ 2.00 Cr")`;
 
   const knowledgeBaseSection = `
 ## KNOWLEDGE BASE (SOURCE OF TRUTH)
