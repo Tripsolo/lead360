@@ -4,6 +4,11 @@ import {
   buildStage3Prompt, 
   checkSafetyConditions,
   getNBARuleDef,
+  normalizePersona,
+  detectObjectionCategories,
+  mapToMatrixObjection,
+  lookupMatrixEntry,
+  getTalkingPointDef,
   type NBAActionType
 } from "./nba-framework.ts";
 import {
@@ -2937,6 +2942,51 @@ IMPORTANT SCORING RULES:
         stage25Model = "skipped (no sister projects or Stage 2 failed)";
       }
 
+      // ===== PRE-STAGE 3: DETERMINISTIC NBA/TP SELECTION =====
+      let preSelectedNba: any = null;
+      let preSelectedTpIds: string[] = [];
+      let preSelectedObjection: string | null = null;
+
+      if (parseSuccess) {
+        try {
+          const preVisitComments = lead.rawData?.["Visit Comments"] || 
+                                   lead.rawData?.["Remarks in Detail"] || 
+                                   lead.rawData?.["Site Re-Visit Comment"] || "";
+          
+          const normalizedPersona = normalizePersona(analysisResult.persona);
+          const detectedObjections = detectObjectionCategories(preVisitComments, extractedSignals);
+          const safetyPre = checkSafetyConditions(analysisResult.persona, extractedSignals);
+
+          if (safetyPre.triggered && safetyPre.overrideNbaId) {
+            // Safety override: use safety NBA and its linked TPs
+            const safetyNba = getNBARuleDef(safetyPre.overrideNbaId);
+            if (safetyNba) {
+              preSelectedNba = safetyNba;
+              preSelectedTpIds = safetyNba.linked_talking_points || [];
+              preSelectedObjection = `safety:${safetyPre.safetyRule}`;
+            }
+          } else if (detectedObjections && detectedObjections.length > 0) {
+            // Matrix lookup: map primary objection to matrix key, then look up entry
+            const primaryObjection = detectedObjections[0];
+            const matrixObjection = mapToMatrixObjection(primaryObjection);
+            if (matrixObjection) {
+              const matrixEntry = lookupMatrixEntry(normalizedPersona, matrixObjection);
+              if (matrixEntry) {
+                preSelectedNba = getNBARuleDef(matrixEntry.nba_id);
+                preSelectedTpIds = matrixEntry.tp_ids || [];
+                preSelectedObjection = matrixObjection;
+              }
+            }
+          }
+
+          console.log(`Pre-Stage3 deterministic selection for lead ${lead.id}: persona=${normalizedPersona}, objection=${preSelectedObjection}, nba=${preSelectedNba?.nba_id || "none"}, tps=[${preSelectedTpIds.join(",")}]`);
+        } catch (preSelectionError) {
+          console.warn(`Pre-Stage3 selection failed for lead ${lead.id}, falling back to LLM selection:`, preSelectionError);
+          preSelectedNba = null;
+          preSelectedTpIds = [];
+        }
+      }
+
       // ===== STAGE 3: NBA & TALKING POINTS GENERATION (Gemini 3 Flash) =====
       let stage3Model = "gemini-3-flash-preview";
       if (parseSuccess) {
@@ -2957,7 +3007,9 @@ IMPORTANT SCORING RULES:
             visitComments,
             towerInventory || [],
             competitorPricing || [],
-            projectMetadata
+            projectMetadata,
+            preSelectedNba,
+            preSelectedTpIds
           );
           
           const stage3Response = await callGemini3FlashAPI(stage3Prompt, googleApiKey!, true);
@@ -2999,7 +3051,9 @@ IMPORTANT SCORING RULES:
               lead.rawData?.["Visit Comments"] || "",
               towerInventory || [],
               competitorPricing || [],
-              projectMetadata
+              projectMetadata,
+              preSelectedNba,
+              preSelectedTpIds
             );
             
             const stage3Response = await callGemini25FlashAPI(stage3Prompt, googleApiKey!, true);

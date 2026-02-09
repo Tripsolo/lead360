@@ -2138,7 +2138,9 @@ export function buildStage3Prompt(
   visitComments: string,
   towerInventory?: any[],
   competitorPricing?: any[],
-  projectMetadata?: any
+  projectMetadata?: any,
+  preSelectedNba?: any,
+  preSelectedTpIds?: string[]
 ): string {
   const persona = stage2Result?.persona || "Unknown";
   const primaryConcern = stage2Result?.primary_concern_category || null;
@@ -2342,6 +2344,38 @@ Return a JSON object with this EXACT structure:
     ? formatKBForStage3(towerInventory, competitorPricing, projectMetadata)
     : "";
 
+  // Build pre-selection section if deterministic lookup succeeded
+  let preSelectionSection = "";
+  if (preSelectedNba && preSelectedTpIds && preSelectedTpIds.length > 0) {
+    let section = `\n## PRE-SELECTED NBA & TALKING POINTS (MANDATORY — DO NOT OVERRIDE)\n`;
+    section += `The following NBA and Talking Points have been deterministically selected based on the persona-objection matrix. Your job is ONLY to CONTEXTUALIZE them with lead-specific details. Do NOT select different IDs.\n\n`;
+    
+    section += `### Selected NBA:\n`;
+    section += `- **nba_id**: ${preSelectedNba.nba_id}\n`;
+    section += `- **action_category**: ${preSelectedNba.action_category}\n`;
+    section += `- **specific_action**: ${preSelectedNba.specific_action}\n`;
+    section += `- **escalation_trigger**: ${preSelectedNba.escalation_trigger || "N/A"}\n`;
+    section += `- **fallback_action**: ${preSelectedNba.fallback_action || "N/A"}\n\n`;
+    
+    section += `### Selected Talking Points:\n`;
+    for (const tpId of preSelectedTpIds) {
+      const tpDef = getTalkingPointDef(tpId);
+      if (tpDef) {
+        section += `\n#### ${tpId}\n`;
+        section += `- **category**: ${tpDef.category}\n`;
+        section += `- **sub_category**: ${tpDef.sub_category || "N/A"}\n`;
+        section += `- **talking_point**: ${tpDef.talking_point}\n`;
+        section += `- **key_data_points**: ${tpDef.key_data_points || "N/A"}\n`;
+        section += `- **emotional_hook**: ${tpDef.emotional_hook || "N/A"}\n`;
+        section += `- **logical_argument**: ${tpDef.logical_argument || "N/A"}\n`;
+      }
+    }
+    
+    section += `\n### INSTRUCTION: Use EXACTLY the nba_id "${preSelectedNba.nba_id}" and tp_ids [${preSelectedTpIds.map((t: string) => `"${t}"`).join(", ")}] in your output. Contextualize the talking point text with lead-specific data from the knowledge base, but do NOT change the IDs.\n`;
+    
+    preSelectionSection = section;
+  }
+
   return `${systemPrompt}
 
 ${inputDataSection}
@@ -2349,6 +2383,8 @@ ${inputDataSection}
 ${safetySection}
 
 ${kbSection}
+
+${preSelectionSection}
 
 ${frameworkSection}
 
