@@ -1,54 +1,51 @@
 
-# Plan: Expand `normalizePersona()` Coverage (Patch 3)
+
+# Plan: Fix Null Budget Handling in Cross-Sell (Patch 4)
 
 ## Problem
 
-The current `normalizePersona()` function (lines 1688-1733) handles only 13 basic patterns. Stage 2 (Claude Opus) generates freeform persona labels like "Corporate Professional", "Growing Family", "IT Professional", "Young Couple", "Doctor", "Overseas Buyer", etc. These fall through to the default "Aspirant Upgrader", causing ~30-40% of leads to receive generic, irrelevant talking points.
+When Stage 1 fails to extract a budget from sparse CRM comments, `buildCrossSellPrompt()` treats null budget as an automatic PASS for Rule 1 (Budget Ceiling). This means the cross-sell engine can recommend expensive projects (e.g., 4.5Cr Immensa) to leads who may only afford 80L -- a potentially damaging sales recommendation.
 
 ## Changes
 
-### File: `supabase/functions/analyze-leads/nba-framework.ts`
+### File: `supabase/functions/analyze-leads/index.ts`
 
-**Replace the `normalizePersona()` function body (lines 1688-1733)** with the patch-provided version that:
+Three targeted text changes inside the `buildCrossSellPrompt()` function's prompt string:
 
-**1. Expands existing patterns with more keywords:**
+**Change 4a -- Line 1082: Update RULE 1 null-budget behavior**
 
-| Existing Persona | New Keywords Added |
-|---|---|
-| Lifestyle Connoisseur | `luxury`, `hni`, `high net worth` |
-| Asset-Locked Upgrader | `sop`, `sale of property` |
-| Settlement Seeker | `retired`, `senior citizen` |
-| Business Owner | `entrepreneur`, `self-employed`, `proprietor` |
-| Kalpataru Loyalist Upgrader | `existing customer` |
-| Parkcity Rental Converter | `immensa rental` |
-| NRI/Out-of-City Relocator | `overseas`, `abroad`, `gulf`, `dubai`, `expat` |
+Replace:
+```
+- If budget is not stated, this rule passes automatically.
+```
+With:
+```
+- If budget is not stated (null), this rule FAILS. You cannot validate budget fit without a stated budget. Set budget_check to "FAIL" and do NOT recommend a cross-sell project. The sales team should first discover the customer's budget before making cross-sell recommendations.
+```
 
-**2. Fixes ordering bugs:**
-- Moves `first-time investor` check AFTER `pragmatic investor` (currently it's unreachable at line 1724 because `investor` match on line 1706 catches it first)
-- Adds generic `investor`/`investment` catch-all after specific investor types
-- Separates `senior citizen self-use` (requires both "senior" + "self-use") from `retired`/`senior citizen` (now maps to Settlement Seeker)
+**Change 4b -- Line 1088: Add RTMI clarification to RULE 2**
 
-**3. Adds new medium-priority freeform label mappings:**
+After the existing line:
+```
+- If lead has no specific possession urgency, this rule passes automatically.
+```
+Add:
+```
+- However, if lead explicitly needs RTMI and no sister project has is_rtmi=true AND earliest oc_date > 8 months from today, this rule FAILS.
+```
 
-| Stage 2 Output Pattern | Maps To |
-|---|---|
-| `growing family`, `young couple`, `couple with`, `family` | Lifestyle Connoisseur |
-| `corporate`, `professional`, `executive`, `manager`, `mid-career` | Aspirant Upgrader |
-| `upgrade`, `upgrader`, `seeker` | Aspirant Upgrader |
-| `first-time buyer`, `first home`, `first time` | First-Time Investor |
-| `doctor`, `healthcare`, `medical` | Lifestyle Connoisseur |
-| `trader`, `merchant`, `industrialist` | Business Owner |
+**Change 4c -- Lines 1138-1142: Add null-budget output instruction**
 
-**4. Adds monitoring:**
-- `console.warn` on default fallback to log unmapped personas for future coverage expansion
-
-## Ordering Strategy
-
-The patch follows a strict priority order:
-1. **Highest priority** -- Direct matrix persona matches (Lifestyle Connoisseur, Asset-Locked, Vastu, Settlement, Investors, Business Owner, Amara, Loyalist, Parkcity, NRI, Senior Self-Use)
-2. **Medium priority** -- Common freeform labels (family-oriented, professional/corporate, upgrade-focused, first-time buyers, healthcare, business-related)
-3. **Default fallback** -- Aspirant Upgrader with console.warn
+After the existing "no sister project" fallback block, add a new block:
+```
+If budget_stated is null/not available, return:
+{
+  "cross_sell_recommendation": null,
+  "evaluation_log": "Budget not stated - cannot validate cross-sell affordability. Discover budget first."
+}
+```
 
 ## No other files changed
 
-This is a self-contained change to a single function in `nba-framework.ts`. The function signature and return types remain identical.
+All changes are within the LLM prompt string in `buildCrossSellPrompt()`. No logic, types, or UI changes needed.
+
