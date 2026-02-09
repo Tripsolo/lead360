@@ -1140,6 +1140,12 @@ If no sister project meets all criteria, return:
 {
   "cross_sell_recommendation": null,
   "evaluation_log": "No sister project passed all validation rules. [Reason for each rejection]"
+}
+
+If budget_stated is null/not available, return:
+{
+  "cross_sell_recommendation": null,
+  "evaluation_log": "Budget not stated - cannot validate cross-sell affordability. Discover budget first."
 }`;
 
   return crossSellPrompt;
