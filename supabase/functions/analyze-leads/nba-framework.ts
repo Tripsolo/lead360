@@ -2337,11 +2337,18 @@ Return a JSON object with this EXACT structure:
   "safety_check_triggered": ${safetyCheck.triggered ? `"${safetyCheck.safetyRule}"` : "null"}
 }`;
 
+  // Build KB section if data available
+  const kbSection = (towerInventory && competitorPricing) 
+    ? formatKBForStage3(towerInventory, competitorPricing, projectMetadata)
+    : "";
+
   return `${systemPrompt}
 
 ${inputDataSection}
 
 ${safetySection}
+
+${kbSection}
 
 ${frameworkSection}
 
