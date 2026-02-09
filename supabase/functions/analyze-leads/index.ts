@@ -3051,7 +3051,9 @@ IMPORTANT SCORING RULES:
               lead.rawData?.["Visit Comments"] || "",
               towerInventory || [],
               competitorPricing || [],
-              projectMetadata
+              projectMetadata,
+              preSelectedNba,
+              preSelectedTpIds
             );
             
             const stage3Response = await callGemini25FlashAPI(stage3Prompt, googleApiKey!, true);
