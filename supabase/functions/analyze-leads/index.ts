@@ -1079,7 +1079,7 @@ ${competitorRef || "No competitor data available"}
 - **closing_price_min_cr = All-inclusive Total Value (Base + Floor Rise + GST + Stamp Duty)**
 - Formula: IF (closing_price_min_cr > lead_budget * 1.20) THEN REJECT
 - NEVER use base PSF * carpet area as a proxy for budget comparison.
-- If budget is not stated, this rule passes automatically.
+- If budget is not stated (null), this rule FAILS. You cannot validate budget fit without a stated budget. Set budget_check to "FAIL" and do NOT recommend a cross-sell project. The sales team should first discover the customer's budget before making cross-sell recommendations.
 
 ### RULE 2: POSSESSION MARGIN (8 MONTHS MAX)
 - The possession date difference from lead's expectation must be within 8 months.
