@@ -1086,6 +1086,7 @@ ${competitorRef || "No competitor data available"}
 - Use oc_date (possession_date field) - NOT RERA date.
 - If lead needs RTMI, only recommend projects with is_rtmi = true OR possession within 8 months from today.
 - If lead has no specific possession urgency, this rule passes automatically.
+- However, if lead explicitly needs RTMI and no sister project has is_rtmi=true AND earliest oc_date > 8 months from today, this rule FAILS.
 
 ### RULE 3: SIZE CONSTRAINT (10% SMALLER MAX)
 - The recommended config's carpet area must not be more than 10% smaller than desired.
