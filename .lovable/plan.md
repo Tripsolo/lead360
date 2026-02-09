@@ -1,51 +1,36 @@
 
-
-# Plan: Fix Null Budget Handling in Cross-Sell (Patch 4)
+# Plan: Give Stage 3 Access to the Knowledge Base (Patch 1)
 
 ## Problem
 
-When Stage 1 fails to extract a budget from sparse CRM comments, `buildCrossSellPrompt()` treats null budget as an automatic PASS for Rule 1 (Budget Ceiling). This means the cross-sell engine can recommend expensive projects (e.g., 4.5Cr Immensa) to leads who may only afford 80L -- a potentially damaging sales recommendation.
+`buildStage3Prompt()` in `nba-framework.ts` generates talking points and NBA recommendations but never receives tower inventory, competitor pricing, or project metadata. When it writes competitor prices or possession dates in talking points, it hallucinates from static example text in the TALKING_POINTS constant definitions.
 
 ## Changes
 
-### File: `supabase/functions/analyze-leads/index.ts`
+### File 1: `supabase/functions/analyze-leads/nba-framework.ts`
 
-Three targeted text changes inside the `buildCrossSellPrompt()` function's prompt string:
+**Add `formatKBForStage3()` helper function** before `buildStage3Prompt()` (~line 2065):
+- Accepts `towerInventory`, `competitorPricing`, and `projectMetadata`
+- Formats tower inventory as a markdown table (Project, Tower, Typology, Carpet, Closing Price, OC Date, Unsold)
+- Maps project_id to readable names (eternia, primera, estella, immensa)
+- Formats competitor pricing as a markdown table (Competitor, Project, Config, Carpet, Price in Lakhs, PSF, vs Eternia)
+- Includes key project facts from projectMetadata
+- Ends with a CRITICAL RULE: "Use ONLY numbers from tables above, NEVER use example numbers from framework TP definitions"
 
-**Change 4a -- Line 1082: Update RULE 1 null-budget behavior**
+**Update `buildStage3Prompt()` signature** to accept 3 new optional parameters:
+- `towerInventory?: any[]`
+- `competitorPricing?: any[]`
+- `projectMetadata?: any`
 
-Replace:
-```
-- If budget is not stated, this rule passes automatically.
-```
-With:
-```
-- If budget is not stated (null), this rule FAILS. You cannot validate budget fit without a stated budget. Set budget_check to "FAIL" and do NOT recommend a cross-sell project. The sales team should first discover the customer's budget before making cross-sell recommendations.
-```
+**Inject KB section into prompt** between `safetySection` and `frameworkSection` in the return template.
 
-**Change 4b -- Line 1088: Add RTMI clarification to RULE 2**
+### File 2: `supabase/functions/analyze-leads/index.ts`
 
-After the existing line:
+**Update both call sites** (primary ~line 2954 and fallback ~line 2993) to pass the 3 new arguments:
 ```
-- If lead has no specific possession urgency, this rule passes automatically.
-```
-Add:
-```
-- However, if lead explicitly needs RTMI and no sister project has is_rtmi=true AND earliest oc_date > 8 months from today, this rule FAILS.
-```
-
-**Change 4c -- Lines 1138-1142: Add null-budget output instruction**
-
-After the existing "no sister project" fallback block, add a new block:
-```
-If budget_stated is null/not available, return:
-{
-  "cross_sell_recommendation": null,
-  "evaluation_log": "Budget not stated - cannot validate cross-sell affordability. Discover budget first."
-}
+buildStage3Prompt(analysisResult, extractedSignals, visitComments, towerInventory || [], competitorPricing || [], projectMetadata)
 ```
 
 ## No other files changed
 
-All changes are within the LLM prompt string in `buildCrossSellPrompt()`. No logic, types, or UI changes needed.
-
+Types and UI remain untouched. The function signature change is backward-compatible (new params are optional).
