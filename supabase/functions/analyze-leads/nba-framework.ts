@@ -2138,7 +2138,9 @@ export function buildStage3Prompt(
   visitComments: string,
   towerInventory?: any[],
   competitorPricing?: any[],
-  projectMetadata?: any
+  projectMetadata?: any,
+  preSelectedNba?: any,
+  preSelectedTpIds?: string[]
 ): string {
   const persona = stage2Result?.persona || "Unknown";
   const primaryConcern = stage2Result?.primary_concern_category || null;
