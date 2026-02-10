@@ -2847,6 +2847,7 @@ IMPORTANT SCORING RULES:
           const stage1Response = await callGemini3FlashAPI(stage1Prompt, googleApiKey!, true);
           extractedSignals = JSON.parse(stage1Response);
           console.log(`Stage 1 complete for lead ${lead.id} using ${stage1Model}`);
+          console.log(`Stage 1 budget for lead ${lead.id}: ${extractedSignals?.financial_signals?.budget_stated_cr ?? 'null'}`);
         } catch (stage1PrimaryError) {
           console.warn(`Stage 1 primary (${stage1Model}) failed for lead ${lead.id}, trying fallback (gemini-2.5-flash)...`);
           stage1Model = "gemini-2.5-flash (fallback)";
