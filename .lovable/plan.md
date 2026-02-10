@@ -1,39 +1,41 @@
 
+# Plan: Update Safety Override Section in Scenario Variant
 
-# Plan: Delete All Lead Data (Preserve KB and Project Metadata)
+## Summary
 
-## What Will Be Deleted
+Update the safety override text in `nba-scenario-framework.ts` (lines 306-317) to add budget-aware logic for RTMI redirects and a graceful fallback for leads with no realistic action.
 
-These three tables contain lead-specific data tied to individual leads (phone numbers):
+## Change
 
-1. **`lead_analyses`** -- AI analysis results (ratings, insights, full_analysis JSON)
-2. **`lead_enrichments`** -- MQL enrichment data (credit scores, income, loans, etc.)
-3. **`leads`** -- Raw CRM data uploads (lead_id, crm_data, revisit dates)
+**File:** `supabase/functions/analyze-leads/nba-scenario-framework.ts`  
+**Lines:** 311-316
 
-All rows in these three tables will be deleted.
+Replace the current three bullet points and closing line with updated guidance:
 
-## What Will NOT Be Touched
+**Current text:**
+```
+You MUST:
+- For 75+ RTMI: Immediately pivot to Immensa/Sunrise ready options. Do NOT pitch UC.
+- For Proxy Buyer: Push for decision maker visit or video call. Create urgency.
+- For Settlement Seeker: Redirect to RTMI/Resale desk immediately.
 
-- `projects` -- Project metadata
-- `brands` -- Brand configurations and Excel schemas
-- `sister_projects` -- Cross-sell project relationships
-- `tower_inventory` -- Tower/unit inventory KB data
-- `competitor_pricing` -- Competitor pricing KB data
-- `approved_domains` -- Auth domain whitelist
-
-## Execution Order
-
-Due to no foreign key constraints between lead tables, all three can be deleted in any order:
-
-```sql
-DELETE FROM lead_analyses;
-DELETE FROM lead_enrichments;
-DELETE FROM leads;
+This overrides all other considerations.
 ```
 
-## Technical Details
+**New text:**
+```
+You MUST:
+- For 75+ RTMI: Pivot to Immensa/Sunrise ready options ONLY if the customer's budget fits the closing price range of available units there (check KB). If budget does not match, explore other ways to address their concerns (e.g., flexible payment plans, alternate configurations within budget). Do NOT pitch UC.
+- For Proxy Buyer: Push for decision maker visit or video call. Create urgency.
+- For Settlement Seeker: Redirect to RTMI/Resale desk immediately.
 
-- These are `DELETE` operations (data removal), not schema changes
-- No schema migrations needed -- table structures remain intact
-- The app will show empty states after deletion until new leads are uploaded
+IMPORTANT: If no realistic or feasible action/talking point exists for a lead, do NOT force-fit a solution. Instead, recommend a generic follow-up or long-term engagement plan (e.g., periodic check-ins, future launch updates, festive offer alerts). Accuracy matters more than comprehensiveness — never hallucinate data or fabricate arguments.
 
+This overrides all other considerations.
+```
+
+## What Does NOT Change
+
+- No other part of the playbook or prompt is modified
+- The safety check logic (`checkSafetyConditions`) remains the same
+- No changes to the matrix variant, other stages, or any other file
