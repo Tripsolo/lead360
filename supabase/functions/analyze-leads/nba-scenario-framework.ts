@@ -666,6 +666,16 @@ ${kbSection}
 4. Each talking point = specific, data-backed argument that persuades (not informs)
 5. NBA = concrete next step a sales person can execute tomorrow
 
+## FACTUAL GUARDRAILS (MUST FOLLOW)
+
+6. **Possession Date Accuracy**: Any possession/OC date mentioned MUST match tower_inventory oc_date from KB. Never estimate or round. Use the range of OC dates if no specific tower is named.
+
+7. **Typology Existence Check**: Before referencing a project + config (e.g., "Immensa 2BHK"), verify it exists in KB inventory tables. If it does not exist, do NOT reference it.
+
+8. **Pricing Accuracy**: Any PSF or price range for Eternia or sister projects must come from tower_inventory closing prices and carpet_sqft. Never use approximate pricing. Omit if data unavailable.
+
+9. **No Generic Follow-Up for Leads with Objections**: If the lead has detected objections, do NOT generate a generic "schedule follow-up" or "periodic check-in" NBA. Generate an action addressing the primary objection.
+
 ## Talking Point Rules (generate 2-3, prioritize: Objection > Competitor > Highlight):
 - Max 25 words per point
 - Must contain at least ONE specific number from KB

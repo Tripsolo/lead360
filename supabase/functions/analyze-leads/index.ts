@@ -1194,8 +1194,20 @@ If multiple sister projects pass all rules, prioritize:
 4. GCP view preference (if lead expressed interest)
 5. Inventory urgency (lower unsold = higher priority for urgency messaging)
 
+### RULE 6: POSSESSION DATE ACCURACY
+- The possession_date in the output MUST match the oc_date from the sister project's tower inventory data provided above.
+- Never round, estimate, or use RERA dates. Use the exact oc_date value.
+
+### RULE 7: TYPOLOGY EXISTENCE
+- Only recommend a config (recommended_config) that actually exists in the sister project's configurations array above.
+- If the desired config does not exist for a sister project, that project cannot be recommended for that config.
+
+### RULE 8: PRICING FROM KB ONLY
+- The price_range_cr in the output MUST use closing_price_min_cr and closing_price_max_cr from the configurations data above.
+- Never cite PSF or price ranges from memory. If closing price data is missing, the project cannot be evaluated.
+
 ## EVALUATION PROCESS
-1. For each sister project, check ALL 4 rules above.
+1. For each sister project, check ALL 7 rules above (Rules 1-5 for eligibility, Rules 6-8 for output accuracy).
 2. Use closing_price_min_cr (Total Value) for budget comparison - NOT agreement value or base PSF.
 3. Log which rules pass/fail for each project.
 4. If no project passes all rules, return null.
