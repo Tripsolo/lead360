@@ -812,7 +812,7 @@ async function callOpenRouterAPI(
           "X-Title": "CX360 Lead Analysis"
         },
         body: JSON.stringify({
-          model: "anthropic/claude-opus-4",
+          model: "anthropic/claude-sonnet-4",
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt }
