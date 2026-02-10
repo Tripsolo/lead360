@@ -719,6 +719,76 @@ async function callGemini3FlashAPI(
   return typeof part?.text === "string" ? part.text : JSON.stringify(candidate ?? data);
 }
 
+// ============= Gemini 3 Pro Preview API (Stage 2 & 3 Fallback) =============
+async function callGemini3ProAPI(
+  prompt: string,
+  googleApiKey: string,
+  useJsonMode: boolean = true,
+  maxRetries: number = 3,
+): Promise<string> {
+  let lastError: Error | null = null;
+  let response: Response | null = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const generationConfig: any = {
+        temperature: 0.2,
+        topK: 40,
+        topP: 0.95,
+        maxOutputTokens: 8192,
+      };
+
+      if (useJsonMode) {
+        generationConfig.responseMimeType = "application/json";
+      }
+
+      response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent?key=${googleApiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig,
+          }),
+        },
+      );
+
+      if (response.ok) {
+        break;
+      }
+
+      const errorText = await response.text();
+
+      if ((response.status === 503 || response.status === 429) && attempt < maxRetries) {
+        const backoffMs = Math.pow(2, attempt) * 1000;
+        console.warn(`Gemini 3 Pro Preview API overloaded (attempt ${attempt}/${maxRetries}), retrying in ${backoffMs}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+        continue;
+      }
+
+      console.error("Gemini 3 Pro Preview API error:", errorText);
+      lastError = new Error(`Gemini 3 Pro Preview API call failed: ${errorText}`);
+    } catch (fetchError) {
+      lastError = fetchError instanceof Error ? fetchError : new Error(String(fetchError));
+      if (attempt < maxRetries) {
+        const backoffMs = Math.pow(2, attempt) * 1000;
+        console.warn(`Gemini 3 Pro Preview fetch error (attempt ${attempt}/${maxRetries}), retrying in ${backoffMs}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+      }
+    }
+  }
+
+  if (!response?.ok) {
+    throw lastError || new Error("Gemini 3 Pro Preview API call failed after retries");
+  }
+
+  const data = await response.json();
+  const candidate = data?.candidates?.[0];
+  const part = candidate?.content?.parts?.[0];
+  return typeof part?.text === "string" ? part.text : JSON.stringify(candidate ?? data);
+}
+
 // ============= Gemini 2.5 Flash API (Stage 1 & 3 Fallback) =============
 async function callGemini25FlashAPI(
   prompt: string,
