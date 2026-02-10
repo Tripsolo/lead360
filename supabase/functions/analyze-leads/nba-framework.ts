@@ -2126,11 +2126,143 @@ function formatKBForStage3(
   return kb;
 }
 
-// ============= STAGE 3 PROMPT BUILDER =============
+// ============= STAGE 3A CLASSIFICATION PROMPT BUILDER =============
 
 /**
- * Build Stage 3 prompt for NBA & Talking Points generation
- * Uses decision tree framework based on persona + objection matrix
+ * Build Stage 3A Classification prompt (shared schema, matrix variant).
+ * Lightweight prompt: NO KB tables, NO TP/NBA definitions.
+ * Classifies objections, buying goal, preferences, competitor threats.
+ */
+export function buildStage3AClassificationPrompt(
+  stage2Result: any,
+  extractedSignals: any,
+  visitComments: string
+): string {
+  const persona = stage2Result?.persona || "Unknown";
+  const primaryConcern = stage2Result?.primary_concern_category || null;
+  const concernCategories = stage2Result?.concern_categories || [];
+  const keyConcerns = stage2Result?.key_concerns || [];
+  const rating = stage2Result?.ai_rating || "Unknown";
+  const ppsScore = stage2Result?.pps_score || null;
+
+  const budgetStated = extractedSignals?.financial_signals?.budget_stated_cr || null;
+  const budgetGap = extractedSignals?.financial_signals?.budget_gap_percent || null;
+  const customerMentionedPriceHigh = extractedSignals?.financial_signals?.customer_mentioned_price_high || false;
+  const carpetDesired = extractedSignals?.property_preferences?.carpet_area_desired || null;
+  const configInterested = extractedSignals?.property_preferences?.config_interested || null;
+  const unitInterested = extractedSignals?.property_preferences?.specific_unit_interest || null;
+  const stagePreference = extractedSignals?.property_preferences?.stage_preference || null;
+  const possessionUrgency = extractedSignals?.engagement_signals?.possession_urgency || null;
+  const competitors = extractedSignals?.competitor_intelligence?.competitors_mentioned || [];
+  const age = extractedSignals?.demographics?.age || null;
+  const familyStage = extractedSignals?.demographics?.family_stage || null;
+  const childrenCount = extractedSignals?.demographics?.children_count || null;
+  const decisionMakers = extractedSignals?.engagement_signals?.decision_makers_present || null;
+  const nonBookingReason = extractedSignals?.engagement_signals?.non_booking_reason || null;
+  const negotiationAsks = extractedSignals?.engagement_signals?.negotiation_asks || [];
+  const visitCount = extractedSignals?.engagement_signals?.visit_count || 1;
+  const sampleFeedback = extractedSignals?.engagement_signals?.sample_feedback || "not_seen";
+  const coreMotivation = extractedSignals?.core_motivation || "";
+  const visitNotesSummary = extractedSignals?.visit_notes_summary || "";
+
+  const competitorContext = competitors.length > 0
+    ? competitors.map((c: any) =>
+        `- ${c.name}${c.project ? ` (${c.project})` : ""}: ${c.carpet_stated ? `${c.carpet_stated} sqft` : ""} ${c.price_stated_cr ? `at ₹${c.price_stated_cr} Cr` : ""} ${c.advantage_stated ? `— "${c.advantage_stated}"` : ""}`
+      ).join("\n")
+    : "None mentioned";
+
+  // Objection categories for reference (so LLM knows valid values)
+  const VALID_OBJECTION_CATEGORIES = [
+    "Economic Fit", "Possession Timeline", "Inventory & Product",
+    "Location & Ecosystem", "Competition", "Investment", "Decision Process", "Special Scenarios"
+  ];
+
+  const prompt = `You are an expert real estate sales analyst for Kalpataru Parkcity (premium residential township, Thane, India).
+
+Your ONLY task is to CLASSIFY this customer's situation. Do NOT generate talking points or actions.
+
+# CUSTOMER SITUATION
+
+## Lead Profile
+- Persona: ${persona}
+- Rating: ${rating} (PPS: ${ppsScore || "N/A"})
+- Core Motivation: ${coreMotivation}
+- Family Stage: ${familyStage || "Unknown"}, Children: ${childrenCount || "Unknown"}
+- Age: ${age || "Unknown"}
+
+## What They Want
+- Config: ${configInterested || "Not specified"}
+- Carpet Desired: ${carpetDesired || "Not specified"}
+- Budget: ${budgetStated ? `₹${budgetStated} Cr` : "Not stated"}
+- Budget Gap: ${budgetGap !== null ? `${budgetGap.toFixed(1)}%` : "Not calculated"}${customerMentionedPriceHigh ? " — Customer explicitly mentioned price is too high" : ""}
+- Stage Preference: ${stagePreference || "Not specified"}
+- Possession Urgency: ${possessionUrgency || "Not stated"}
+- Specific Unit Interest: ${unitInterested ? unitInterested.join(", ") : "None"}
+
+## Their Concerns
+- Primary Concern (from Stage 2): ${primaryConcern || "None detected"}
+- Key Concerns: ${keyConcerns.length > 0 ? keyConcerns.join(", ") : "None extracted"}
+- Non-Booking Reason: ${nonBookingReason || "Not stated"}
+- Negotiation Asks: ${negotiationAsks.length > 0 ? negotiationAsks.join(", ") : "None"}
+
+## Engagement Context
+- Visit Count: ${visitCount}
+- Sample Feedback: ${sampleFeedback}
+- Decision Makers: ${decisionMakers || "Unknown"}
+
+## Competitors Mentioned
+${competitorContext}
+
+## Visit Notes
+${visitNotesSummary}
+${visitComments ? `\nRaw comments: ${visitComments.substring(0, 500)}` : ""}
+
+# CLASSIFICATION TASK
+
+Analyze the customer situation above and produce a structured classification:
+
+1. **Primary Objection Category**: Choose from: ${VALID_OBJECTION_CATEGORIES.join(", ")}
+2. **Primary Objection Detail**: One sentence describing the specific objection
+3. **Secondary Objections**: Other concern categories (0-3)
+4. **Customer Buying Goal**: What the customer ultimately wants (1 sentence)
+5. **Amenities/Preferences**: Specific preferences mentioned (vastu, views, greenery, walking areas, floor, ventilation, etc.)
+6. **Competitor Threat**: Level (high/medium/low/none), names, stated advantage
+7. **Key Preferences Distilled**: Config, carpet, budget, stage preference, possession urgency
+8. **Decision Blockers**: Non-objection blockers (spouse approval, comparing projects, etc.)
+
+# OUTPUT (Return ONLY valid JSON)
+{
+  "primary_objection_category": "one of: ${VALID_OBJECTION_CATEGORIES.join(" | ")}",
+  "primary_objection_detail": "Specific description of the primary objection",
+  "secondary_objections": ["Category1", "Category2"],
+  "customer_buying_goal": "What the customer wants (1 sentence)",
+  "amenities_preferences": ["Specific preference 1", "Specific preference 2"],
+  "scenario_matched": [],
+  "competitor_threat": {
+    "level": "high|medium|low|none",
+    "competitors": ["Name1"],
+    "stated_advantage": "What they claim is better"
+  },
+  "key_preferences_distilled": {
+    "config": "2BHK/3BHK/etc or null",
+    "carpet_desired": "sqft or null",
+    "budget_cr": number or null,
+    "stage_preference": "UC/RTMI/No preference",
+    "possession_urgency": "immediate/moderate/flexible/not_stated"
+  },
+  "decision_blockers": ["Blocker 1", "Blocker 2"]
+}`;
+
+  console.log(`[Stage3A-Matrix] Classification prompt length: ${prompt.length} chars`);
+  return prompt;
+}
+
+// ============= STAGE 3B GENERATION PROMPT BUILDER =============
+
+/**
+ * Build Stage 3B prompt for NBA & Talking Points generation (matrix variant).
+ * Receives 3A classification as structured input.
+ * Uses decision tree framework based on persona + objection matrix.
  */
 export function buildStage3Prompt(
   stage2Result: any,
