@@ -1,61 +1,89 @@
 
-# Plan: Fix Cross-Sell Budget Extraction Fallback
 
-## Root Cause
+# Plan: Add Descriptive Concern Details from Stage 3A to Key Concerns Display
 
-The logs confirm: **`budget_stated_cr=null` for every lead** at Stage 2.5. The cross-sell prompt builder (`buildCrossSellPrompt`) only reads the budget from Stage 1 output (`extractedSignals.financial_signals.budget_stated_cr`). When Stage 1 (Gemini Flash) fails to extract a budget from CRM comments, the cross-sell prompt shows "Stated Budget: Not stated", and the LLM correctly returns null per Rule 1.
+## Problem
 
-However, **Stage 2 (Claude Sonnet 4.5) separately extracts `budget_stated` into `analysisResult.extracted_signals.budget_stated`** -- this value is never checked by the cross-sell logic. So even when Stage 2 successfully extracts a budget, it's ignored.
+Currently, `key_concerns` from Stage 2 contains the same category labels as `concern_categories` (e.g., both say "Price", "Location"). In the UI (LeadReportModal, LeadCard), a badge shows the category and the text below it repeats the same word -- making it redundant.
 
-Additionally, the **diagnostic log at line 2983** has a bug: it reads `extractedSignals?.budget_stated_cr` (flat path) instead of `extractedSignals?.financial_signals?.budget_stated_cr` (nested path), so the log always shows null even if Stage 1 did extract it.
+Stage 3A already extracts `primary_objection_detail` (a descriptive sentence like "Budget gap - wants UC at lower price point"), but this never flows back to update `key_concerns`.
 
-## Changes (all in `supabase/functions/analyze-leads/index.ts`)
+## Solution
 
-### 1. Add budget fallback in `buildCrossSellPrompt`
+Enrich `key_concerns` with descriptive text from Stage 3A's classification output, so each concern shows a category badge AND a meaningful description.
 
-At line 1112, change the budget extraction to try Stage 1 first, then fall back to Stage 2's extracted budget:
+## Changes
 
-```
-// Before:
-const leadBudget = extractedSignals?.financial_signals?.budget_stated_cr || null;
+### 1. Add `secondary_objection_details` to Stage 3A output schema (both variants)
 
-// After:
-const leadBudget = extractedSignals?.financial_signals?.budget_stated_cr 
-  || analysisResult?.extracted_signals?.budget_stated 
-  || null;
-```
+**Files**: `nba-framework.ts`, `nba-scenario-framework.ts`
 
-This requires passing `analysisResult` to the function (it's already passed -- it's the first parameter).
+In both `buildStage3AClassificationPrompt` and `buildStage3AScenarioClassificationPrompt`, update the output schema to include a new field:
 
-### 2. Fix diagnostic log path
-
-At line 2983, fix the log to use the correct nested path:
-
-```
-// Before:
-const leadBudgetForLog = extractedSignals?.budget_stated_cr ?? analysisResult?.extracted_signals?.budget_stated_cr ?? null;
-
-// After:
-const leadBudgetForLog = extractedSignals?.financial_signals?.budget_stated_cr ?? analysisResult?.extracted_signals?.budget_stated ?? null;
+```json
+{
+  "primary_objection_category": "Economic Fit",
+  "primary_objection_detail": "Budget gap - wants UC at lower price point",
+  "secondary_objections": ["Competition", "Possession Timeline"],
+  "secondary_objection_details": ["Comparing with Lodha Amara on price per sqft", "Needs possession within 18 months"],
+  ...
+}
 ```
 
-### 3. Add Stage 1 budget extraction diagnostic log
-
-After Stage 1 completes (around line 2847), add a log to track whether budget was extracted:
-
+Add a classification instruction:
 ```
-console.log(`Stage 1 budget for lead ${lead.id}: ${extractedSignals?.financial_signals?.budget_stated_cr ?? 'null'}`);
+3. **Secondary Objections**: Other concern categories (0-3), each with a brief description (max 10 words)
 ```
+
+And add `"secondary_objection_details"` to the JSON output template, described as: `["Brief description of each secondary objection (max 10 words each, same order as secondary_objections)"]`
+
+Also add a constraint to `primary_objection_detail`: `(max 10 words)`
+
+### 2. Override `key_concerns` after Stage 3A completes (index.ts)
+
+In `index.ts`, after Stage 3A classification succeeds (for both matrix and scenario variants), rebuild `key_concerns` and `concern_categories` from 3A output:
+
+```typescript
+// After 3A classification succeeds, override key_concerns with descriptive text
+if (stage3AClassification) {
+  const newKeyConcerns: string[] = [];
+  const newConcernCategories: string[] = [];
+  
+  if (stage3AClassification.primary_objection_category) {
+    newConcernCategories.push(stage3AClassification.primary_objection_category);
+    newKeyConcerns.push(stage3AClassification.primary_objection_detail || stage3AClassification.primary_objection_category);
+  }
+  
+  if (stage3AClassification.secondary_objections?.length) {
+    stage3AClassification.secondary_objections.forEach((cat: string, i: number) => {
+      newConcernCategories.push(cat);
+      newKeyConcerns.push(
+        stage3AClassification.secondary_objection_details?.[i] || cat
+      );
+    });
+  }
+  
+  analysisResult.key_concerns = newKeyConcerns;
+  analysisResult.concern_categories = newConcernCategories;
+  analysisResult.primary_concern_category = stage3AClassification.primary_objection_category || analysisResult.primary_concern_category;
+}
+```
+
+This goes right after the `stage3AClassification` variable is set, before Stage 3B is called (so it also flows into the DB update).
+
+### 3. No UI changes needed
+
+The UI already renders this correctly:
+- `LeadReportModal.tsx` (line 401-409): Shows a badge with `concern_categories[idx]` and the text from `key_concerns[idx]` below it
+- `LeadCard.tsx` (line 159): Shows `key_concerns` as list items
+
+With descriptive text in `key_concerns`, the badge will show "Price" and the text below will show "Budget gap - wants UC at lower price" instead of repeating "Price".
 
 ## What Does NOT Change
 
-- Stage 1 extraction prompt (no changes)
-- Stage 2 scoring logic
-- Cross-sell guardrail rules (Rule 1-5 stay the same)
-- Stage 3, Stage 4
-- UI components
-- Database schema
+- Stage 2 prompt (still outputs `key_concerns` as categories -- serves as fallback if 3A fails)
+- Stage 3B generation logic
+- Stage 4 evaluator
+- Database schema (key_concerns is already a JSON array of strings)
+- UI components (already structured to show category badge + concern text)
 
-## Expected Outcome
-
-After this fix, leads where Stage 2 (Claude) extracts a budget but Stage 1 (Gemini) missed it will now have their budget passed to the cross-sell prompt. This should unblock cross-sell recommendations for leads that do have budget information in their CRM data.
