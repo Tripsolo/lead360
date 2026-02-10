@@ -384,8 +384,9 @@ ${PLAYBOOK_SCENARIO_NAMES.map((s, i) => `${i + 1}. ${s}`).join("\n")}
 # OUTPUT (Return ONLY valid JSON)
 {
   "primary_objection_category": "one of the 8 categories above",
-  "primary_objection_detail": "Specific description of the primary objection",
+  "primary_objection_detail": "Brief description of primary objection (max 10 words)",
   "secondary_objections": ["Category1", "Category2"],
+  "secondary_objection_details": ["Brief description of each secondary objection (max 10 words each, same order as secondary_objections)"],
   "customer_buying_goal": "What the customer wants (1 sentence)",
   "amenities_preferences": ["Specific preference 1", "Specific preference 2"],
   "scenario_matched": ["Exact scenario name from list", "Optional second scenario"],

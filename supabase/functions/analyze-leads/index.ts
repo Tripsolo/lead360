@@ -3097,6 +3097,32 @@ IMPORTANT SCORING RULES:
           stage3AClassification = JSON.parse(cleaned3A.trim());
           
           console.log(`Stage 3A complete for lead ${lead.id}: primary_objection=${stage3AClassification.primary_objection_category}, scenarios=[${(stage3AClassification.scenario_matched || []).join(",")}], goal="${stage3AClassification.customer_buying_goal}"`);
+
+          // Override key_concerns with descriptive text from 3A classification
+          if (stage3AClassification) {
+            const newKeyConcerns: string[] = [];
+            const newConcernCategories: string[] = [];
+
+            if (stage3AClassification.primary_objection_category) {
+              newConcernCategories.push(stage3AClassification.primary_objection_category);
+              newKeyConcerns.push(stage3AClassification.primary_objection_detail || stage3AClassification.primary_objection_category);
+            }
+
+            if (stage3AClassification.secondary_objections?.length) {
+              stage3AClassification.secondary_objections.forEach((cat: string, i: number) => {
+                newConcernCategories.push(cat);
+                newKeyConcerns.push(
+                  stage3AClassification.secondary_objection_details?.[i] || cat
+                );
+              });
+            }
+
+            analysisResult.key_concerns = newKeyConcerns;
+            analysisResult.concern_categories = newConcernCategories;
+            analysisResult.primary_concern_category = stage3AClassification.primary_objection_category || analysisResult.primary_concern_category;
+            console.log(`Key concerns overridden from 3A for lead ${lead.id}: ${JSON.stringify(newKeyConcerns)}`);
+          }
+
         } catch (stage3AError) {
           console.warn(`Stage 3A failed for lead ${lead.id}, falling back to single-prompt approach:`, stage3AError);
           stage3AClassification = null;
