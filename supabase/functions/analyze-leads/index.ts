@@ -11,6 +11,7 @@ import {
   getTalkingPointDef,
   type NBAActionType
 } from "./nba-framework.ts";
+import { buildStage3ScenarioPrompt } from "./nba-scenario-framework.ts";
 import {
   evaluateOutputs,
   type TowerInventoryRow,
@@ -2942,12 +2943,17 @@ IMPORTANT SCORING RULES:
         stage25Model = "skipped (no sister projects or Stage 2 failed)";
       }
 
-      // ===== PRE-STAGE 3: DETERMINISTIC NBA/TP SELECTION =====
+      // ===== STAGE 3 VARIANT SELECTION (A/B Test) =====
+      // Deterministic 50/50 split based on lead index within the batch
+      const stage3Variant: "matrix" | "scenario" = (index % 2 === 0) ? "matrix" : "scenario";
+      console.log(`Stage 3 variant for lead ${lead.id}: ${stage3Variant}`);
+
+      // ===== PRE-STAGE 3: DETERMINISTIC NBA/TP SELECTION (Matrix variant only) =====
       let preSelectedNba: any = null;
       let preSelectedTpIds: string[] = [];
       let preSelectedObjection: string | null = null;
 
-      if (parseSuccess) {
+      if (parseSuccess && stage3Variant === "matrix") {
         try {
           const preVisitComments = lead.rawData?.["Visit Comments"] || 
                                    lead.rawData?.["Remarks in Detail"] || 
@@ -2958,7 +2964,6 @@ IMPORTANT SCORING RULES:
           const safetyPre = checkSafetyConditions(analysisResult.persona, extractedSignals);
 
           if (safetyPre.triggered && safetyPre.overrideNbaId) {
-            // Safety override: use safety NBA and its linked TPs
             const safetyNba = getNBARuleDef(safetyPre.overrideNbaId);
             if (safetyNba) {
               preSelectedNba = safetyNba;
@@ -2966,7 +2971,6 @@ IMPORTANT SCORING RULES:
               preSelectedObjection = `safety:${safetyPre.safetyRule}`;
             }
           } else if (detectedObjections && detectedObjections.length > 0) {
-            // Matrix lookup: map primary objection to matrix key, then look up entry
             const primaryObjection = detectedObjections[0];
             const matrixObjection = mapToMatrixObjection(primaryObjection);
             if (matrixObjection) {
@@ -2987,85 +2991,129 @@ IMPORTANT SCORING RULES:
         }
       }
 
-      // ===== STAGE 3: NBA & TALKING POINTS GENERATION (Claude Sonnet 4.5) =====
+      // ===== STAGE 3: NBA & TALKING POINTS GENERATION =====
       let stage3Model = "claude-sonnet-4.5";
       if (parseSuccess) {
-        console.log(`Stage 3 (NBA/TP) starting for lead ${lead.id} using ${stage3Model}`);
-        
-        // Add 200ms delay before Stage 3
-        await new Promise((resolve) => setTimeout(resolve, 200));
-        
-        // Get visit comments from raw data
         const visitComments = lead.rawData?.["Visit Comments"] || 
                              lead.rawData?.["Remarks in Detail"] || 
                              lead.rawData?.["Site Re-Visit Comment"] || "";
-        
-        try {
-          const stage3Prompt = buildStage3Prompt(
-            analysisResult,
-            extractedSignals,
-            visitComments,
-            towerInventory || [],
-            competitorPricing || [],
-            projectMetadata,
-            preSelectedNba,
-            preSelectedTpIds
-          );
-          
-          const stage3Response = await callOpenRouterAPI("You are a sales strategy AI. Return valid JSON only.", stage3Prompt);
-          // Claude may return JSON wrapped in markdown code blocks - strip them
-          let cleanedStage3 = stage3Response.trim();
-          if (cleanedStage3.startsWith("```json")) cleanedStage3 = cleanedStage3.slice(7);
-          else if (cleanedStage3.startsWith("```")) cleanedStage3 = cleanedStage3.slice(3);
-          if (cleanedStage3.endsWith("```")) cleanedStage3 = cleanedStage3.slice(0, -3);
-          const stage3Result = JSON.parse(cleanedStage3.trim());
-          console.log(`Stage 3 complete for lead ${lead.id} using ${stage3Model}`);
-          
-          // Code-level safety validation (override LLM if needed)
-          const safetyCheck = checkSafetyConditions(analysisResult.persona, extractedSignals);
-          if (safetyCheck.triggered && stage3Result.safety_check_triggered === null) {
-            const overrideNba = getNBARuleDef(safetyCheck.overrideNbaId || "");
-            if (overrideNba) {
-              stage3Result.next_best_action = {
-                nba_id: overrideNba.nba_id,
-                action_type: overrideNba.action_category as NBAActionType,
-                action: overrideNba.specific_action,
-                escalation_trigger: overrideNba.escalation_trigger,
-                fallback_action: overrideNba.fallback_action,
-              };
-              stage3Result.safety_check_triggered = safetyCheck.safetyRule;
+
+        if (stage3Variant === "scenario") {
+          // ===== SCENARIO-DRIVEN STAGE 3 =====
+          console.log(`Stage 3 Scenario starting for lead ${lead.id}`);
+          await new Promise((resolve) => setTimeout(resolve, 200));
+
+          try {
+            const stage3Prompt = buildStage3ScenarioPrompt(
+              analysisResult,
+              extractedSignals,
+              visitComments,
+              towerInventory || [],
+              competitorPricing || [],
+              projectMetadata
+            );
+
+            const stage3Response = await callOpenRouterAPI("You are a sales strategy AI. Return valid JSON only.", stage3Prompt);
+            let cleanedStage3 = stage3Response.trim();
+            if (cleanedStage3.startsWith("```json")) cleanedStage3 = cleanedStage3.slice(7);
+            else if (cleanedStage3.startsWith("```")) cleanedStage3 = cleanedStage3.slice(3);
+            if (cleanedStage3.endsWith("```")) cleanedStage3 = cleanedStage3.slice(0, -3);
+            const stage3Result = JSON.parse(cleanedStage3.trim());
+
+            stage3Model = "claude-sonnet-4.5 (scenario)";
+            console.log(`Stage 3 Scenario complete for lead ${lead.id}`);
+
+            // Code-level safety validation (same as matrix)
+            const safetyCheck = checkSafetyConditions(analysisResult.persona, extractedSignals);
+            if (safetyCheck.triggered && !stage3Result.safety_check_triggered) {
+              const overrideNba = getNBARuleDef(safetyCheck.overrideNbaId || "");
+              if (overrideNba) {
+                stage3Result.next_best_action = {
+                  action_type: overrideNba.action_category as NBAActionType,
+                  action: overrideNba.specific_action,
+                  escalation_trigger: overrideNba.escalation_trigger,
+                  fallback_action: overrideNba.fallback_action,
+                };
+                stage3Result.safety_check_triggered = safetyCheck.safetyRule;
+              }
+            }
+
+            // Merge scenario Stage 3 results
+            analysisResult.next_best_action = stage3Result.next_best_action;
+            analysisResult.talking_points = stage3Result.talking_points;
+            analysisResult.scenario_matched = stage3Result.scenario_matched;
+            analysisResult.customer_goal = stage3Result.customer_goal;
+            analysisResult.safety_check_triggered = stage3Result.safety_check_triggered;
+
+          } catch (stage3PrimaryError) {
+            console.warn(`Stage 3 Scenario primary failed for lead ${lead.id}, trying Gemini fallback...`, stage3PrimaryError);
+            stage3Model = "gemini-2.5-flash (scenario-fallback)";
+
+            try {
+              const stage3Prompt = buildStage3ScenarioPrompt(
+                analysisResult,
+                extractedSignals,
+                visitComments,
+                towerInventory || [],
+                competitorPricing || [],
+                projectMetadata
+              );
+
+              const stage3Response = await callGemini25FlashAPI(stage3Prompt, googleApiKey!, true);
+              const stage3Result = JSON.parse(stage3Response);
+              console.log(`Stage 3 Scenario fallback complete for lead ${lead.id}`);
+
+              const safetyCheck = checkSafetyConditions(analysisResult.persona, extractedSignals);
+              if (safetyCheck.triggered && !stage3Result.safety_check_triggered) {
+                const overrideNba = getNBARuleDef(safetyCheck.overrideNbaId || "");
+                if (overrideNba) {
+                  stage3Result.next_best_action = {
+                    action_type: overrideNba.action_category as NBAActionType,
+                    action: overrideNba.specific_action,
+                    escalation_trigger: overrideNba.escalation_trigger,
+                    fallback_action: overrideNba.fallback_action,
+                  };
+                  stage3Result.safety_check_triggered = safetyCheck.safetyRule;
+                }
+              }
+
+              analysisResult.next_best_action = stage3Result.next_best_action;
+              analysisResult.talking_points = stage3Result.talking_points;
+              analysisResult.scenario_matched = stage3Result.scenario_matched;
+              analysisResult.customer_goal = stage3Result.customer_goal;
+              analysisResult.safety_check_triggered = stage3Result.safety_check_triggered;
+
+            } catch (stage3FallbackError) {
+              stage3Model = "skipped (scenario failed)";
+              console.error(`Stage 3 Scenario fallback failed for lead ${lead.id}:`, stage3FallbackError);
             }
           }
-          
-          // Merge Stage 3 results into analysis result
-          analysisResult.next_best_action = stage3Result.next_best_action;
-          analysisResult.talking_points = stage3Result.talking_points;
-          analysisResult.objection_categories_detected = stage3Result.objection_categories_detected;
-          analysisResult.primary_objection = stage3Result.primary_objection;
-          analysisResult.secondary_objections = stage3Result.secondary_objections;
-          analysisResult.safety_check_triggered = stage3Result.safety_check_triggered;
-          
-        } catch (stage3PrimaryError) {
-          console.warn(`Stage 3 primary (${stage3Model}) failed for lead ${lead.id}, trying fallback (gemini-2.5-flash)...`, stage3PrimaryError);
-          stage3Model = "gemini-2.5-flash (fallback)";
-          
+
+        } else {
+          // ===== MATRIX-DRIVEN STAGE 3 (existing logic) =====
+          console.log(`Stage 3 (NBA/TP) starting for lead ${lead.id} using ${stage3Model}`);
+          await new Promise((resolve) => setTimeout(resolve, 200));
+
           try {
             const stage3Prompt = buildStage3Prompt(
               analysisResult,
               extractedSignals,
-              lead.rawData?.["Visit Comments"] || "",
+              visitComments,
               towerInventory || [],
               competitorPricing || [],
               projectMetadata,
               preSelectedNba,
               preSelectedTpIds
             );
-            
-            const stage3Response = await callGemini25FlashAPI(stage3Prompt, googleApiKey!, true);
-            const stage3Result = JSON.parse(stage3Response);
+
+            const stage3Response = await callOpenRouterAPI("You are a sales strategy AI. Return valid JSON only.", stage3Prompt);
+            let cleanedStage3 = stage3Response.trim();
+            if (cleanedStage3.startsWith("```json")) cleanedStage3 = cleanedStage3.slice(7);
+            else if (cleanedStage3.startsWith("```")) cleanedStage3 = cleanedStage3.slice(3);
+            if (cleanedStage3.endsWith("```")) cleanedStage3 = cleanedStage3.slice(0, -3);
+            const stage3Result = JSON.parse(cleanedStage3.trim());
             console.log(`Stage 3 complete for lead ${lead.id} using ${stage3Model}`);
-            
-            // Code-level safety validation (override LLM if needed)
+
             const safetyCheck = checkSafetyConditions(analysisResult.persona, extractedSignals);
             if (safetyCheck.triggered && stage3Result.safety_check_triggered === null) {
               const overrideNba = getNBARuleDef(safetyCheck.overrideNbaId || "");
@@ -3080,19 +3128,60 @@ IMPORTANT SCORING RULES:
                 stage3Result.safety_check_triggered = safetyCheck.safetyRule;
               }
             }
-            
-            // Merge Stage 3 results into analysis result
+
             analysisResult.next_best_action = stage3Result.next_best_action;
             analysisResult.talking_points = stage3Result.talking_points;
             analysisResult.objection_categories_detected = stage3Result.objection_categories_detected;
             analysisResult.primary_objection = stage3Result.primary_objection;
             analysisResult.secondary_objections = stage3Result.secondary_objections;
             analysisResult.safety_check_triggered = stage3Result.safety_check_triggered;
-            
-          } catch (stage3FallbackError) {
-            stage3Model = "skipped (using Stage 2 output)";
-            console.error(`Stage 3 fallback failed for lead ${lead.id}:`, stage3FallbackError);
-            // Keep Stage 2 output without talking_points/NBA enhancement
+
+          } catch (stage3PrimaryError) {
+            console.warn(`Stage 3 primary (${stage3Model}) failed for lead ${lead.id}, trying fallback (gemini-2.5-flash)...`, stage3PrimaryError);
+            stage3Model = "gemini-2.5-flash (fallback)";
+
+            try {
+              const stage3Prompt = buildStage3Prompt(
+                analysisResult,
+                extractedSignals,
+                lead.rawData?.["Visit Comments"] || "",
+                towerInventory || [],
+                competitorPricing || [],
+                projectMetadata,
+                preSelectedNba,
+                preSelectedTpIds
+              );
+
+              const stage3Response = await callGemini25FlashAPI(stage3Prompt, googleApiKey!, true);
+              const stage3Result = JSON.parse(stage3Response);
+              console.log(`Stage 3 complete for lead ${lead.id} using ${stage3Model}`);
+
+              const safetyCheck = checkSafetyConditions(analysisResult.persona, extractedSignals);
+              if (safetyCheck.triggered && stage3Result.safety_check_triggered === null) {
+                const overrideNba = getNBARuleDef(safetyCheck.overrideNbaId || "");
+                if (overrideNba) {
+                  stage3Result.next_best_action = {
+                    nba_id: overrideNba.nba_id,
+                    action_type: overrideNba.action_category as NBAActionType,
+                    action: overrideNba.specific_action,
+                    escalation_trigger: overrideNba.escalation_trigger,
+                    fallback_action: overrideNba.fallback_action,
+                  };
+                  stage3Result.safety_check_triggered = safetyCheck.safetyRule;
+                }
+              }
+
+              analysisResult.next_best_action = stage3Result.next_best_action;
+              analysisResult.talking_points = stage3Result.talking_points;
+              analysisResult.objection_categories_detected = stage3Result.objection_categories_detected;
+              analysisResult.primary_objection = stage3Result.primary_objection;
+              analysisResult.secondary_objections = stage3Result.secondary_objections;
+              analysisResult.safety_check_triggered = stage3Result.safety_check_triggered;
+
+            } catch (stage3FallbackError) {
+              stage3Model = "skipped (using Stage 2 output)";
+              console.error(`Stage 3 fallback failed for lead ${lead.id}:`, stage3FallbackError);
+            }
           }
         }
       } else {
@@ -3124,7 +3213,8 @@ IMPORTANT SCORING RULES:
             (competitorPricing || []) as CompetitorPricingRow[],
             (sisterProjects || []) as SisterProjectRow[],
             projectMetadata || {},
-            openRouterKey
+            openRouterKey,
+            stage3Variant
           );
           
           if (evaluatedOutput) {
@@ -3164,6 +3254,7 @@ IMPORTANT SCORING RULES:
         stage2: stage2Model,
         stage2_5: stage25Model,
         stage3: stage3Model,
+        stage3_variant: stage3Variant,
         stage4_evaluator: stage4Model,
       };
 

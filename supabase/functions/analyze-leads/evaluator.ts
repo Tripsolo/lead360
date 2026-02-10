@@ -215,7 +215,8 @@ export function buildEvaluatorPrompt(
     objections_detected: string[];
     budget_stated: number | null;
     timeline: string | null;
-  }
+  },
+  stage3Variant: "matrix" | "scenario" = "matrix"
 ): string {
   const systemPrompt = `# OUTPUT EVALUATOR - TP, NBA & CROSS-SELL VALIDATION
 
@@ -231,8 +232,9 @@ You are a quality assurance specialist for real estate sales AI. Your task is to
 ## CRITICAL RULES - DO NOT SKIP
 
 ### Rule 1: TP-ID Validity
-- Every tp_id in talking_points MUST exist in TALKING_POINTS definitions
-- If a TP-ID doesn't exist, replace with the closest valid TP-ID
+${stage3Variant === "scenario" ? `- SKIP: This lead used the scenario-driven variant — talking points do not use standard TP-IDs.
+- Instead, validate that each talking point contains at least one specific number from the Knowledge Base.` : `- Every tp_id in talking_points MUST exist in TALKING_POINTS definitions
+- If a TP-ID doesn't exist, replace with the closest valid TP-ID`}
 
 ### Rule 2: TP Content Accuracy
 - Numeric data (prices, areas, dates) MUST come from tower_inventory or competitor_pricing
@@ -281,9 +283,10 @@ IF persona = "Pragmatic Investor" or "First-Time Investor":
 CORRECT: Replace with TP-INV-006 or appropriate investment TP
 
 ### Rule 9: NBA-ID Validity
-- The nba_id MUST exist in NBA_RULES definitions
+${stage3Variant === "scenario" ? `- SKIP: This lead used the scenario-driven variant — NBA does not use standard NBA-IDs.
+- Instead, validate that the NBA action is specific, actionable, and under 20 words.` : `- The nba_id MUST exist in NBA_RULES definitions
 - The trigger_condition in the rule must be plausibly satisfied by the lead context
-- If the NBA-ID doesn't match the lead's objection category, FLAG as mismatch
+- If the NBA-ID doesn't match the lead's objection category, FLAG as mismatch`}
 
 ### Rule 10: PPS Score Exclusion in Rating Rationale (NON-NEGOTIABLE)
 The PPS Score number MUST NEVER appear in any text output field, especially rating_rationale.
@@ -630,7 +633,8 @@ export async function evaluateOutputs(
   competitorPricing: CompetitorPricingRow[],
   sisterProjects: SisterProjectRow[],
   projectMetadata: Record<string, any>,
-  openRouterApiKey: string
+  openRouterApiKey: string,
+  stage3Variant: "matrix" | "scenario" = "matrix"
 ): Promise<EvaluatorResponse | null> {
   try {
     // Build lead context from extracted signals
@@ -659,7 +663,8 @@ export async function evaluateOutputs(
       crossSellResult,
       extractedSignals,
       knowledgeBase,
-      leadContext
+      leadContext,
+      stage3Variant
     );
 
     // Run evaluator
