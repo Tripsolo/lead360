@@ -283,9 +283,10 @@ IF persona = "Pragmatic Investor" or "First-Time Investor":
 CORRECT: Replace with TP-INV-006 or appropriate investment TP
 
 ### Rule 9: NBA-ID Validity
-- The nba_id MUST exist in NBA_RULES definitions
+${stage3Variant === "scenario" ? `- SKIP: This lead used the scenario-driven variant — NBA does not use standard NBA-IDs.
+- Instead, validate that the NBA action is specific, actionable, and under 20 words.` : `- The nba_id MUST exist in NBA_RULES definitions
 - The trigger_condition in the rule must be plausibly satisfied by the lead context
-- If the NBA-ID doesn't match the lead's objection category, FLAG as mismatch
+- If the NBA-ID doesn't match the lead's objection category, FLAG as mismatch`}
 
 ### Rule 10: PPS Score Exclusion in Rating Rationale (NON-NEGOTIABLE)
 The PPS Score number MUST NEVER appear in any text output field, especially rating_rationale.
