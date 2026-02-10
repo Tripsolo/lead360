@@ -964,7 +964,13 @@ async function callCrossSellAPI(
       if (response.ok) {
         const data = await response.json();
         const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-        return JSON.parse(text);
+        console.log(`[Cross-Sell RAW Response] ${text.substring(0, 500)}`);
+        try {
+          return JSON.parse(text);
+        } catch (parseErr) {
+          console.error(`[Cross-Sell JSON Parse FAILED] Raw text: ${text.substring(0, 1000)}`);
+          return null;
+        }
       }
 
       const errorText = await response.text();
