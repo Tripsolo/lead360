@@ -633,7 +633,8 @@ export async function evaluateOutputs(
   competitorPricing: CompetitorPricingRow[],
   sisterProjects: SisterProjectRow[],
   projectMetadata: Record<string, any>,
-  openRouterApiKey: string
+  openRouterApiKey: string,
+  stage3Variant: "matrix" | "scenario" = "matrix"
 ): Promise<EvaluatorResponse | null> {
   try {
     // Build lead context from extracted signals
