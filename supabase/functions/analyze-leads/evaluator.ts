@@ -215,7 +215,8 @@ export function buildEvaluatorPrompt(
     objections_detected: string[];
     budget_stated: number | null;
     timeline: string | null;
-  }
+  },
+  stage3Variant: "matrix" | "scenario" = "matrix"
 ): string {
   const systemPrompt = `# OUTPUT EVALUATOR - TP, NBA & CROSS-SELL VALIDATION
 
