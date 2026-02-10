@@ -676,6 +676,10 @@ ${kbSection}
 
 9. **No Generic Follow-Up for Leads with Objections**: If the lead has detected objections, do NOT generate a generic "schedule follow-up" or "periodic check-in" NBA. Generate an action addressing the primary objection.
 
+10. **Budget-Fit Constraint (Non-Negotiable)**: The lead's stated budget has a maximum 25% flexibility threshold. Do NOT reference projects/configs where closing_price_min_cr > (lead_budget x 1.25). If budget is not stated, avoid price-based arguments entirely.
+
+11. **Investment Goal Alignment (Non-Negotiable)**: The customer_buying_goal from Classification (or core_motivation) defines argument framing. Investment goals get ROI/appreciation arguments only. End-use goals get lifestyle/family arguments only. Never cross-contaminate.
+
 ## Talking Point Rules (generate 2-3, prioritize: Objection > Competitor > Highlight):
 - Max 25 words per point
 - Must contain at least ONE specific number from KB

@@ -2484,7 +2484,19 @@ From the selected NBA-ID:
 
 10. **Pricing Accuracy**: Any PSF or price range you cite for Eternia or sister projects must be derived from tower_inventory closing_min_cr/closing_max_cr and carpet_sqft fields. Never use approximate or memorized pricing. If no inventory data exists, omit the price claim.
 
-11. **No Generic Follow-Up for Leads with Objections**: If the lead has specific objections detected, do NOT generate a generic follow-up NBA (e.g., "schedule follow-up", "periodic check-in"). Instead, generate an action directly addressing the primary objection.`;
+11. **No Generic Follow-Up for Leads with Objections**: If the lead has specific objections detected, do NOT generate a generic follow-up NBA (e.g., "schedule follow-up", "periodic check-in"). Instead, generate an action directly addressing the primary objection.
+
+12. **Budget-Fit Constraint (Non-Negotiable)**: The lead's stated budget is a hard constraint with a maximum 25% flexibility threshold.
+    - Do NOT reference or recommend any project, tower, or config where closing_price_min_cr exceeds (lead_budget x 1.25).
+    - Do NOT suggest upgrades, premium floors, or larger configs that push beyond this threshold.
+    - If the lead's budget is not stated, do NOT make price-based arguments or suggest specific units — focus on experience-based talking points instead.
+    - Example: Lead budget = ₹1.5 Cr → max allowable = ₹1.875 Cr. Do NOT pitch a 3BHK at ₹2.1 Cr.
+
+13. **Investment Goal Alignment (Non-Negotiable)**: The lead's core_motivation and customer_buying_goal define the framing of ALL talking points and NBAs.
+    - If goal = "investment/rental/ROI/appreciation" → Frame ALL arguments around returns, appreciation, rental yield, capital growth. NEVER use family/lifestyle/school arguments.
+    - If goal = "end-use/family/upgrade/self-use" → Frame ALL arguments around lifestyle, convenience, family amenities, community. NEVER use pure ROI/investment language.
+    - If goal is unclear or mixed → Default to end-use framing but include one investment data point if relevant.
+    - This rule overrides persona-based TP selection if there is a conflict.`;
 
   const outputStructure = `# OUTPUT STRUCTURE
 Return a JSON object with this EXACT structure:

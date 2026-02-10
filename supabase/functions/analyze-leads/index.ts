@@ -1207,7 +1207,7 @@ If multiple sister projects pass all rules, prioritize:
 - Never cite PSF or price ranges from memory. If closing price data is missing, the project cannot be evaluated.
 
 ## EVALUATION PROCESS
-1. For each sister project, check ALL 7 rules above (Rules 1-5 for eligibility, Rules 6-8 for output accuracy).
+1. For each sister project, check ALL 8 rules above (Rules 1-5 for eligibility, Rules 6-8 for output accuracy).
 2. Use closing_price_min_cr (Total Value) for budget comparison - NOT agreement value or base PSF.
 3. Log which rules pass/fail for each project.
 4. If no project passes all rules, return null.

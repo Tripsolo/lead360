@@ -431,6 +431,8 @@ ${JSON.stringify(crossSellOutput, null, 2)}
 - Objections Detected: ${leadContext.objections_detected?.join(", ") || "None"}
 - Budget Stated: ${leadContext.budget_stated ? `₹${leadContext.budget_stated} Cr` : "Not stated"}
 - Timeline: ${leadContext.timeline || "Not stated"}
+- Core Motivation: ${leadContext.core_motivation || "Unknown"}
+- Customer Buying Goal: ${leadContext.customer_buying_goal || "Unknown"}
 
 ### Extracted Signals Summary
 \`\`\`json
