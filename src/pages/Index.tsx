@@ -906,7 +906,7 @@ const Index = () => {
       });
 
       // Now run the analysis flow for these leads
-      const CHUNK_SIZE = 2;
+      const CHUNK_SIZE = 1;
       const chunks: Lead[][] = [];
       for (let i = 0; i < failedLeads.length; i += CHUNK_SIZE) {
         chunks.push(failedLeads.slice(i, i + CHUNK_SIZE));
