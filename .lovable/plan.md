@@ -1,84 +1,60 @@
 
-# Plan: Scenario-Driven NBA/TP Generator (Stage 3 A/B Variant)
 
-## Overview
+# Plan: Switch Fallback Models to Gemini 3 Pro Preview
 
-Add a parallel Stage 3 variant ("scenario-driven") that runs alongside the existing "matrix-driven" Stage 3 as an A/B test. The scenario variant uses a cleaned objection playbook (39 real-world sales scenarios) as LLM grounding instead of deterministic TP-ID lookup, allowing the model to reason creatively within strategic guardrails.
+## Summary
 
-Both variants produce the same output schema (`talking_points[]`, `next_best_action{}`) and are stored with a `stage3_variant` field for comparison.
+Keep Claude Sonnet 4.5 (via OpenRouter) as the primary model for Stage 2 and Stage 3. Replace the current fallback models with Gemini 3 Pro Preview. Remove the rule-based hardcoded defaults fallback from Stage 2.
 
-## What Stays the Same
+## Current vs New Model Chains
 
-- Stages 1, 2, 2.5: Completely unchanged
-- Stage 4 Evaluator: Minor tweak only (skip TP-ID existence check for scenario variant)
-- Output schema: Identical -- both variants produce the same JSON shape
-- Safety overrides: Reused from existing `checkSafetyConditions()` in `nba-framework.ts`
+| Stage | Current Chain | New Chain |
+|-------|--------------|-----------|
+| Stage 2 | Claude Sonnet 4.5 -> Gemini 2.5 Pro -> Rule-based defaults | Claude Sonnet 4.5 -> Gemini 3 Pro Preview |
+| Stage 3 (Matrix) | Claude Sonnet 4.5 -> Gemini 2.5 Flash | Claude Sonnet 4.5 -> Gemini 3 Pro Preview |
+| Stage 3 (Scenario) | Claude Sonnet 4.5 -> Gemini 2.5 Flash | Claude Sonnet 4.5 -> Gemini 3 Pro Preview |
 
-## Changes
+## Changes (all in `supabase/functions/analyze-leads/index.ts`)
 
-### 1. New File: `supabase/functions/analyze-leads/nba-scenario-framework.ts`
+### 1. New Helper Function: `callGemini3ProAPI()`
 
-Contains:
-- **`OBJECTION_PLAYBOOK`** constant: The cleaned 39-scenario playbook as a markdown string (7 categories: Economic Fit, Possession Timeline, Inventory and Product, Location and Ecosystem, Competition, Investment, Decision Process), embedded directly in the file
-- **`buildStage3ScenarioPrompt()`** function: Builds the scenario-driven prompt using:
-  - Stage 2 result (persona, concerns, rating, PPS score)
-  - Extracted signals (budget, timeline, competitors, demographics)
-  - Visit comments (raw CRM notes)
-  - Tower inventory and competitor pricing (live KB data, formatted as markdown tables)
-  - Project metadata
-  - Safety check results (reuses `checkSafetyConditions()` from existing `nba-framework.ts`)
+Add a helper function targeting `gemini-3-pro-preview` via the Google Generative AI REST API. Uses the existing `GOOGLE_AI_API_KEY`. Placed after the existing `callGeminiAPI()` function.
 
-The prompt instructs the LLM to:
-1. Read the playbook scenarios and identify the 2-3 most relevant ones
-2. Use live KB data (tower inventory, competitor pricing) for all numerical claims
-3. Generate 3-5 talking points with types (Highlight, Objection handling, Competitor handling)
-4. Generate a strategic NBA with action type, specific action, escalation trigger, and fallback
-5. Output the same JSON schema as the matrix variant
+- Endpoint: `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent`
+- Same retry logic, JSON mode support, and error handling as existing Gemini helpers
 
-Key differences from matrix variant prompt:
-- No TP-IDs or NBA-IDs (uses scenario references like `"[ECO-3]"` instead)
-- No pre-selection block -- the LLM reasons from the playbook
-- Playbook scenarios provide strategic direction; KB data provides factual grounding
-- Explicit instructions to never fabricate prices/dates not in KB
+### 2. Stage 2: Replace Fallback + Remove Rule-Based Defaults
 
-### 2. Modified File: `supabase/functions/analyze-leads/index.ts`
+In the Stage 2 fallback block:
+- Replace `callGeminiAPI()` (Gemini 2.5 Pro) with `callGemini3ProAPI()`
+- Update fallback model label to `"gemini-3-pro-preview"`
+- Remove the inner catch block that falls back to rule-based hardcoded defaults (Warm rating, generic persona). If both primary and fallback fail, let `parseSuccess = false` and the pipeline handles it naturally.
 
-**Import addition (top of file):**
-- Import `buildStage3ScenarioPrompt` from `./nba-scenario-framework.ts`
+### 3. Stage 3 Matrix Variant: Replace Fallback
 
-**A/B variant selection (before Stage 3 block, ~line 2990):**
-- Add a `stage3Variant` variable: `"matrix" | "scenario"`
-- Selection logic: Use lead index modulo 2 -- even-indexed leads get `"matrix"`, odd-indexed get `"scenario"`
-- This gives a clean 50/50 split within each batch for comparison
+In the matrix Stage 3 fallback block:
+- Replace `callGemini3FlashAPI()` / `callGeminiFlashAPI()` (Gemini 2.5 Flash) with `callGemini3ProAPI()`
+- Update fallback model label to `"gemini-3-pro-preview"`
 
-**Stage 3 routing (within the Stage 3 block):**
-- When `stage3Variant === "scenario"`:
-  - Skip the pre-selection block (no deterministic lookup needed)
-  - Call `buildStage3ScenarioPrompt()` instead of `buildStage3Prompt()`
-  - Same model (Claude Sonnet 4.5 via OpenRouter), same JSON cleanup, same safety override post-processing
-  - Same fallback to Gemini 2.5 Flash on failure
-- When `stage3Variant === "matrix"`:
-  - Existing flow unchanged (pre-selection + `buildStage3Prompt()`)
+### 4. Stage 3 Scenario Variant: Replace Fallback
 
-**Variant metadata storage (after Stage 3 completes):**
-- Add `stage3_variant: stage3Variant` to `analysisResult` before Stage 4
-- Update `models_used` to include `stage3_variant` field
+In the scenario Stage 3 fallback block:
+- Replace the Gemini 2.5 Flash fallback with `callGemini3ProAPI()`
+- Update fallback model label to `"gemini-3-pro-preview (scenario)"`
 
-### 3. Modified File: `supabase/functions/analyze-leads/evaluator.ts`
+## What Does NOT Change
 
-**Minor change in Rule 1 (TP-ID Validity) and Rule 9 (NBA-ID Validity):**
-- The evaluator prompt receives the stage3 output which may now lack valid TP-IDs/NBA-IDs (scenario variant uses descriptive references like `"[ECO-3]"`)
-- Add a conditional: if the talking points don't have standard TP-ID format (matching `/^TP-[A-Z]{2,4}-\d{3}$/`), skip Rule 1 and Rule 9 validation
-- All other rules (factual accuracy, competitor data, cross-sell, safety, PPS exclusion, budget standardization) still apply
-
-**Implementation approach:**
-- Pass `stage3Variant` as a parameter to `evaluateOutputs()`
-- In the prompt builder, conditionally include/exclude Rule 1 and Rule 9 text based on variant
+- Primary model for Stage 2 and Stage 3: Claude Sonnet 4.5 via OpenRouter (unchanged)
+- Stage 1: Stays on its current models
+- Stage 2.5 (Cross-Sell): Stays on its current model
+- Stage 4 (Evaluator): Stays on Claude Sonnet 4.5 via OpenRouter
+- All prompt content remains identical
+- No database or schema changes
+- The `callOpenRouterAPI()` function stays as-is (still primary for Stages 2, 3, and 4)
 
 ## Technical Notes
 
-- The `nba-scenario-framework.ts` file will be ~400-450 lines (mostly the playbook constant)
-- The playbook is embedded as a string constant to avoid file I/O in the edge function
-- Safety conditions are handled identically: `checkSafetyConditions()` runs before both variants, and post-Stage-3 safety override code is shared
-- The A/B split is deterministic (based on lead index), ensuring reproducibility within a batch
-- No database schema changes needed -- `stage3_variant` is stored inside the existing `full_analysis` JSONB column
+- Gemini 3 Pro Preview uses the same `GOOGLE_AI_API_KEY` as other Gemini helpers -- no new secrets needed
+- The Gemini API uses a single `contents` array format, so fallback calls will use combined prompt strings (same pattern as existing Gemini fallbacks)
+- `maxOutputTokens` stays at 8192
+
