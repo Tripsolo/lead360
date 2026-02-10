@@ -2413,7 +2413,7 @@ Return a JSON object with this EXACT structure:
     preSelectionSection = section;
   }
 
-  return `${systemPrompt}
+  const stage3Prompt = `${systemPrompt}
 
 ${inputDataSection}
 
@@ -2428,4 +2428,8 @@ ${frameworkSection}
 ${instructionsSection}
 
 ${outputStructure}`;
+
+  console.log(`[Patch5] Stage 3 prompt length: ${stage3Prompt.length} chars, pre-selection active: ${!!(preSelectedNba && preSelectedTpIds && preSelectedTpIds.length > 0)}`);
+
+  return stage3Prompt;
 }
