@@ -2987,8 +2987,8 @@ IMPORTANT SCORING RULES:
         }
       }
 
-      // ===== STAGE 3: NBA & TALKING POINTS GENERATION (Gemini 3 Flash) =====
-      let stage3Model = "gemini-3-flash-preview";
+      // ===== STAGE 3: NBA & TALKING POINTS GENERATION (Claude Sonnet 4.5) =====
+      let stage3Model = "claude-sonnet-4.5";
       if (parseSuccess) {
         console.log(`Stage 3 (NBA/TP) starting for lead ${lead.id} using ${stage3Model}`);
         
@@ -3012,8 +3012,13 @@ IMPORTANT SCORING RULES:
             preSelectedTpIds
           );
           
-          const stage3Response = await callGemini3FlashAPI(stage3Prompt, googleApiKey!, true);
-          const stage3Result = JSON.parse(stage3Response);
+          const stage3Response = await callOpenRouterAPI("You are a sales strategy AI. Return valid JSON only.", stage3Prompt);
+          // Claude may return JSON wrapped in markdown code blocks - strip them
+          let cleanedStage3 = stage3Response.trim();
+          if (cleanedStage3.startsWith("```json")) cleanedStage3 = cleanedStage3.slice(7);
+          else if (cleanedStage3.startsWith("```")) cleanedStage3 = cleanedStage3.slice(3);
+          if (cleanedStage3.endsWith("```")) cleanedStage3 = cleanedStage3.slice(0, -3);
+          const stage3Result = JSON.parse(cleanedStage3.trim());
           console.log(`Stage 3 complete for lead ${lead.id} using ${stage3Model}`);
           
           // Code-level safety validation (override LLM if needed)
