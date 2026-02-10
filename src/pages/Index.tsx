@@ -739,7 +739,7 @@ const Index = () => {
         
         // Small delay between batch initiations
         if (i < chunks.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
       
