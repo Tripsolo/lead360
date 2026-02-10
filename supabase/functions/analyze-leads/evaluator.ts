@@ -215,6 +215,8 @@ export function buildEvaluatorPrompt(
     objections_detected: string[];
     budget_stated: number | null;
     timeline: string | null;
+    core_motivation?: string;
+    customer_buying_goal?: string;
   },
   stage3Variant: "matrix" | "scenario" = "matrix"
 ): string {
@@ -257,7 +259,7 @@ When a talking point references a competitor:
 Using tower_inventory data:
 - Find the recommended_project + recommended_config combination
 - Get the actual closing_min_cr from inventory
-- IF closing_min_cr > (lead_budget × 1.20) THEN REJECT
+- IF closing_min_cr > (lead_budget × 1.25) THEN REJECT
 - CORRECT: Either null the recommendation OR suggest valid alternative
 
 ### Rule 5: Cross-Sell Possession Validation
@@ -343,7 +345,20 @@ CORRECT: Suggest a specific NBA aligned to the primary objection:
 - Possession → NBA-CON-003 (construction progress update)
 - Config/Amenities → NBA-CON-001 (site visit / sample flat)
 - Trust → NBA-COM-005 (senior management connect)
-Add to corrections_made with reason: "Generic follow-up replaced with objection-specific NBA"`;
+Add to corrections_made with reason: "Generic follow-up replaced with objection-specific NBA"
+
+### Rule 16: Talking Point Budget-Fit Validation (NON-NEGOTIABLE)
+If lead has a stated budget (budget_stated_cr is not null):
+1. Check each talking point for project/config references with specific pricing
+2. If any TP references a unit/config where closing_price_min_cr > (budget_stated_cr × 1.25) → CORRECT: Remove the over-budget reference or replace with a budget-appropriate alternative
+3. If a TP suggests an "upgrade" to a larger config, verify the upgrade price is within 25% threshold
+4. Add to corrections_made: "TP removed/corrected: referenced unit exceeds 25% budget threshold"
+
+### Rule 17: Investment Goal Alignment Validation
+Check core_motivation / customer_buying_goal against talking point content:
+1. If goal contains "investment/rental/ROI/appreciation" AND any TP uses family/lifestyle arguments (school, children, community, family) → CORRECT: Replace with investment-focused TP
+2. If goal contains "family/end-use/upgrade/self-use" AND any TP uses pure investment language (ROI, rental yield, capital appreciation, returns) → CORRECT: Replace with lifestyle-focused TP
+3. Add to corrections_made: "TP goal-alignment corrected: [investment/end-use] framing applied"`;
 
   const knowledgeBaseSection = `
 ## KNOWLEDGE BASE (SOURCE OF TRUTH)
@@ -416,6 +431,8 @@ ${JSON.stringify(crossSellOutput, null, 2)}
 - Objections Detected: ${leadContext.objections_detected?.join(", ") || "None"}
 - Budget Stated: ${leadContext.budget_stated ? `₹${leadContext.budget_stated} Cr` : "Not stated"}
 - Timeline: ${leadContext.timeline || "Not stated"}
+- Core Motivation: ${leadContext.core_motivation || "Unknown"}
+- Customer Buying Goal: ${leadContext.customer_buying_goal || "Unknown"}
 
 ### Extracted Signals Summary
 \`\`\`json
@@ -681,6 +698,8 @@ export async function evaluateOutputs(
       objections_detected: stage3Result?.objection_categories_detected || [],
       budget_stated: extractedSignals?.financial_signals?.budget_stated_cr || null,
       timeline: extractedSignals?.engagement_signals?.finalization_timeline || null,
+      core_motivation: extractedSignals?.core_motivation || "Unknown",
+      customer_buying_goal: stage3Result?.customer_buying_goal || "Unknown",
     };
 
     // Build knowledge base

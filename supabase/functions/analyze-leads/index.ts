@@ -1159,10 +1159,10 @@ ${competitorRef || "No competitor data available"}
 
 ## CROSS-SELL EVALUATION RULES (CRITICAL - ALL MUST PASS)
 
-### RULE 1: BUDGET CEILING (20% MAX)
-- The recommended project's entry price (closing_price_min_cr for matching config) must NOT exceed 120% of the lead's stated budget.
+### RULE 1: BUDGET CEILING (25% MAX)
+- The recommended project's entry price (closing_price_min_cr for matching config) must NOT exceed 125% of the lead's stated budget.
 - **closing_price_min_cr = All-inclusive Total Value (Base + Floor Rise + GST + Stamp Duty)**
-- Formula: IF (closing_price_min_cr > lead_budget * 1.20) THEN REJECT
+- Formula: IF (closing_price_min_cr > lead_budget * 1.25) THEN REJECT
 - NEVER use base PSF * carpet area as a proxy for budget comparison.
 - If budget is not stated (null), this rule FAILS. You cannot validate budget fit without a stated budget. Set budget_check to "FAIL" and do NOT recommend a cross-sell project. The sales team should first discover the customer's budget before making cross-sell recommendations.
 
@@ -1207,7 +1207,7 @@ If multiple sister projects pass all rules, prioritize:
 - Never cite PSF or price ranges from memory. If closing price data is missing, the project cannot be evaluated.
 
 ## EVALUATION PROCESS
-1. For each sister project, check ALL 7 rules above (Rules 1-5 for eligibility, Rules 6-8 for output accuracy).
+1. For each sister project, check ALL 8 rules above (Rules 1-5 for eligibility, Rules 6-8 for output accuracy).
 2. Use closing_price_min_cr (Total Value) for budget comparison - NOT agreement value or base PSF.
 3. Log which rules pass/fail for each project.
 4. If no project passes all rules, return null.
@@ -2013,7 +2013,7 @@ NEVER tell a customer their possession is based on RERA date - always use oc_dat
 ## SECTION 6: CROSS-SELL DECISION RULES
 
 When recommending sister projects:
-1. **Budget Check**: closing_min_cr of recommended config ≤ customer budget × 1.20
+1. **Budget Check**: closing_min_cr of recommended config ≤ customer budget × 1.25
 2. **Possession Check**: oc_date within 8 months of customer expectation (or RTMI if urgent)
 3. **Size Check**: carpet_sqft_max ≥ customer desired carpet × 0.90
 4. **Room Check**: NEVER recommend fewer rooms; max 1 additional room allowed
