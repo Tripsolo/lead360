@@ -2799,7 +2799,7 @@ IMPORTANT SCORING RULES:
         await new Promise((resolve) => setTimeout(resolve, 300));
       }
 
-      let stage2Model = "claude-opus-4.5";
+      let stage2Model = "claude-sonnet-4.5";
       console.log(`Stage 2 (Scoring & Generation) starting for lead ${lead.id} using ${stage2Model} (${index + 1}/${stage1Results.length})`);
 
       // Build prompts for Claude (OpenRouter format: system + user messages)
