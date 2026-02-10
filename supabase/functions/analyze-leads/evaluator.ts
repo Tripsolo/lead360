@@ -257,7 +257,7 @@ When a talking point references a competitor:
 Using tower_inventory data:
 - Find the recommended_project + recommended_config combination
 - Get the actual closing_min_cr from inventory
-- IF closing_min_cr > (lead_budget × 1.20) THEN REJECT
+- IF closing_min_cr > (lead_budget × 1.25) THEN REJECT
 - CORRECT: Either null the recommendation OR suggest valid alternative
 
 ### Rule 5: Cross-Sell Possession Validation
