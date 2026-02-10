@@ -2907,8 +2907,8 @@ IMPORTANT SCORING RULES:
         analysisResult = JSON.parse(cleanedResponse.trim());
         console.log(`Stage 2 complete for lead ${lead.id} using ${stage2Model}`);
       } catch (stage2PrimaryError) {
-        console.warn(`Stage 2 primary (${stage2Model}) failed for lead ${lead.id}, trying fallback (gemini-2.5-pro)...`);
-        stage2Model = "gemini-2.5-pro (fallback)";
+        console.warn(`Stage 2 primary (${stage2Model}) failed for lead ${lead.id}, trying fallback (gemini-3-pro-preview)...`);
+        stage2Model = "gemini-3-pro-preview (fallback)";
         
         // Build the original combined prompt for Gemini fallback
         const stage2Prompt = buildStage2Prompt(
@@ -2927,20 +2927,13 @@ IMPORTANT SCORING RULES:
         );
         
         try {
-          const stage2Response = await callGeminiAPI(stage2Prompt, googleApiKey!, true);
+          const stage2Response = await callGemini3ProAPI(stage2Prompt, googleApiKey!, true);
           analysisResult = JSON.parse(stage2Response);
           console.log(`Stage 2 complete for lead ${lead.id} using ${stage2Model}`);
         } catch (stage2FallbackError) {
           parseSuccess = false;
-          stage2Model = "rule-based fallback";
-          console.error(`Stage 2 fallback failed for lead ${lead.id}:`, stage2FallbackError);
-          analysisResult = {
-            ai_rating: "Warm",
-            rating_confidence: "Low",
-            rating_rationale: "Analysis completed with limited structure",
-            summary: extractedSignals.visit_notes_summary || "Unable to analyze lead",
-            mql_data_available: mqlAvailable,
-          };
+          console.error(`Stage 2 fallback (gemini-3-pro-preview) also failed for lead ${lead.id}:`, stage2FallbackError);
+          analysisResult = {};
         }
       }
 
