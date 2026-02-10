@@ -964,7 +964,13 @@ async function callCrossSellAPI(
       if (response.ok) {
         const data = await response.json();
         const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-        return JSON.parse(text);
+        console.log(`[Cross-Sell RAW Response] ${text.substring(0, 500)}`);
+        try {
+          return JSON.parse(text);
+        } catch (parseErr) {
+          console.error(`[Cross-Sell JSON Parse FAILED] Raw text: ${text.substring(0, 1000)}`);
+          return null;
+        }
       }
 
       const errorText = await response.text();
@@ -1124,7 +1130,7 @@ You are evaluating whether a lead should be recommended a sister project from th
 - **closing_price_min_cr / closing_price_max_cr**: ALL-INCLUSIVE Total Value (Base + Floor Rise + Facing Premium + GST + Stamp Duty)
 - This is the PRIMARY field for budget comparison - the actual amount customer will pay
 - NEVER use base PSF * carpet area as a proxy for budget comparison
-- If closing_price fields are null, the data source is "metadata_fallback" and has lower confidence
+- If closing_price fields are null, budget comparison cannot be performed. If closing_price fields are populated (even from metadata), treat them as valid for evaluation.
 
 ### POSSESSION HIERARCHY
 - **oc_date**: Actual expected possession date per tower (PRIMARY)
@@ -1142,7 +1148,7 @@ You are evaluating whether a lead should be recommended a sister project from th
 - Primary Concern: ${analysisResult.primary_concern_category || "Unknown"}
 - Core Motivation: ${analysisResult.extracted_signals?.core_motivation || "Unknown"}
 
-## SISTER PROJECTS AVAILABLE (with CLOSING PRICES from Tower Inventory)
+## SISTER PROJECTS AVAILABLE (with CLOSING PRICES)
 ${JSON.stringify(sisterProjectsData, null, 2)}
 
 ## COMPETITOR REFERENCE (For Talking Points)
@@ -1191,6 +1197,7 @@ If multiple sister projects pass all rules, prioritize:
 3. Log which rules pass/fail for each project.
 4. If no project passes all rules, return null.
 5. If one or more pass, select the best match per priority rules.
+6. The data_source field is for tracking only. If closing_price_min_cr and closing_price_max_cr are populated, use them for Rule 1 evaluation regardless of whether data_source is "tower_inventory" or "metadata_fallback".
 
 ## OUTPUT STRUCTURE
 Return a JSON object with ONLY these fields:
@@ -2972,7 +2979,9 @@ IMPORTANT SCORING RULES:
       // ===== STAGE 2.5: CROSS-SELL RECOMMENDATION (Gemini 3 Flash) =====
       let stage25Model = "gemini-3-flash-preview";
       if (parseSuccess && sisterProjects && sisterProjects.length > 0) {
-        console.log(`Stage 2.5 (Cross-Sell) starting for lead ${lead.id} using ${stage25Model}`);
+        const leadBudgetForLog = extractedSignals?.budget_stated_cr ?? analysisResult?.extracted_signals?.budget_stated_cr ?? null;
+        console.log(`Stage 2.5 (Cross-Sell) starting for lead ${lead.id} using ${stage25Model} | budget_stated_cr=${leadBudgetForLog}`);
+        console.log(`Stage 2.5 sister project configs: ${JSON.stringify(sisterProjects.map((sp: any) => ({ name: sp.name, metadata_keys: Object.keys(sp.metadata || {}) })))}`);
         
         try {
           // Add small delay before cross-sell call
@@ -2988,6 +2997,7 @@ IMPORTANT SCORING RULES:
           );
           
           const crossSellResult = await callCrossSellAPI(crossSellPrompt, googleApiKey!);
+          console.log(`Stage 2.5 raw result for lead ${lead.id}: ${JSON.stringify(crossSellResult)?.substring(0, 500)}`);
           
           // Merge cross-sell recommendation into analysis result
           if (crossSellResult?.cross_sell_recommendation) {
