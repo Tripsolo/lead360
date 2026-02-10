@@ -3193,8 +3193,31 @@ IMPORTANT SCORING RULES:
           }
 
         } else {
-          // ===== MATRIX-DRIVEN STAGE 3 (existing logic) =====
-          console.log(`Stage 3 (NBA/TP) starting for lead ${lead.id} using ${stage3Model}`);
+          // ===== MATRIX-DRIVEN STAGE 3B (with 3A classification) =====
+          
+          // If 3A classification succeeded, use it for improved pre-selection
+          if (stage3AClassification && stage3AClassification.primary_objection_category) {
+            try {
+              const classifiedObjection = stage3AClassification.primary_objection_category as any;
+              const normalizedPersona3A = normalizePersona(analysisResult.persona);
+              const matrixObjection3A = mapToMatrixObjection(classifiedObjection, extractedSignals, visitComments);
+              
+              const safetyPre = checkSafetyConditions(analysisResult.persona, extractedSignals);
+              if (!safetyPre.triggered) {
+                const matrixEntry3A = lookupMatrixEntry(normalizedPersona3A, matrixObjection3A);
+                if (matrixEntry3A) {
+                  preSelectedNba = getNBARuleDef(matrixEntry3A.nba_id);
+                  preSelectedTpIds = matrixEntry3A.tp_ids || [];
+                  preSelectedObjection = matrixObjection3A;
+                  console.log(`Stage 3A-driven pre-selection for lead ${lead.id}: objection=${matrixObjection3A}, nba=${preSelectedNba?.nba_id || "none"}, tps=[${preSelectedTpIds.join(",")}]`);
+                }
+              }
+            } catch (preSelect3AError) {
+              console.warn(`Stage 3A-driven pre-selection failed for lead ${lead.id}, using original pre-selection:`, preSelect3AError);
+            }
+          }
+
+          console.log(`Stage 3B Matrix starting for lead ${lead.id}, classification available: ${!!stage3AClassification}`);
           await new Promise((resolve) => setTimeout(resolve, 200));
 
           try {
@@ -3215,7 +3238,9 @@ IMPORTANT SCORING RULES:
             else if (cleanedStage3.startsWith("```")) cleanedStage3 = cleanedStage3.slice(3);
             if (cleanedStage3.endsWith("```")) cleanedStage3 = cleanedStage3.slice(0, -3);
             const stage3Result = JSON.parse(cleanedStage3.trim());
-            console.log(`Stage 3 complete for lead ${lead.id} using ${stage3Model}`);
+            
+            stage3Model = stage3AClassification ? "claude-sonnet-4.5 (matrix-3A/3B)" : "claude-sonnet-4.5 (matrix)";
+            console.log(`Stage 3B Matrix complete for lead ${lead.id} using ${stage3Model}`);
 
             const safetyCheck = checkSafetyConditions(analysisResult.persona, extractedSignals);
             if (safetyCheck.triggered && stage3Result.safety_check_triggered === null) {
@@ -3240,7 +3265,7 @@ IMPORTANT SCORING RULES:
             analysisResult.safety_check_triggered = stage3Result.safety_check_triggered;
 
           } catch (stage3PrimaryError) {
-            console.warn(`Stage 3 primary (${stage3Model}) failed for lead ${lead.id}, trying fallback (gemini-3-pro-preview)...`, stage3PrimaryError);
+            console.warn(`Stage 3B Matrix primary failed for lead ${lead.id}, trying fallback (gemini-3-pro-preview)...`, stage3PrimaryError);
             stage3Model = "gemini-3-pro-preview (fallback)";
 
             try {
@@ -3257,7 +3282,7 @@ IMPORTANT SCORING RULES:
 
               const stage3Response = await callGemini3ProAPI(stage3Prompt, googleApiKey!, true);
               const stage3Result = JSON.parse(stage3Response);
-              console.log(`Stage 3 complete for lead ${lead.id} using ${stage3Model}`);
+              console.log(`Stage 3B Matrix fallback complete for lead ${lead.id}`);
 
               const safetyCheck = checkSafetyConditions(analysisResult.persona, extractedSignals);
               if (safetyCheck.triggered && stage3Result.safety_check_triggered === null) {
@@ -3283,7 +3308,7 @@ IMPORTANT SCORING RULES:
 
             } catch (stage3FallbackError) {
               stage3Model = "skipped (using Stage 2 output)";
-              console.error(`Stage 3 fallback failed for lead ${lead.id}:`, stage3FallbackError);
+              console.error(`Stage 3B Matrix fallback failed for lead ${lead.id}:`, stage3FallbackError);
             }
           }
         }
