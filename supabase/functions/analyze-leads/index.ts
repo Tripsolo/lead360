@@ -2979,7 +2979,9 @@ IMPORTANT SCORING RULES:
       // ===== STAGE 2.5: CROSS-SELL RECOMMENDATION (Gemini 3 Flash) =====
       let stage25Model = "gemini-3-flash-preview";
       if (parseSuccess && sisterProjects && sisterProjects.length > 0) {
-        console.log(`Stage 2.5 (Cross-Sell) starting for lead ${lead.id} using ${stage25Model}`);
+        const leadBudgetForLog = extractedSignals?.budget_stated_cr ?? analysisResult?.extracted_signals?.budget_stated_cr ?? null;
+        console.log(`Stage 2.5 (Cross-Sell) starting for lead ${lead.id} using ${stage25Model} | budget_stated_cr=${leadBudgetForLog}`);
+        console.log(`Stage 2.5 sister project configs: ${JSON.stringify(sisterProjects.map((sp: any) => ({ name: sp.name, metadata_keys: Object.keys(sp.metadata || {}) })))}`);
         
         try {
           // Add small delay before cross-sell call
@@ -2995,6 +2997,7 @@ IMPORTANT SCORING RULES:
           );
           
           const crossSellResult = await callCrossSellAPI(crossSellPrompt, googleApiKey!);
+          console.log(`Stage 2.5 raw result for lead ${lead.id}: ${JSON.stringify(crossSellResult)?.substring(0, 500)}`);
           
           // Merge cross-sell recommendation into analysis result
           if (crossSellResult?.cross_sell_recommendation) {
