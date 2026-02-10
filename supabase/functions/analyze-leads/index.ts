@@ -575,8 +575,8 @@ ${outputStructure}`;
 }
 
 // ============= Model Configuration =============
-// Stage 1 & 3: Gemini 3 Flash Preview (Primary) / Gemini 2.5 Flash (Fallback)
-// Stage 2: Claude Opus 4.5 via OpenRouter (Primary) / Gemini 2.5 Pro (Fallback)
+// Stage 1: Gemini 3 Flash Preview (Primary) / Gemini 2.5 Flash (Fallback)
+// Stage 2 & 3: Claude Sonnet 4.5 via OpenRouter (Primary) / Gemini 2.5 Pro/Flash (Fallback)
 
 // ============= Gemini API Call Helper (gemini-2.5-pro - Stage 2 Fallback) =============
 async function callGeminiAPI(
@@ -788,7 +788,7 @@ async function callGemini25FlashAPI(
   return typeof part?.text === "string" ? part.text : JSON.stringify(candidate ?? data);
 }
 
-// ============= OpenRouter API (Stage 2 Primary - Claude Opus 4.5) =============
+// ============= OpenRouter API (Stage 2 & 3 Primary - Claude Sonnet 4.5) =============
 async function callOpenRouterAPI(
   systemPrompt: string,
   userPrompt: string,
@@ -812,7 +812,7 @@ async function callOpenRouterAPI(
           "X-Title": "CX360 Lead Analysis"
         },
         body: JSON.stringify({
-          model: "anthropic/claude-opus-4",
+          model: "anthropic/claude-sonnet-4",
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt }
@@ -2788,7 +2788,7 @@ IMPORTANT SCORING RULES:
     
     console.log(`Parallel Stage 1 complete for all ${leadsToAnalyze.length} leads`);
 
-    // ===== SEQUENTIAL STAGE 2 SCORING (Claude Opus 4.5 via OpenRouter) + STAGE 3 NBA/TP (Gemini 3 Flash) =====
+    // ===== SEQUENTIAL STAGE 2 SCORING (Claude Sonnet 4.5 via OpenRouter) + STAGE 3 NBA/TP (Claude Sonnet 4.5) =====
     const freshResults: any[] = [];
 
     for (let index = 0; index < stage1Results.length; index++) {
@@ -2799,7 +2799,7 @@ IMPORTANT SCORING RULES:
         await new Promise((resolve) => setTimeout(resolve, 300));
       }
 
-      let stage2Model = "claude-opus-4.5";
+      let stage2Model = "claude-sonnet-4.5";
       console.log(`Stage 2 (Scoring & Generation) starting for lead ${lead.id} using ${stage2Model} (${index + 1}/${stage1Results.length})`);
 
       // Build prompts for Claude (OpenRouter format: system + user messages)
@@ -2987,8 +2987,8 @@ IMPORTANT SCORING RULES:
         }
       }
 
-      // ===== STAGE 3: NBA & TALKING POINTS GENERATION (Gemini 3 Flash) =====
-      let stage3Model = "gemini-3-flash-preview";
+      // ===== STAGE 3: NBA & TALKING POINTS GENERATION (Claude Sonnet 4.5) =====
+      let stage3Model = "claude-sonnet-4.5";
       if (parseSuccess) {
         console.log(`Stage 3 (NBA/TP) starting for lead ${lead.id} using ${stage3Model}`);
         
@@ -3012,8 +3012,13 @@ IMPORTANT SCORING RULES:
             preSelectedTpIds
           );
           
-          const stage3Response = await callGemini3FlashAPI(stage3Prompt, googleApiKey!, true);
-          const stage3Result = JSON.parse(stage3Response);
+          const stage3Response = await callOpenRouterAPI("You are a sales strategy AI. Return valid JSON only.", stage3Prompt);
+          // Claude may return JSON wrapped in markdown code blocks - strip them
+          let cleanedStage3 = stage3Response.trim();
+          if (cleanedStage3.startsWith("```json")) cleanedStage3 = cleanedStage3.slice(7);
+          else if (cleanedStage3.startsWith("```")) cleanedStage3 = cleanedStage3.slice(3);
+          if (cleanedStage3.endsWith("```")) cleanedStage3 = cleanedStage3.slice(0, -3);
+          const stage3Result = JSON.parse(cleanedStage3.trim());
           console.log(`Stage 3 complete for lead ${lead.id} using ${stage3Model}`);
           
           // Code-level safety validation (override LLM if needed)
@@ -3041,7 +3046,7 @@ IMPORTANT SCORING RULES:
           analysisResult.safety_check_triggered = stage3Result.safety_check_triggered;
           
         } catch (stage3PrimaryError) {
-          console.warn(`Stage 3 primary (${stage3Model}) failed for lead ${lead.id}, trying fallback (gemini-2.5-flash)...`);
+          console.warn(`Stage 3 primary (${stage3Model}) failed for lead ${lead.id}, trying fallback (gemini-2.5-flash)...`, stage3PrimaryError);
           stage3Model = "gemini-2.5-flash (fallback)";
           
           try {
