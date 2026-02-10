@@ -1109,7 +1109,9 @@ function buildCrossSellPrompt(
   });
   
   // Extract lead's stated preferences
-  const leadBudget = extractedSignals?.financial_signals?.budget_stated_cr || null;
+  const leadBudget = extractedSignals?.financial_signals?.budget_stated_cr 
+    || analysisResult?.extracted_signals?.budget_stated 
+    || null;
   const leadConfig = extractedSignals?.property_preferences?.config_interested || null;
   const leadCarpetDesired = extractedSignals?.property_preferences?.carpet_area_desired || null;
   const leadPossessionUrgency = extractedSignals?.engagement_signals?.possession_urgency || null;
@@ -2845,6 +2847,7 @@ IMPORTANT SCORING RULES:
           const stage1Response = await callGemini3FlashAPI(stage1Prompt, googleApiKey!, true);
           extractedSignals = JSON.parse(stage1Response);
           console.log(`Stage 1 complete for lead ${lead.id} using ${stage1Model}`);
+          console.log(`Stage 1 budget for lead ${lead.id}: ${extractedSignals?.financial_signals?.budget_stated_cr ?? 'null'}`);
         } catch (stage1PrimaryError) {
           console.warn(`Stage 1 primary (${stage1Model}) failed for lead ${lead.id}, trying fallback (gemini-2.5-flash)...`);
           stage1Model = "gemini-2.5-flash (fallback)";
@@ -2980,7 +2983,7 @@ IMPORTANT SCORING RULES:
       // ===== STAGE 2.5: CROSS-SELL RECOMMENDATION (Gemini 3 Flash) =====
       let stage25Model = "gemini-3-flash-preview";
       if (parseSuccess && sisterProjects && sisterProjects.length > 0) {
-        const leadBudgetForLog = extractedSignals?.budget_stated_cr ?? analysisResult?.extracted_signals?.budget_stated_cr ?? null;
+        const leadBudgetForLog = extractedSignals?.financial_signals?.budget_stated_cr ?? analysisResult?.extracted_signals?.budget_stated ?? null;
         console.log(`Stage 2.5 (Cross-Sell) starting for lead ${lead.id} using ${stage25Model} | budget_stated_cr=${leadBudgetForLog}`);
         console.log(`Stage 2.5 sister project configs: ${JSON.stringify(sisterProjects.map((sp: any) => ({ name: sp.name, metadata_keys: Object.keys(sp.metadata || {}) })))}`);
         
