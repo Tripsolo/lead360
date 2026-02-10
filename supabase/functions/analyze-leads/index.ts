@@ -2013,7 +2013,7 @@ NEVER tell a customer their possession is based on RERA date - always use oc_dat
 ## SECTION 6: CROSS-SELL DECISION RULES
 
 When recommending sister projects:
-1. **Budget Check**: closing_min_cr of recommended config ≤ customer budget × 1.20
+1. **Budget Check**: closing_min_cr of recommended config ≤ customer budget × 1.25
 2. **Possession Check**: oc_date within 8 months of customer expectation (or RTMI if urgent)
 3. **Size Check**: carpet_sqft_max ≥ customer desired carpet × 0.90
 4. **Room Check**: NEVER recommend fewer rooms; max 1 additional room allowed
