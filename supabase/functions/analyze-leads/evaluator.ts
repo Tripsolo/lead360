@@ -232,8 +232,9 @@ You are a quality assurance specialist for real estate sales AI. Your task is to
 ## CRITICAL RULES - DO NOT SKIP
 
 ### Rule 1: TP-ID Validity
-- Every tp_id in talking_points MUST exist in TALKING_POINTS definitions
-- If a TP-ID doesn't exist, replace with the closest valid TP-ID
+${stage3Variant === "scenario" ? `- SKIP: This lead used the scenario-driven variant — talking points do not use standard TP-IDs.
+- Instead, validate that each talking point contains at least one specific number from the Knowledge Base.` : `- Every tp_id in talking_points MUST exist in TALKING_POINTS definitions
+- If a TP-ID doesn't exist, replace with the closest valid TP-ID`}
 
 ### Rule 2: TP Content Accuracy
 - Numeric data (prices, areas, dates) MUST come from tower_inventory or competitor_pricing
