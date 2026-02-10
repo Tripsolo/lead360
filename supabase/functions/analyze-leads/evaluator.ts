@@ -694,6 +694,8 @@ export async function evaluateOutputs(
       objections_detected: stage3Result?.objection_categories_detected || [],
       budget_stated: extractedSignals?.financial_signals?.budget_stated_cr || null,
       timeline: extractedSignals?.engagement_signals?.finalization_timeline || null,
+      core_motivation: extractedSignals?.core_motivation || "Unknown",
+      customer_buying_goal: stage3Result?.customer_buying_goal || "Unknown",
     };
 
     // Build knowledge base
