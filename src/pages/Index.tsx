@@ -667,8 +667,8 @@ const Index = () => {
 
     setIsAnalyzing(true);
     
-    // Chunk size for analysis (max 2 leads per API call to stay within timeout)
-    const CHUNK_SIZE = 2;
+    // Process 1 lead per function call to stay within ~150s platform timeout
+    const CHUNK_SIZE = 1;
     
     const chunkArray = <T,>(array: T[], size: number): T[][] => {
       const chunks: T[][] = [];
