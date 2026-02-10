@@ -372,8 +372,8 @@ ${PLAYBOOK_SCENARIO_NAMES.map((s, i) => `${i + 1}. ${s}`).join("\n")}
 # CLASSIFICATION TASK
 
 1. **Primary Objection Category**: Choose from: Economic Fit, Possession Timeline, Inventory & Product, Location & Ecosystem, Competition, Investment, Decision Process, Special Scenarios
-2. **Primary Objection Detail**: One sentence describing the specific objection
-3. **Secondary Objections**: Other concern categories (0-3)
+2. **Primary Objection Detail**: Brief description of the specific objection (max 10 words)
+3. **Secondary Objections**: Other concern categories (0-3), each with a brief description (max 10 words)
 4. **Customer Buying Goal**: What the customer ultimately wants (1 sentence)
 5. **Amenities/Preferences**: Specific preferences mentioned (vastu, views, greenery, walking areas, floor, ventilation, etc.)
 6. **Scenario Matched**: Pick 1-2 scenario names from the list above that best match this customer
@@ -384,8 +384,9 @@ ${PLAYBOOK_SCENARIO_NAMES.map((s, i) => `${i + 1}. ${s}`).join("\n")}
 # OUTPUT (Return ONLY valid JSON)
 {
   "primary_objection_category": "one of the 8 categories above",
-  "primary_objection_detail": "Specific description of the primary objection",
+  "primary_objection_detail": "Brief description of primary objection (max 10 words)",
   "secondary_objections": ["Category1", "Category2"],
+  "secondary_objection_details": ["Brief description of each secondary objection (max 10 words each, same order as secondary_objections)"],
   "customer_buying_goal": "What the customer wants (1 sentence)",
   "amenities_preferences": ["Specific preference 1", "Specific preference 2"],
   "scenario_matched": ["Exact scenario name from list", "Optional second scenario"],

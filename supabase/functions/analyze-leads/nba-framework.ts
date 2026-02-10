@@ -2222,8 +2222,8 @@ ${visitComments ? `\nRaw comments: ${visitComments.substring(0, 500)}` : ""}
 Analyze the customer situation above and produce a structured classification:
 
 1. **Primary Objection Category**: Choose from: ${VALID_OBJECTION_CATEGORIES.join(", ")}
-2. **Primary Objection Detail**: One sentence describing the specific objection
-3. **Secondary Objections**: Other concern categories (0-3)
+2. **Primary Objection Detail**: Brief description of the specific objection (max 10 words)
+3. **Secondary Objections**: Other concern categories (0-3), each with a brief description (max 10 words)
 4. **Customer Buying Goal**: What the customer ultimately wants (1 sentence)
 5. **Amenities/Preferences**: Specific preferences mentioned (vastu, views, greenery, walking areas, floor, ventilation, etc.)
 6. **Competitor Threat**: Level (high/medium/low/none), names, stated advantage
@@ -2233,8 +2233,9 @@ Analyze the customer situation above and produce a structured classification:
 # OUTPUT (Return ONLY valid JSON)
 {
   "primary_objection_category": "one of: ${VALID_OBJECTION_CATEGORIES.join(" | ")}",
-  "primary_objection_detail": "Specific description of the primary objection",
+  "primary_objection_detail": "Brief description of primary objection (max 10 words)",
   "secondary_objections": ["Category1", "Category2"],
+  "secondary_objection_details": ["Brief description of each secondary objection (max 10 words each, same order as secondary_objections)"],
   "customer_buying_goal": "What the customer wants (1 sentence)",
   "amenities_preferences": ["Specific preference 1", "Specific preference 2"],
   "scenario_matched": [],
