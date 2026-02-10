@@ -3212,10 +3212,10 @@ IMPORTANT SCORING RULES:
         stage25Model = "skipped (no sister projects or Stage 2 failed)";
       }
 
-      // ===== STAGE 3 VARIANT SELECTION (A/B Test) =====
-      // Deterministic 50/50 split based on lead index within the batch
-      const stage3Variant: "matrix" | "scenario" = (index % 2 === 0) ? "matrix" : "scenario";
-      console.log(`Stage 3 variant for lead ${lead.id}: ${stage3Variant}`);
+      // ===== STAGE 3 VARIANT SELECTION =====
+      // Scenario variant is the default workflow (A/B test disabled)
+      const stage3Variant: "matrix" | "scenario" = "scenario";
+      console.log(`Stage 3 variant for lead ${lead.id}: ${stage3Variant} (default)`);
 
       // ===== PRE-STAGE 3: DETERMINISTIC NBA/TP SELECTION (Matrix variant only) =====
       let preSelectedNba: any = null;
