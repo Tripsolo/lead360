@@ -667,8 +667,8 @@ const Index = () => {
 
     setIsAnalyzing(true);
     
-    // Chunk size for analysis (max 2 leads per API call to stay within timeout)
-    const CHUNK_SIZE = 2;
+    // Process 1 lead per function call to stay within ~150s platform timeout
+    const CHUNK_SIZE = 1;
     
     const chunkArray = <T,>(array: T[], size: number): T[][] => {
       const chunks: T[][] = [];
@@ -739,7 +739,7 @@ const Index = () => {
         
         // Small delay between batch initiations
         if (i < chunks.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
       
@@ -906,7 +906,7 @@ const Index = () => {
       });
 
       // Now run the analysis flow for these leads
-      const CHUNK_SIZE = 2;
+      const CHUNK_SIZE = 1;
       const chunks: Lead[][] = [];
       for (let i = 0; i < failedLeads.length; i += CHUNK_SIZE) {
         chunks.push(failedLeads.slice(i, i + CHUNK_SIZE));
@@ -933,7 +933,7 @@ const Index = () => {
 
         // Small delay between batches
         if (i < chunks.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
       
