@@ -2964,20 +2964,45 @@ IMPORTANT SCORING RULES:
       return { mqlSection, mqlAvailable: true };
     }
 
-    // Run Stage 1 for all leads in parallel with Gemini 3 Flash (fallback to Gemini 2.5 Flash)
+    // Run Stage 1 for all leads in parallel with Gemini 3 Pro Preview (grounding + extraction)
+    // Fallback chain: Gemini 3 Pro Preview → Gemini 3 Flash → Gemini 2.5 Flash → rule-based
     const stage1Results = await Promise.all(
       leadsToAnalyze.map(async (leadWithMql, index) => {
         // Small stagger to avoid burst requests
         if (index > 0) {
-          await new Promise((resolve) => setTimeout(resolve, 100 * index));
+          await new Promise((resolve) => setTimeout(resolve, 150 * index));
         }
         
         const { mqlEnrichment, ...lead } = leadWithMql;
         const leadDataJson = JSON.stringify(lead, null, 2);
         const { mqlSection, mqlAvailable } = buildMqlSection(mqlEnrichment);
         
-        let stage1Model = "gemini-3-flash-preview";
-        console.log(`Stage 1 (Extraction) starting for lead ${lead.id} using ${stage1Model}`);
+        // Step 1A: Google Search Grounding (optional - skip if no employer data)
+        let groundingContext = "";
+        const employerName = mqlEnrichment?.employer_name || lead.rawData?.["Place of Work (Company Name)"] || lead.rawData?.["Place of Work"] || "";
+        const designation = lead.rawData?.["Designation"] || mqlEnrichment?.designation || "";
+        const companyName = lead.rawData?.["Place of Work (Company Name)"] || employerName;
+        const location = mqlEnrichment?.location || lead.rawData?.["Location of Residence"] || "";
+        
+        if (employerName || companyName) {
+          try {
+            console.log(`Stage 1A (Grounding) starting for lead ${lead.id}`);
+            const groundingResult = await callGemini3ProWithGrounding(
+              buildGroundingPrompt(employerName, designation, companyName, location),
+              googleApiKey!
+            );
+            groundingContext = groundingResult.text;
+            console.log(`Stage 1A (Grounding) complete for lead ${lead.id}: ${groundingContext.substring(0, 200)}...`);
+          } catch (groundingError) {
+            console.warn(`Stage 1A (Grounding) failed for lead ${lead.id}, proceeding without:`, groundingError);
+          }
+        } else {
+          console.log(`Stage 1A (Grounding) skipped for lead ${lead.id}: no employer data`);
+        }
+        
+        // Step 1B: Structured Extraction (Gemini 3 Pro Preview with JSON mode)
+        let stage1Model = "gemini-3-pro-preview";
+        console.log(`Stage 1B (Extraction) starting for lead ${lead.id} using ${stage1Model}`);
         
         const stage1Prompt = buildStage1Prompt(
           leadDataJson,
@@ -2985,27 +3010,37 @@ IMPORTANT SCORING RULES:
           mqlAvailable,
           crmFieldExplainer,
           mqlFieldExplainer,
+          groundingContext,
         );
         
         let extractedSignals;
         try {
-          const stage1Response = await callGemini3FlashAPI(stage1Prompt, googleApiKey!, true);
+          const stage1Response = await callGemini3ProAPI(stage1Prompt, googleApiKey!, true);
           extractedSignals = JSON.parse(stage1Response);
-          console.log(`Stage 1 complete for lead ${lead.id} using ${stage1Model}`);
-          console.log(`Stage 1 budget for lead ${lead.id}: ${extractedSignals?.financial_signals?.budget_stated_cr ?? 'null'}`);
+          console.log(`Stage 1B complete for lead ${lead.id} using ${stage1Model}`);
+          console.log(`Stage 1B budget for lead ${lead.id}: ${extractedSignals?.financial_signals?.budget_stated_cr ?? 'null'}, stretch: ${extractedSignals?.financial_capability_assessment?.budget_stretch_probability ?? 'N/A'}`);
         } catch (stage1PrimaryError) {
-          console.warn(`Stage 1 primary (${stage1Model}) failed for lead ${lead.id}, trying fallback (gemini-2.5-flash)...`);
-          stage1Model = "gemini-2.5-flash (fallback)";
+          console.warn(`Stage 1B primary (${stage1Model}) failed for lead ${lead.id}, trying fallback (gemini-3-flash-preview)...`);
+          stage1Model = "gemini-3-flash-preview (fallback)";
           
           try {
-            const stage1Response = await callGemini25FlashAPI(stage1Prompt, googleApiKey!, true);
+            const stage1Response = await callGemini3FlashAPI(stage1Prompt, googleApiKey!, true);
             extractedSignals = JSON.parse(stage1Response);
-            console.log(`Stage 1 complete for lead ${lead.id} using ${stage1Model}`);
-          } catch (stage1FallbackError) {
-            console.error(`Stage 1 fallback failed for lead ${lead.id}:`, stage1FallbackError);
-            extractedSignals = createFallbackExtraction(lead, mqlEnrichment);
-            stage1Model = "rule-based fallback";
-            console.log(`Using rule-based fallback extraction for lead ${lead.id}`);
+            console.log(`Stage 1B complete for lead ${lead.id} using ${stage1Model}`);
+          } catch (stage1Flash3Error) {
+            console.warn(`Stage 1B secondary (${stage1Model}) failed for lead ${lead.id}, trying fallback (gemini-2.5-flash)...`);
+            stage1Model = "gemini-2.5-flash (fallback)";
+            
+            try {
+              const stage1Response = await callGemini25FlashAPI(stage1Prompt, googleApiKey!, true);
+              extractedSignals = JSON.parse(stage1Response);
+              console.log(`Stage 1B complete for lead ${lead.id} using ${stage1Model}`);
+            } catch (stage1FallbackError) {
+              console.error(`Stage 1B all models failed for lead ${lead.id}:`, stage1FallbackError);
+              extractedSignals = createFallbackExtraction(lead, mqlEnrichment);
+              stage1Model = "rule-based fallback";
+              console.log(`Using rule-based fallback extraction for lead ${lead.id}`);
+            }
           }
         }
         
