@@ -1109,7 +1109,9 @@ function buildCrossSellPrompt(
   });
   
   // Extract lead's stated preferences
-  const leadBudget = extractedSignals?.financial_signals?.budget_stated_cr || null;
+  const leadBudget = extractedSignals?.financial_signals?.budget_stated_cr 
+    || analysisResult?.extracted_signals?.budget_stated 
+    || null;
   const leadConfig = extractedSignals?.property_preferences?.config_interested || null;
   const leadCarpetDesired = extractedSignals?.property_preferences?.carpet_area_desired || null;
   const leadPossessionUrgency = extractedSignals?.engagement_signals?.possession_urgency || null;
