@@ -1130,7 +1130,7 @@ You are evaluating whether a lead should be recommended a sister project from th
 - **closing_price_min_cr / closing_price_max_cr**: ALL-INCLUSIVE Total Value (Base + Floor Rise + Facing Premium + GST + Stamp Duty)
 - This is the PRIMARY field for budget comparison - the actual amount customer will pay
 - NEVER use base PSF * carpet area as a proxy for budget comparison
-- If closing_price fields are null, the data source is "metadata_fallback" and has lower confidence
+- If closing_price fields are null, budget comparison cannot be performed. If closing_price fields are populated (even from metadata), treat them as valid for evaluation.
 
 ### POSSESSION HIERARCHY
 - **oc_date**: Actual expected possession date per tower (PRIMARY)
