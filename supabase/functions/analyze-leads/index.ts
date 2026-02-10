@@ -52,6 +52,79 @@ function excelDateToISOString(excelDate: any): string | null {
   return null;
 }
 
+// ============= Gemini 3 Pro Preview with Google Search Grounding =============
+async function callGemini3ProWithGrounding(
+  prompt: string,
+  googleApiKey: string,
+  maxRetries: number = 2,
+): Promise<{ text: string; groundingMetadata: any }> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent?key=${googleApiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            tools: [{ google_search: {} }],
+            generationConfig: {
+              temperature: 0.2,
+              maxOutputTokens: 2048,
+            },
+          }),
+        },
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        const candidate = data?.candidates?.[0];
+        const text = candidate?.content?.parts?.[0]?.text || "";
+        const groundingMetadata = candidate?.groundingMetadata || null;
+        return { text, groundingMetadata };
+      }
+
+      const errorText = await response.text();
+      if ((response.status === 503 || response.status === 429) && attempt < maxRetries) {
+        const backoffMs = Math.pow(2, attempt) * 1000;
+        console.warn(`Grounding API overloaded (attempt ${attempt}/${maxRetries}), retrying in ${backoffMs}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+        continue;
+      }
+
+      lastError = new Error(`Grounding API call failed: ${errorText}`);
+    } catch (fetchError) {
+      lastError = fetchError instanceof Error ? fetchError : new Error(String(fetchError));
+      if (attempt < maxRetries) {
+        const backoffMs = Math.pow(2, attempt) * 1000;
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+      }
+    }
+  }
+
+  throw lastError || new Error("Grounding API call failed after retries");
+}
+
+// ============= Employer Grounding Prompt =============
+function buildGroundingPrompt(employerName: string, designation: string, companyName: string, location: string): string {
+  return `Verify the following employer/company details using web search:
+- Employer: ${employerName || "Unknown"}
+- Designation: ${designation || "Unknown"}
+- Company: ${companyName || "Unknown"}
+- Location: ${location || "Unknown"}
+
+Provide:
+1. Is this a real, verifiable company? (verified/unverified/unknown)
+2. Company size category (Large Enterprise / Mid-size / SME / Startup / Unknown)
+3. Industry sector
+4. Typical compensation range for this designation at this company (if available, in Indian Lakhs per annum)
+5. Company reputation/stability signal (Established / Growing / Unknown)
+
+Be concise. If information is not available, say "Unknown".`;
+}
+
 // ============= STAGE 1: Signal Extraction =============
 function buildStage1Prompt(
   leadDataJson: string,
@@ -59,6 +132,7 @@ function buildStage1Prompt(
   mqlAvailable: boolean,
   crmFieldExplainer: string,
   mqlFieldExplainer: string,
+  groundingContext: string = "",
 ): string {
   const extractionSystemPrompt = `You are a data extraction specialist for real estate CRM and lead enrichment data. Your task is to extract structured signals from raw CRM and MQL data accurately and completely.
 
@@ -441,8 +515,63 @@ Return a JSON object with this EXACT structure:
     "stated_motivation_quote": "string | null",
     "upgrade_drivers": "string | null",
     "location_pull": "string | null"
+  },
+
+  "financial_capability_assessment": {
+    "combined_income_signal": "Elite" | "High" | "Mid-Senior" | "Entry-Mid" | "Unknown",
+    "income_sources": ["CRM stated income", "MQL verified income", "Employer-based estimate"],
+    "budget_stretch_probability": "High" | "Medium" | "Low" | "Unknown",
+    "budget_stretch_range_cr": { "min": number, "max": number } | null,
+    "stretch_reasoning": "string (max 30 words explaining why stretch is likely/unlikely)",
+    "employer_verified": boolean,
+    "employer_size": "Large Enterprise" | "Mid-size" | "SME" | "Startup" | "Unknown",
+    "employer_industry": "string | null",
+    "combined_affordability_tier": "Comfortable" | "Stretched" | "At-Limit" | "Over-Budget" | "Unknown",
+    "intent_from_capability": "High" | "Medium" | "Low",
+    "grounding_used": boolean
   }
 }`;
+
+  const financialCapabilityInstructions = `## FINANCIAL CAPABILITY ASSESSMENT (CRITICAL - NEW COMPOSITE FIELD)
+
+Combine CRM budget, MQL income/credit, and employer grounding data to produce a composite financial capability signal.
+
+### Budget Stretch Logic:
+- If MQL final_income_lacs >= 3x annual EMI of budget property AND credit_rating = "High" → budget_stretch_probability = "High", budget_stretch_range_cr = { min: budget_stated_cr * 1.25, max: budget_stated_cr * 1.30 }
+- If MQL final_income_lacs >= 2x annual EMI AND credit_rating = "Medium" → budget_stretch_probability = "Medium", budget_stretch_range_cr = { min: budget_stated_cr * 1.20, max: budget_stated_cr * 1.25 }
+- If income < 2x OR credit_rating = "Low" OR no MQL data → budget_stretch_probability = "Low", budget_stretch_range_cr = null
+- If employer is Large Enterprise/MNC with senior designation → +1 tier uplift on stretch probability (Low→Medium, Medium→High)
+
+### Combined Income Signal:
+- "Elite": income > 70 LPA OR turnover 25Cr+ OR Elite Corporate designation
+- "High": income 50-70 LPA OR turnover 5Cr-25Cr OR High-Skill Professional
+- "Mid-Senior": income 25-50 LPA OR turnover 1.5Cr-5Cr OR Mid-Senior Corporate
+- "Entry-Mid": income < 25 LPA OR turnover < 1.5Cr
+- "Unknown": No income/turnover data available
+
+### Combined Affordability Tier:
+- "Comfortable": budget_gap_percent <= 10 AND (stretch_probability = "High" OR income_signal in ["Elite", "High"])
+- "Stretched": budget_gap_percent 10-20 AND stretch_probability >= "Medium"
+- "At-Limit": budget_gap_percent 20-30 OR stretch_probability = "Low" with budget gap
+- "Over-Budget": budget_gap_percent > 30 AND stretch_probability = "Low"
+- "Unknown": No budget or income data
+
+### Intent from Capability:
+- "High": Comfortable affordability + High/Medium stretch + investor_signal OR multiple visits
+- "Medium": Stretched affordability + any stretch probability
+- "Low": At-Limit or Over-Budget + Low stretch
+
+### Employer Verification:
+- employer_verified = true if grounding context confirms company existence
+- employer_size, employer_industry from grounding context
+- grounding_used = true if grounding context was provided`;
+
+  const groundingSection = groundingContext ? `
+# EMPLOYER VERIFICATION (Web-Grounded)
+The following employer/company verification was obtained via web search. Use this to inform the financial_capability_assessment:
+
+${groundingContext}
+` : "";
 
   return `${extractionSystemPrompt}
 
@@ -452,10 +581,14 @@ ${mqlAvailable ? mqlFieldExplainer : ""}
 
 ${mqlSection}
 
+${groundingSection}
+
 # LEAD DATA TO EXTRACT FROM
 ${leadDataJson}
 
 ${extractionInstructions}
+
+${financialCapabilityInstructions}
 
 ${extractionOutputSchema}`;
 }
@@ -518,6 +651,14 @@ You are provided with PRE-EXTRACTED SIGNALS from CRM and MQL data (not raw data)
    - Consider: budget constraints, RTMI needs, config preference, GCP view interest
    - Generate cross_sell_recommendation if a clear match exists, otherwise set to null
 
+## FINANCIAL CAPABILITY ASSESSMENT (from Stage 1)
+Use the financial_capability_assessment from extracted signals for enhanced scoring:
+- combined_affordability_tier informs Financial Capability (A) dimension
+- budget_stretch_probability and budget_stretch_range_cr inform whether the lead can be pitched slightly above-budget options (within 25% guardrail)
+- employer_verified = true with Large Enterprise adds +2 pts to Financial Capability
+- intent_from_capability directly modifies Intent & Engagement scoring
+- If combined_income_signal = "Elite" or "High" AND budget_stretch_probability = "High": Consider adding +3 pts to Financial Capability
+
 ## USING EXTRACTED EVIDENCE IN OUTPUTS (CRITICAL)
 
 When generating persona_description, summary, and talking_points, reference the evidence sections:
@@ -577,7 +718,8 @@ ${outputStructure}`;
 }
 
 // ============= Model Configuration =============
-// Stage 1: Gemini 3 Flash Preview (Primary) / Gemini 2.5 Flash (Fallback)
+// Stage 1A: Gemini 3 Pro Preview with Google Search Grounding (employer verification)
+// Stage 1B: Gemini 3 Pro Preview (Primary) / Gemini 3 Flash (Fallback) / Gemini 2.5 Flash (Fallback 2)
 // Stage 2 & 3: Claude Sonnet 4.5 via OpenRouter (Primary) / Gemini 3 Pro Preview (Fallback)
 
 // ============= Gemini API Call Helper (gemini-2.5-pro - Stage 2 Fallback) =============
@@ -1150,6 +1292,9 @@ You are evaluating whether a lead should be recommended a sister project from th
 - Persona: ${analysisResult.persona || "Unknown"}
 - Primary Concern: ${analysisResult.primary_concern_category || "Unknown"}
 - Core Motivation: ${analysisResult.extracted_signals?.core_motivation || "Unknown"}
+- Budget Stretch Probability: ${extractedSignals?.financial_capability_assessment?.budget_stretch_probability || "Unknown"}
+- Budget Stretch Range: ${extractedSignals?.financial_capability_assessment?.budget_stretch_range_cr ? `₹${extractedSignals.financial_capability_assessment.budget_stretch_range_cr.min} - ₹${extractedSignals.financial_capability_assessment.budget_stretch_range_cr.max} Cr` : "N/A"}
+- Affordability Tier: ${extractedSignals?.financial_capability_assessment?.combined_affordability_tier || "Unknown"}
 
 ## SISTER PROJECTS AVAILABLE (with CLOSING PRICES)
 ${JSON.stringify(sisterProjectsData, null, 2)}
@@ -2831,20 +2976,45 @@ IMPORTANT SCORING RULES:
       return { mqlSection, mqlAvailable: true };
     }
 
-    // Run Stage 1 for all leads in parallel with Gemini 3 Flash (fallback to Gemini 2.5 Flash)
+    // Run Stage 1 for all leads in parallel with Gemini 3 Pro Preview (grounding + extraction)
+    // Fallback chain: Gemini 3 Pro Preview → Gemini 3 Flash → Gemini 2.5 Flash → rule-based
     const stage1Results = await Promise.all(
       leadsToAnalyze.map(async (leadWithMql, index) => {
         // Small stagger to avoid burst requests
         if (index > 0) {
-          await new Promise((resolve) => setTimeout(resolve, 100 * index));
+          await new Promise((resolve) => setTimeout(resolve, 150 * index));
         }
         
         const { mqlEnrichment, ...lead } = leadWithMql;
         const leadDataJson = JSON.stringify(lead, null, 2);
         const { mqlSection, mqlAvailable } = buildMqlSection(mqlEnrichment);
         
-        let stage1Model = "gemini-3-flash-preview";
-        console.log(`Stage 1 (Extraction) starting for lead ${lead.id} using ${stage1Model}`);
+        // Step 1A: Google Search Grounding (optional - skip if no employer data)
+        let groundingContext = "";
+        const employerName = mqlEnrichment?.employer_name || lead.rawData?.["Place of Work (Company Name)"] || lead.rawData?.["Place of Work"] || "";
+        const designation = lead.rawData?.["Designation"] || mqlEnrichment?.designation || "";
+        const companyName = lead.rawData?.["Place of Work (Company Name)"] || employerName;
+        const location = mqlEnrichment?.location || lead.rawData?.["Location of Residence"] || "";
+        
+        if (employerName || companyName) {
+          try {
+            console.log(`Stage 1A (Grounding) starting for lead ${lead.id}`);
+            const groundingResult = await callGemini3ProWithGrounding(
+              buildGroundingPrompt(employerName, designation, companyName, location),
+              googleApiKey!
+            );
+            groundingContext = groundingResult.text;
+            console.log(`Stage 1A (Grounding) complete for lead ${lead.id}: ${groundingContext.substring(0, 200)}...`);
+          } catch (groundingError) {
+            console.warn(`Stage 1A (Grounding) failed for lead ${lead.id}, proceeding without:`, groundingError);
+          }
+        } else {
+          console.log(`Stage 1A (Grounding) skipped for lead ${lead.id}: no employer data`);
+        }
+        
+        // Step 1B: Structured Extraction (Gemini 3 Pro Preview with JSON mode)
+        let stage1Model = "gemini-3-pro-preview";
+        console.log(`Stage 1B (Extraction) starting for lead ${lead.id} using ${stage1Model}`);
         
         const stage1Prompt = buildStage1Prompt(
           leadDataJson,
@@ -2852,27 +3022,37 @@ IMPORTANT SCORING RULES:
           mqlAvailable,
           crmFieldExplainer,
           mqlFieldExplainer,
+          groundingContext,
         );
         
         let extractedSignals;
         try {
-          const stage1Response = await callGemini3FlashAPI(stage1Prompt, googleApiKey!, true);
+          const stage1Response = await callGemini3ProAPI(stage1Prompt, googleApiKey!, true);
           extractedSignals = JSON.parse(stage1Response);
-          console.log(`Stage 1 complete for lead ${lead.id} using ${stage1Model}`);
-          console.log(`Stage 1 budget for lead ${lead.id}: ${extractedSignals?.financial_signals?.budget_stated_cr ?? 'null'}`);
+          console.log(`Stage 1B complete for lead ${lead.id} using ${stage1Model}`);
+          console.log(`Stage 1B budget for lead ${lead.id}: ${extractedSignals?.financial_signals?.budget_stated_cr ?? 'null'}, stretch: ${extractedSignals?.financial_capability_assessment?.budget_stretch_probability ?? 'N/A'}`);
         } catch (stage1PrimaryError) {
-          console.warn(`Stage 1 primary (${stage1Model}) failed for lead ${lead.id}, trying fallback (gemini-2.5-flash)...`);
-          stage1Model = "gemini-2.5-flash (fallback)";
+          console.warn(`Stage 1B primary (${stage1Model}) failed for lead ${lead.id}, trying fallback (gemini-3-flash-preview)...`);
+          stage1Model = "gemini-3-flash-preview (fallback)";
           
           try {
-            const stage1Response = await callGemini25FlashAPI(stage1Prompt, googleApiKey!, true);
+            const stage1Response = await callGemini3FlashAPI(stage1Prompt, googleApiKey!, true);
             extractedSignals = JSON.parse(stage1Response);
-            console.log(`Stage 1 complete for lead ${lead.id} using ${stage1Model}`);
-          } catch (stage1FallbackError) {
-            console.error(`Stage 1 fallback failed for lead ${lead.id}:`, stage1FallbackError);
-            extractedSignals = createFallbackExtraction(lead, mqlEnrichment);
-            stage1Model = "rule-based fallback";
-            console.log(`Using rule-based fallback extraction for lead ${lead.id}`);
+            console.log(`Stage 1B complete for lead ${lead.id} using ${stage1Model}`);
+          } catch (stage1Flash3Error) {
+            console.warn(`Stage 1B secondary (${stage1Model}) failed for lead ${lead.id}, trying fallback (gemini-2.5-flash)...`);
+            stage1Model = "gemini-2.5-flash (fallback)";
+            
+            try {
+              const stage1Response = await callGemini25FlashAPI(stage1Prompt, googleApiKey!, true);
+              extractedSignals = JSON.parse(stage1Response);
+              console.log(`Stage 1B complete for lead ${lead.id} using ${stage1Model}`);
+            } catch (stage1FallbackError) {
+              console.error(`Stage 1B all models failed for lead ${lead.id}:`, stage1FallbackError);
+              extractedSignals = createFallbackExtraction(lead, mqlEnrichment);
+              stage1Model = "rule-based fallback";
+              console.log(`Using rule-based fallback extraction for lead ${lead.id}`);
+            }
           }
         }
         

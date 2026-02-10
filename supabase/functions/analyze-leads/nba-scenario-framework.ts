@@ -632,6 +632,13 @@ ${classificationSection}
 - Possession Urgency: ${possessionUrgency || "Not stated"}
 - Specific Unit Interest: ${unitInterested ? unitInterested.join(", ") : "None"}
 
+## Financial Capability Context
+- Budget Stretch: ${extractedSignals?.financial_capability_assessment?.budget_stretch_probability || "Unknown"} (${extractedSignals?.financial_capability_assessment?.budget_stretch_range_cr ? `₹${extractedSignals.financial_capability_assessment.budget_stretch_range_cr.min}-${extractedSignals.financial_capability_assessment.budget_stretch_range_cr.max} Cr` : "N/A"})
+- Affordability: ${extractedSignals?.financial_capability_assessment?.combined_affordability_tier || "Unknown"}
+- Employer: ${extractedSignals?.financial_capability_assessment?.employer_verified ? "Verified" : "Unverified"} (${extractedSignals?.financial_capability_assessment?.employer_size || "Unknown"})
+- Intent from Capability: ${extractedSignals?.financial_capability_assessment?.intent_from_capability || "Unknown"}
+- Combined Income Signal: ${extractedSignals?.financial_capability_assessment?.combined_income_signal || "Unknown"}
+
 ## Their Concerns
 - Primary Concern: ${primaryConcern || "None detected"}
 - Key Concerns: ${keyConcerns.length > 0 ? keyConcerns.join(", ") : "None extracted"}
