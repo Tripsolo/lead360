@@ -3046,7 +3046,7 @@ IMPORTANT SCORING RULES:
           analysisResult.safety_check_triggered = stage3Result.safety_check_triggered;
           
         } catch (stage3PrimaryError) {
-          console.warn(`Stage 3 primary (${stage3Model}) failed for lead ${lead.id}, trying fallback (gemini-2.5-flash)...`);
+          console.warn(`Stage 3 primary (${stage3Model}) failed for lead ${lead.id}, trying fallback (gemini-2.5-flash)...`, stage3PrimaryError);
           stage3Model = "gemini-2.5-flash (fallback)";
           
           try {
