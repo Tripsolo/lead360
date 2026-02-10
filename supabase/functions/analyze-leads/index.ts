@@ -3212,10 +3212,10 @@ IMPORTANT SCORING RULES:
         stage25Model = "skipped (no sister projects or Stage 2 failed)";
       }
 
-      // ===== STAGE 3 VARIANT SELECTION (A/B Test) =====
-      // Deterministic 50/50 split based on lead index within the batch
-      const stage3Variant: "matrix" | "scenario" = (index % 2 === 0) ? "matrix" : "scenario";
-      console.log(`Stage 3 variant for lead ${lead.id}: ${stage3Variant}`);
+      // ===== STAGE 3 VARIANT SELECTION =====
+      // Scenario variant is the default workflow (A/B test disabled)
+      const stage3Variant: "matrix" | "scenario" = "scenario";
+      console.log(`Stage 3 variant for lead ${lead.id}: ${stage3Variant} (default)`);
 
       // ===== PRE-STAGE 3: DETERMINISTIC NBA/TP SELECTION (Matrix variant only) =====
       let preSelectedNba: any = null;
@@ -3271,9 +3271,8 @@ IMPORTANT SCORING RULES:
 
         // ===== STAGE 3A: CLASSIFICATION (both variants) =====
         try {
-          const stage3APrompt = stage3Variant === "scenario"
-            ? buildStage3AScenarioClassificationPrompt(analysisResult, extractedSignals, visitComments)
-            : buildStage3AClassificationPrompt(analysisResult, extractedSignals, visitComments);
+          // Always use scenario classification (A/B test disabled, scenario is default)
+          const stage3APrompt = buildStage3AScenarioClassificationPrompt(analysisResult, extractedSignals, visitComments);
 
           console.log(`Stage 3A (Classification) starting for lead ${lead.id}, variant=${stage3Variant}`);
           await new Promise((resolve) => setTimeout(resolve, 200));
