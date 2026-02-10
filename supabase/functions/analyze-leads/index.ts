@@ -52,6 +52,79 @@ function excelDateToISOString(excelDate: any): string | null {
   return null;
 }
 
+// ============= Gemini 3 Pro Preview with Google Search Grounding =============
+async function callGemini3ProWithGrounding(
+  prompt: string,
+  googleApiKey: string,
+  maxRetries: number = 2,
+): Promise<{ text: string; groundingMetadata: any }> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent?key=${googleApiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            tools: [{ google_search: {} }],
+            generationConfig: {
+              temperature: 0.2,
+              maxOutputTokens: 2048,
+            },
+          }),
+        },
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        const candidate = data?.candidates?.[0];
+        const text = candidate?.content?.parts?.[0]?.text || "";
+        const groundingMetadata = candidate?.groundingMetadata || null;
+        return { text, groundingMetadata };
+      }
+
+      const errorText = await response.text();
+      if ((response.status === 503 || response.status === 429) && attempt < maxRetries) {
+        const backoffMs = Math.pow(2, attempt) * 1000;
+        console.warn(`Grounding API overloaded (attempt ${attempt}/${maxRetries}), retrying in ${backoffMs}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+        continue;
+      }
+
+      lastError = new Error(`Grounding API call failed: ${errorText}`);
+    } catch (fetchError) {
+      lastError = fetchError instanceof Error ? fetchError : new Error(String(fetchError));
+      if (attempt < maxRetries) {
+        const backoffMs = Math.pow(2, attempt) * 1000;
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+      }
+    }
+  }
+
+  throw lastError || new Error("Grounding API call failed after retries");
+}
+
+// ============= Employer Grounding Prompt =============
+function buildGroundingPrompt(employerName: string, designation: string, companyName: string, location: string): string {
+  return `Verify the following employer/company details using web search:
+- Employer: ${employerName || "Unknown"}
+- Designation: ${designation || "Unknown"}
+- Company: ${companyName || "Unknown"}
+- Location: ${location || "Unknown"}
+
+Provide:
+1. Is this a real, verifiable company? (verified/unverified/unknown)
+2. Company size category (Large Enterprise / Mid-size / SME / Startup / Unknown)
+3. Industry sector
+4. Typical compensation range for this designation at this company (if available, in Indian Lakhs per annum)
+5. Company reputation/stability signal (Established / Growing / Unknown)
+
+Be concise. If information is not available, say "Unknown".`;
+}
+
 // ============= STAGE 1: Signal Extraction =============
 function buildStage1Prompt(
   leadDataJson: string,
@@ -59,6 +132,7 @@ function buildStage1Prompt(
   mqlAvailable: boolean,
   crmFieldExplainer: string,
   mqlFieldExplainer: string,
+  groundingContext: string = "",
 ): string {
   const extractionSystemPrompt = `You are a data extraction specialist for real estate CRM and lead enrichment data. Your task is to extract structured signals from raw CRM and MQL data accurately and completely.
 
