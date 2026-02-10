@@ -305,7 +305,45 @@ The PPS Score number MUST NEVER appear in any text output field, especially rati
 **EXPECTED STANDARDIZED FORMAT:**
 - ₹82.5 Lacs → budget_stated_cr: 0.825 (display as "₹ 82.5 Lacs")
 - ₹1.25 Cr → budget_stated_cr: 1.25 (display as "₹ 1.25 Cr")
-- ₹2 Cr → budget_stated_cr: 2.0 (display as "₹ 2.00 Cr")`;
+- ₹2 Cr → budget_stated_cr: 2.0 (display as "₹ 2.00 Cr")
+
+### Rule 12: Possession Date Cross-Check (CRITICAL)
+When ANY output field mentions a possession date, OC date, or move-in timeline for a specific tower:
+1. Look up that tower in tower_inventory and find its oc_date
+2. If the stated date does NOT match the KB oc_date → CORRECT with the actual date
+3. If no specific tower is named, use the range of OC dates for that project
+4. Add to corrections_made with reason: "Possession date corrected per KB tower_inventory"
+Example: TP says "Tower H ready by April 2026" but KB shows oc_date = "2026-10-01" → CORRECT to "Oct 2026"
+
+### Rule 13: Typology Availability Validation (CRITICAL)
+When ANY output references a project + config combination (e.g., "Immensa 2BHK", "Primera 3BHK"):
+1. Check tower_inventory for rows matching that project_id AND typology
+2. If ZERO rows exist for that combination → ERROR: typology does not exist
+3. CORRECT: Replace with an available typology from that project, or remove the reference
+4. Add to corrections_made with reason: "Typology does not exist in KB inventory"
+Example: TP mentions "Immensa 2BHK rentals" but inventory shows Immensa only has 4BHK → CORRECT or REMOVE
+
+### Rule 14: Sister Project PSF Accuracy (CRITICAL)
+When ANY output cites a PSF (price per sqft) for Eternia or a sister project:
+1. Compute actual PSF from tower_inventory: PSF = (closing_min_cr * 10000000) / carpet_sqft_max (for min PSF) and (closing_max_cr * 10000000) / carpet_sqft_min (for max PSF)
+2. If the cited PSF deviates by more than 10% from the KB-derived range → CORRECT with actual PSF
+3. If no inventory data exists, use sister_projects.metadata pricing as fallback
+4. Add to corrections_made with reason: "PSF corrected per KB tower_inventory calculation"
+Example: TP says "Primera at ₹20K PSF" but KB-derived PSF is ₹14,500-15,500 → CORRECT to actual range
+
+### Rule 15: Generic NBA Override for Actionable Leads
+If ALL of the following are true:
+1. NBA action_type = "FOLLOW-UP" AND action text contains generic phrases ("schedule follow-up", "periodic check-in", "touch base", "keep in touch", "regular updates")
+2. Lead has at least 1 objection in objections_detected
+3. Lead persona is NOT "Passive Explorer" or "Window Shopper"
+THEN → ERROR: Generic NBA inappropriate for lead with specific objections
+CORRECT: Suggest a specific NBA aligned to the primary objection:
+- Price/Economic Fit → NBA-OFF-001 (payment plan / offer)
+- Competition → NBA-CON-002 (comparative collateral)
+- Possession → NBA-CON-003 (construction progress update)
+- Config/Amenities → NBA-CON-001 (site visit / sample flat)
+- Trust → NBA-COM-005 (senior management connect)
+Add to corrections_made with reason: "Generic follow-up replaced with objection-specific NBA"`;
 
   const knowledgeBaseSection = `
 ## KNOWLEDGE BASE (SOURCE OF TRUTH)
