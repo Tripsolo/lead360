@@ -1,38 +1,59 @@
 
 
-# Plan: Make NBA/TP Selection Deterministic (Patch 2)
+# Plan: Reduce Stage 3 Prompt Size (Patch 5)
 
 ## Problem
 
-Stage 3 (Gemini Flash) navigates a 43-TP x 49-NBA x 13-persona matrix via prompt engineering, frequently selecting wrong IDs. The matrix is already structured in code (`PERSONA_OBJECTION_MATRIX`) and should be looked up deterministically, with the LLM only contextualizing the pre-selected items.
+`buildStage3Prompt()` always injects the full framework section (~8,000-10,000 tokens) containing the entire persona-objection matrix, all relevant TP definitions (with full emotional hooks, logical arguments, competitor counters), and all NBA rule definitions. When pre-selection from Patch 2 is active, this is redundant because the selected TP and NBA details are already in the `preSelectionSection`.
 
 ## Changes
 
-### File 1: `supabase/functions/analyze-leads/index.ts`
+### File: `supabase/functions/analyze-leads/nba-framework.ts`
 
-**Update imports (line 3-8):** Add `normalizePersona`, `detectObjectionCategories`, `mapToMatrixObjection`, `lookupMatrixEntry`, `getTalkingPointDef` to the import from `nba-framework.ts`.
+**Replace the static `frameworkSection` (lines 2237-2248) with a conditional block:**
 
-**Add deterministic pre-selection block (insert between line 2938 and line 2940):** Before the `// ===== STAGE 3` comment, add a block that:
-- Declares `preSelectedNba`, `preSelectedTpIds`, `preSelectedObjection` (all null/empty initially)
-- Only runs if `parseSuccess` is true
-- Gets visit comments, calls `normalizePersona()`, `detectObjectionCategories()`, `checkSafetyConditions()`
-- If safety triggered: looks up override NBA via `getNBARuleDef()`, gets TP IDs from `linked_talking_points`
-- If not safety but objections detected: calls `mapToMatrixObjection()` for primary objection, then `lookupMatrixEntry()` to get matrix entry with `nba_id` and `tp_ids`, looks up full NBA rule
-- Logs the pre-selection result
+**When pre-selection IS active** (`preSelectedNba` and `preSelectedTpIds` are present and non-empty):
+- Replace the full framework with a minimal reference containing:
+  - Valid TP-ID format example (e.g., `TP-ECO-007`)
+  - Valid NBA-ID format example (e.g., `NBA-OFF-001`)
+  - The 3 talking point type definitions (Objection handling, Competitor handling, Highlight)
+  - A reminder to use the pre-selected IDs from the mandatory section above
 
-**Update both `buildStage3Prompt` call sites (~lines 2954 and 2996):** Pass `preSelectedNba` and `preSelectedTpIds` as last two arguments.
+**When pre-selection is NOT active** (fallback mode):
+- Still provide the framework, but trimmed:
+  - Matrix excerpt: Filter to only rows matching `objectionCategories`, capped at 3 rows via `.slice(0, 3)`
+  - TP reference: Max 6 TPs via `.slice(0, 6)`, with abbreviated format (only `talking_point`, `key_data_points`, `emotional_hook` -- skip `logical_argument` and `competitor_counter`)
+  - NBA reference: Max 3 NBA rules via `.slice(0, 3)`, with abbreviated format (only `specific_action` and `linked_talking_points` -- skip `trigger_condition` and `data_points_required`)
 
-### File 2: `supabase/functions/analyze-leads/nba-framework.ts`
+**Add a prompt length log** after the return template to help verify the reduction.
 
-**Update `buildStage3Prompt()` signature (line 2135-2142):** Add two optional parameters: `preSelectedNba?: any`, `preSelectedTpIds?: string[]`.
+## Technical Detail
 
-**Add pre-selection injection block (after kbSection, ~line 2343):** Build a `preSelectionSection` string:
-- If `preSelectedNba` and `preSelectedTpIds` are provided and non-empty: look up each TP via `getTalkingPointDef()`, build a prompt section titled "PRE-SELECTED NBA & TALKING POINTS (MANDATORY -- DO NOT OVERRIDE)" with full NBA details and TP definitions, instructing the LLM to only contextualize
-- Otherwise: empty string
+The conditional replaces lines 2237-2248 with an `if/else` block:
 
-**Update return template (line 2345):** Insert `${preSelectionSection}` between `${kbSection}` and `${frameworkSection}`.
+```typescript
+let frameworkSection = "";
+if (preSelectedNba && preSelectedTpIds && preSelectedTpIds.length > 0) {
+  // Minimal reference -- actual definitions are in preSelectionSection
+  frameworkSection = `# FRAMEWORK REFERENCE (IDs only)
+  ...valid ID formats, 3 TP types, reminder to use pre-selected IDs...`;
+} else {
+  // Trimmed fallback -- filtered matrix rows, abbreviated TPs and NBAs
+  const limitedMatrixExcerpt = // filter by objectionCategories, .slice(0, 3)
+  const limitedTpRef = // .slice(0, 6), abbreviated fields
+  const limitedNbaRef = // .slice(0, 3), abbreviated fields
+  frameworkSection = `# DECISION TREE FRAMEWORK (TRIMMED)
+  ...limited matrix, TPs, NBAs...`;
+}
+```
+
+The existing variables (`frameworkSubset`, `personaMatrix`, `matrixExcerpt`, `tpReference`, `nbaReference`) built on lines 2153-2188 are kept for the fallback path but sliced/filtered. The return template on lines 2379-2394 remains unchanged since it already references `${frameworkSection}`.
+
+## Expected Result
+
+- With pre-selection active: prompt drops from ~12,000-15,000 chars to ~4,000-6,000 chars
+- Without pre-selection (fallback): prompt drops to ~6,000-8,000 chars (vs full ~12,000-15,000)
 
 ## No other files changed
 
-All helper functions are already exported from `nba-framework.ts`. Types and UI untouched.
-
+All changes are within `buildStage3Prompt()` in `nba-framework.ts`. No signature, type, or UI changes.
