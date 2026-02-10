@@ -576,16 +576,42 @@ This overrides all other considerations.
       ).join("\n")
     : "None mentioned";
 
+  // Determine playbook content: use filtered if classification available, otherwise full
+  const matchedScenarios = classificationResult?.scenario_matched || [];
+  const playbookContent = matchedScenarios.length > 0
+    ? filterPlaybookByScenarios(matchedScenarios)
+    : OBJECTION_PLAYBOOK;
+
+  // Build classification context section if 3A result available
+  const classificationSection = classificationResult ? `
+# CLASSIFICATION RESULT (from Stage 3A — use as ground truth)
+
+- **Primary Objection**: ${classificationResult.primary_objection_category || "Unknown"} — ${classificationResult.primary_objection_detail || ""}
+- **Secondary Objections**: ${(classificationResult.secondary_objections || []).join(", ") || "None"}
+- **Customer Buying Goal**: ${classificationResult.customer_buying_goal || "Unknown"}
+- **Amenities/Preferences**: ${(classificationResult.amenities_preferences || []).join(", ") || "None stated"}
+- **Scenarios Matched**: ${matchedScenarios.join(", ") || "None"}
+- **Competitor Threat**: ${classificationResult.competitor_threat?.level || "none"} ${classificationResult.competitor_threat?.competitors?.length > 0 ? `(${classificationResult.competitor_threat.competitors.join(", ")}: ${classificationResult.competitor_threat.stated_advantage || ""})` : ""}
+- **Key Preferences**: Config=${classificationResult.key_preferences_distilled?.config || "?"}, Budget=${classificationResult.key_preferences_distilled?.budget_cr ? `₹${classificationResult.key_preferences_distilled.budget_cr} Cr` : "?"}, Stage=${classificationResult.key_preferences_distilled?.stage_preference || "?"}, Urgency=${classificationResult.key_preferences_distilled?.possession_urgency || "?"}
+- **Decision Blockers**: ${(classificationResult.decision_blockers || []).join(", ") || "None"}
+
+Use this classification as the basis for your generation. Do NOT re-classify — focus on generating compelling arguments.
+` : "";
+
   const prompt = `You are an expert real estate sales strategist for Kalpataru Parkcity (premium residential township, Thane, India).
 
 Generate the OPTIMAL Next Best Action and 2-3 Talking Points for this lead.
 
 # YOUR APPROACH
 
-1. **CLASSIFY THE SCENARIO**: Read the customer's situation and identify which 1-2 scenarios from the Playbook best match.
+${classificationResult ? `1. **USE THE CLASSIFICATION**: The customer's objections and goals have already been identified (see CLASSIFICATION RESULT below).
+2. **GENERATE ARGUMENTS**: Using Playbook strategic guidance AND live Knowledge Base data, craft specific, data-backed talking points with REAL numbers.
+3. **PERSONALIZE**: Adjust tone based on persona and specific situation.` : `1. **CLASSIFY THE SCENARIO**: Read the customer's situation and identify which 1-2 scenarios from the Playbook best match.
 2. **IDENTIFY THE GOAL**: What are we trying to achieve? (Close deal, overcome objection, redirect to better-fit product, create urgency, etc.)
 3. **GENERATE ARGUMENTS**: Using Playbook strategic guidance AND live Knowledge Base data, craft specific, data-backed talking points with REAL numbers.
-4. **PERSONALIZE**: Adjust tone based on persona and specific situation.
+4. **PERSONALIZE**: Adjust tone based on persona and specific situation.`}
+
+${classificationSection}
 
 # CUSTOMER SITUATION
 
@@ -625,15 +651,15 @@ ${visitComments ? `\nRaw comments: ${visitComments.substring(0, 400)}` : ""}
 
 ${safetySection}
 
-# STRATEGIC PLAYBOOK (Match scenarios to this customer)
+# STRATEGIC PLAYBOOK${matchedScenarios.length > 0 ? " (Filtered to matched scenarios)" : ""}
 
-${OBJECTION_PLAYBOOK}
+${playbookContent}
 
 ${kbSection}
 
 # GENERATION RULES
 
-1. Match 1-2 scenarios from Playbook that best fit this customer
+1. ${classificationResult ? "Use the matched scenarios from the CLASSIFICATION RESULT" : "Match 1-2 scenarios from Playbook that best fit this customer"}
 2. Use Playbook guidance as reasoning framework — it tells you WHAT arguments to make
 3. Fill in REAL numbers from Knowledge Base — never placeholder or example numbers
 4. Each talking point = specific, data-backed argument that persuades (not informs)
@@ -669,6 +695,6 @@ ${kbSection}
   "safety_check_triggered": ${safetyCheck.triggered ? `"${safetyCheck.safetyRule}"` : "null"}
 }`;
 
-  console.log(`[ScenarioVariant] Stage 3 prompt length: ${prompt.length} chars`);
+  console.log(`[ScenarioVariant] Stage 3B prompt length: ${prompt.length} chars, classification available: ${!!classificationResult}, filtered scenarios: ${matchedScenarios.length}`);
   return prompt;
 }
