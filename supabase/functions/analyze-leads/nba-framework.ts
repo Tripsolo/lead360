@@ -2474,7 +2474,17 @@ From the selected NBA-ID:
    If decision_makers_present = "Proxy":
    - MUST include TP-DEC-003 (decision-maker visit urgency)
    - Focus on: scheduling decision-maker visit, video call options, sharing materials
-   - Emphasize limited inventory / price lock to create urgency for decision-maker engagement`;
+   - Emphasize limited inventory / price lock to create urgency for decision-maker engagement
+
+## FACTUAL GUARDRAILS (MUST FOLLOW)
+
+8. **Possession Date Accuracy**: Any possession date or OC date you mention MUST match tower_inventory oc_date from the Knowledge Base. Never estimate or round dates. If no specific tower is named, use the range of OC dates for that project.
+
+9. **Typology Existence Check**: Before referencing any project + config combination (e.g., "Immensa 2BHK", "Primera 3BHK"), verify it exists in the Knowledge Base inventory tables above. If a typology does not appear in the KB for that project, do NOT mention it.
+
+10. **Pricing Accuracy**: Any PSF or price range you cite for Eternia or sister projects must be derived from tower_inventory closing_min_cr/closing_max_cr and carpet_sqft fields. Never use approximate or memorized pricing. If no inventory data exists, omit the price claim.
+
+11. **No Generic Follow-Up for Leads with Objections**: If the lead has specific objections detected, do NOT generate a generic follow-up NBA (e.g., "schedule follow-up", "periodic check-in"). Instead, generate an action directly addressing the primary objection.`;
 
   const outputStructure = `# OUTPUT STRUCTURE
 Return a JSON object with this EXACT structure:
