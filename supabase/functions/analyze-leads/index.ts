@@ -3065,16 +3065,43 @@ IMPORTANT SCORING RULES:
         }
       }
 
-      // ===== STAGE 3: NBA & TALKING POINTS GENERATION =====
+      // ===== STAGE 3: NBA & TALKING POINTS GENERATION (3A Classification → 3B Generation) =====
       let stage3Model = "claude-sonnet-4.5";
+      let stage3AClassification: any = null;
+      
       if (parseSuccess) {
         const visitComments = lead.rawData?.["Visit Comments"] || 
                              lead.rawData?.["Remarks in Detail"] || 
                              lead.rawData?.["Site Re-Visit Comment"] || "";
 
+        // ===== STAGE 3A: CLASSIFICATION (both variants) =====
+        try {
+          const stage3APrompt = stage3Variant === "scenario"
+            ? buildStage3AScenarioClassificationPrompt(analysisResult, extractedSignals, visitComments)
+            : buildStage3AClassificationPrompt(analysisResult, extractedSignals, visitComments);
+
+          console.log(`Stage 3A (Classification) starting for lead ${lead.id}, variant=${stage3Variant}`);
+          await new Promise((resolve) => setTimeout(resolve, 200));
+
+          const stage3AResponse = await callOpenRouterAPI(
+            "You are a sales classification AI. Return valid JSON only.",
+            stage3APrompt
+          );
+          let cleaned3A = stage3AResponse.trim();
+          if (cleaned3A.startsWith("```json")) cleaned3A = cleaned3A.slice(7);
+          else if (cleaned3A.startsWith("```")) cleaned3A = cleaned3A.slice(3);
+          if (cleaned3A.endsWith("```")) cleaned3A = cleaned3A.slice(0, -3);
+          stage3AClassification = JSON.parse(cleaned3A.trim());
+          
+          console.log(`Stage 3A complete for lead ${lead.id}: primary_objection=${stage3AClassification.primary_objection_category}, scenarios=[${(stage3AClassification.scenario_matched || []).join(",")}], goal="${stage3AClassification.customer_buying_goal}"`);
+        } catch (stage3AError) {
+          console.warn(`Stage 3A failed for lead ${lead.id}, falling back to single-prompt approach:`, stage3AError);
+          stage3AClassification = null;
+        }
+
         if (stage3Variant === "scenario") {
-          // ===== SCENARIO-DRIVEN STAGE 3 =====
-          console.log(`Stage 3 Scenario starting for lead ${lead.id}`);
+          // ===== SCENARIO-DRIVEN STAGE 3B =====
+          console.log(`Stage 3B Scenario starting for lead ${lead.id}, classification available: ${!!stage3AClassification}`);
           await new Promise((resolve) => setTimeout(resolve, 200));
 
           try {
@@ -3084,7 +3111,8 @@ IMPORTANT SCORING RULES:
               visitComments,
               towerInventory || [],
               competitorPricing || [],
-              projectMetadata
+              projectMetadata,
+              stage3AClassification // pass classification result (null if 3A failed → full playbook fallback)
             );
 
             const stage3Response = await callOpenRouterAPI("You are a sales strategy AI. Return valid JSON only.", stage3Prompt);
@@ -3094,8 +3122,8 @@ IMPORTANT SCORING RULES:
             if (cleanedStage3.endsWith("```")) cleanedStage3 = cleanedStage3.slice(0, -3);
             const stage3Result = JSON.parse(cleanedStage3.trim());
 
-            stage3Model = "claude-sonnet-4.5 (scenario)";
-            console.log(`Stage 3 Scenario complete for lead ${lead.id}`);
+            stage3Model = "claude-sonnet-4.5 (scenario-3A/3B)";
+            console.log(`Stage 3B Scenario complete for lead ${lead.id}`);
 
             // Code-level safety validation (same as matrix)
             const safetyCheck = checkSafetyConditions(analysisResult.persona, extractedSignals);
@@ -3120,7 +3148,7 @@ IMPORTANT SCORING RULES:
             analysisResult.safety_check_triggered = stage3Result.safety_check_triggered;
 
           } catch (stage3PrimaryError) {
-            console.warn(`Stage 3 Scenario primary failed for lead ${lead.id}, trying Gemini 3 Pro Preview fallback...`, stage3PrimaryError);
+            console.warn(`Stage 3B Scenario primary failed for lead ${lead.id}, trying Gemini 3 Pro Preview fallback...`, stage3PrimaryError);
             stage3Model = "gemini-3-pro-preview (scenario-fallback)";
 
             try {
@@ -3130,12 +3158,13 @@ IMPORTANT SCORING RULES:
                 visitComments,
                 towerInventory || [],
                 competitorPricing || [],
-                projectMetadata
+                projectMetadata,
+                stage3AClassification
               );
 
               const stage3Response = await callGemini3ProAPI(stage3Prompt, googleApiKey!, true);
               const stage3Result = JSON.parse(stage3Response);
-              console.log(`Stage 3 Scenario fallback complete for lead ${lead.id}`);
+              console.log(`Stage 3B Scenario fallback complete for lead ${lead.id}`);
 
               const safetyCheck = checkSafetyConditions(analysisResult.persona, extractedSignals);
               if (safetyCheck.triggered && !stage3Result.safety_check_triggered) {
@@ -3159,7 +3188,7 @@ IMPORTANT SCORING RULES:
 
             } catch (stage3FallbackError) {
               stage3Model = "skipped (scenario failed)";
-              console.error(`Stage 3 Scenario fallback failed for lead ${lead.id}:`, stage3FallbackError);
+              console.error(`Stage 3B Scenario fallback failed for lead ${lead.id}:`, stage3FallbackError);
             }
           }
 
