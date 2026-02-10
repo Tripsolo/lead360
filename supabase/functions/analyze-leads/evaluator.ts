@@ -215,6 +215,8 @@ export function buildEvaluatorPrompt(
     objections_detected: string[];
     budget_stated: number | null;
     timeline: string | null;
+    core_motivation?: string;
+    customer_buying_goal?: string;
   },
   stage3Variant: "matrix" | "scenario" = "matrix"
 ): string {
