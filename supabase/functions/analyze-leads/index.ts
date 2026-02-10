@@ -3200,8 +3200,8 @@ IMPORTANT SCORING RULES:
             analysisResult.safety_check_triggered = stage3Result.safety_check_triggered;
 
           } catch (stage3PrimaryError) {
-            console.warn(`Stage 3 primary (${stage3Model}) failed for lead ${lead.id}, trying fallback (gemini-2.5-flash)...`, stage3PrimaryError);
-            stage3Model = "gemini-2.5-flash (fallback)";
+            console.warn(`Stage 3 primary (${stage3Model}) failed for lead ${lead.id}, trying fallback (gemini-3-pro-preview)...`, stage3PrimaryError);
+            stage3Model = "gemini-3-pro-preview (fallback)";
 
             try {
               const stage3Prompt = buildStage3Prompt(
@@ -3215,7 +3215,7 @@ IMPORTANT SCORING RULES:
                 preSelectedTpIds
               );
 
-              const stage3Response = await callGemini25FlashAPI(stage3Prompt, googleApiKey!, true);
+              const stage3Response = await callGemini3ProAPI(stage3Prompt, googleApiKey!, true);
               const stage3Result = JSON.parse(stage3Response);
               console.log(`Stage 3 complete for lead ${lead.id} using ${stage3Model}`);
 
