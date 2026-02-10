@@ -11,6 +11,7 @@ import {
   getTalkingPointDef,
   type NBAActionType
 } from "./nba-framework.ts";
+import { buildStage3ScenarioPrompt } from "./nba-scenario-framework.ts";
 import {
   evaluateOutputs,
   type TowerInventoryRow,
