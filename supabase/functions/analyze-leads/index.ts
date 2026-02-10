@@ -3271,9 +3271,8 @@ IMPORTANT SCORING RULES:
 
         // ===== STAGE 3A: CLASSIFICATION (both variants) =====
         try {
-          const stage3APrompt = stage3Variant === "scenario"
-            ? buildStage3AScenarioClassificationPrompt(analysisResult, extractedSignals, visitComments)
-            : buildStage3AClassificationPrompt(analysisResult, extractedSignals, visitComments);
+          // Always use scenario classification (A/B test disabled, scenario is default)
+          const stage3APrompt = buildStage3AScenarioClassificationPrompt(analysisResult, extractedSignals, visitComments);
 
           console.log(`Stage 3A (Classification) starting for lead ${lead.id}, variant=${stage3Variant}`);
           await new Promise((resolve) => setTimeout(resolve, 200));
