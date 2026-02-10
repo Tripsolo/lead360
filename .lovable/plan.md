@@ -1,39 +1,59 @@
 
 
-# Plan: Disable A/B Test, Default to Scenario Variant
+# Plan: Reduce Chunk Size to 1 Lead Per Function Call
 
 ## Summary
 
-Remove the 50/50 A/B test between "matrix" and "scenario" variants in Stage 3. The scenario variant becomes the sole workflow for TP/NBA generation.
+Change the `CHUNK_SIZE` from 2 to 1 in both the main analysis flow and the re-analysis flow. This ensures each edge function invocation processes only one lead, staying well within the ~150-second platform timeout.
 
 ## Changes
 
-### 1. Hardcode variant to "scenario" (`index.ts`, ~line 3217)
+### 1. Main analysis flow (`src/pages/Index.tsx`, line 671)
 
-Replace the A/B split logic:
+Change `CHUNK_SIZE` from `2` to `1` and update the comment:
+
 ```
 // Before
-const stage3Variant = (index % 2 === 0) ? "matrix" : "scenario";
+const CHUNK_SIZE = 2;
 
 // After
-const stage3Variant: "matrix" | "scenario" = "scenario";
+const CHUNK_SIZE = 1;
 ```
 
-Update the log message to reflect it's no longer an A/B test.
+### 2. Re-analysis flow (`src/pages/Index.tsx`, line 909)
 
-### 2. Simplify Stage 3A prompt selection (`index.ts`, ~line 3274)
+Same change for the re-analysis batch:
 
-The conditional that picks between `buildStage3AScenarioClassificationPrompt` and `buildStage3AClassificationPrompt` can be simplified to always use the scenario version. The matrix classification prompt call becomes dead code.
+```
+// Before
+const CHUNK_SIZE = 2;
 
-### 3. No changes to evaluator or framework files
+// After
+const CHUNK_SIZE = 1;
+```
 
-- `evaluator.ts` already handles `stage3Variant === "scenario"` correctly (skips Rules 1 and 9 ID validation)
-- `nba-framework.ts` and `nba-scenario-framework.ts` remain unchanged -- both files stay in the codebase since the matrix code may be useful for future reference, but it will simply no longer be called
+### 3. Update inter-batch delay (lines 741, 934)
+
+Increase the delay between calls from 500ms to 2000ms to avoid rate-limiting when sending more individual calls:
+
+```
+// Before
+await new Promise(resolve => setTimeout(resolve, 500));
+
+// After
+await new Promise(resolve => setTimeout(resolve, 2000));
+```
 
 ## What Does NOT Change
 
-- Stage 3B scenario generation logic (unchanged)
-- Evaluator rules and validation (unchanged, already scenario-aware)
-- Database schema, UI, or any other stages
-- The `nba-framework.ts` file (kept for reference, just not invoked)
+- Edge function code (no changes to `analyze-leads/index.ts`)
+- Polling logic for results
+- Database schema or UI layout
+- All other stages and prompts
+
+## Technical Notes
+
+- With `CHUNK_SIZE = 1`, a batch of N leads will trigger N sequential function calls (each awaited before the next starts), with 2-second gaps between them
+- Each call gets the full ~150-second budget for one lead's pipeline (Stage 1A, 1B, 2, 3A, 3B, 4, Cross-Sell)
+- The polling mechanism already handles incremental results, so the UI will update as each lead completes
 
