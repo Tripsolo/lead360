@@ -3254,6 +3254,7 @@ IMPORTANT SCORING RULES:
         stage2: stage2Model,
         stage2_5: stage25Model,
         stage3: stage3Model,
+        stage3_variant: stage3Variant,
         stage4_evaluator: stage4Model,
       };
 
