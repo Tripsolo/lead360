@@ -1148,7 +1148,7 @@ You are evaluating whether a lead should be recommended a sister project from th
 - Primary Concern: ${analysisResult.primary_concern_category || "Unknown"}
 - Core Motivation: ${analysisResult.extracted_signals?.core_motivation || "Unknown"}
 
-## SISTER PROJECTS AVAILABLE (with CLOSING PRICES from Tower Inventory)
+## SISTER PROJECTS AVAILABLE (with CLOSING PRICES)
 ${JSON.stringify(sisterProjectsData, null, 2)}
 
 ## COMPETITOR REFERENCE (For Talking Points)
