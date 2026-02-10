@@ -663,7 +663,8 @@ export async function evaluateOutputs(
       crossSellResult,
       extractedSignals,
       knowledgeBase,
-      leadContext
+      leadContext,
+      stage3Variant
     );
 
     // Run evaluator
