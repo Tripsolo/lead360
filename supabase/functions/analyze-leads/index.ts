@@ -515,8 +515,63 @@ Return a JSON object with this EXACT structure:
     "stated_motivation_quote": "string | null",
     "upgrade_drivers": "string | null",
     "location_pull": "string | null"
+  },
+
+  "financial_capability_assessment": {
+    "combined_income_signal": "Elite" | "High" | "Mid-Senior" | "Entry-Mid" | "Unknown",
+    "income_sources": ["CRM stated income", "MQL verified income", "Employer-based estimate"],
+    "budget_stretch_probability": "High" | "Medium" | "Low" | "Unknown",
+    "budget_stretch_range_cr": { "min": number, "max": number } | null,
+    "stretch_reasoning": "string (max 30 words explaining why stretch is likely/unlikely)",
+    "employer_verified": boolean,
+    "employer_size": "Large Enterprise" | "Mid-size" | "SME" | "Startup" | "Unknown",
+    "employer_industry": "string | null",
+    "combined_affordability_tier": "Comfortable" | "Stretched" | "At-Limit" | "Over-Budget" | "Unknown",
+    "intent_from_capability": "High" | "Medium" | "Low",
+    "grounding_used": boolean
   }
 }`;
+
+  const financialCapabilityInstructions = `## FINANCIAL CAPABILITY ASSESSMENT (CRITICAL - NEW COMPOSITE FIELD)
+
+Combine CRM budget, MQL income/credit, and employer grounding data to produce a composite financial capability signal.
+
+### Budget Stretch Logic:
+- If MQL final_income_lacs >= 3x annual EMI of budget property AND credit_rating = "High" → budget_stretch_probability = "High", budget_stretch_range_cr = { min: budget_stated_cr * 1.25, max: budget_stated_cr * 1.30 }
+- If MQL final_income_lacs >= 2x annual EMI AND credit_rating = "Medium" → budget_stretch_probability = "Medium", budget_stretch_range_cr = { min: budget_stated_cr * 1.20, max: budget_stated_cr * 1.25 }
+- If income < 2x OR credit_rating = "Low" OR no MQL data → budget_stretch_probability = "Low", budget_stretch_range_cr = null
+- If employer is Large Enterprise/MNC with senior designation → +1 tier uplift on stretch probability (Low→Medium, Medium→High)
+
+### Combined Income Signal:
+- "Elite": income > 70 LPA OR turnover 25Cr+ OR Elite Corporate designation
+- "High": income 50-70 LPA OR turnover 5Cr-25Cr OR High-Skill Professional
+- "Mid-Senior": income 25-50 LPA OR turnover 1.5Cr-5Cr OR Mid-Senior Corporate
+- "Entry-Mid": income < 25 LPA OR turnover < 1.5Cr
+- "Unknown": No income/turnover data available
+
+### Combined Affordability Tier:
+- "Comfortable": budget_gap_percent <= 10 AND (stretch_probability = "High" OR income_signal in ["Elite", "High"])
+- "Stretched": budget_gap_percent 10-20 AND stretch_probability >= "Medium"
+- "At-Limit": budget_gap_percent 20-30 OR stretch_probability = "Low" with budget gap
+- "Over-Budget": budget_gap_percent > 30 AND stretch_probability = "Low"
+- "Unknown": No budget or income data
+
+### Intent from Capability:
+- "High": Comfortable affordability + High/Medium stretch + investor_signal OR multiple visits
+- "Medium": Stretched affordability + any stretch probability
+- "Low": At-Limit or Over-Budget + Low stretch
+
+### Employer Verification:
+- employer_verified = true if grounding context confirms company existence
+- employer_size, employer_industry from grounding context
+- grounding_used = true if grounding context was provided`;
+
+  const groundingSection = groundingContext ? `
+# EMPLOYER VERIFICATION (Web-Grounded)
+The following employer/company verification was obtained via web search. Use this to inform the financial_capability_assessment:
+
+${groundingContext}
+` : "";
 
   return `${extractionSystemPrompt}
 
@@ -526,10 +581,14 @@ ${mqlAvailable ? mqlFieldExplainer : ""}
 
 ${mqlSection}
 
+${groundingSection}
+
 # LEAD DATA TO EXTRACT FROM
 ${leadDataJson}
 
 ${extractionInstructions}
+
+${financialCapabilityInstructions}
 
 ${extractionOutputSchema}`;
 }
