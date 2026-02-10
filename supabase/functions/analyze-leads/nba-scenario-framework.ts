@@ -240,16 +240,265 @@ function formatKBForScenarioPrompt(
 }
 
 
-// ============= SCENARIO-DRIVEN STAGE 3 PROMPT BUILDER =============
+// ============= SCENARIO-DRIVEN STAGE 3A CLASSIFICATION PROMPT BUILDER =============
 
 /**
- * Build Stage 3 prompt using scenario-driven approach.
- * 
- * Instead of:
- *   persona × objection → matrix lookup → TP-ID → contextualize template
- * 
- * This does:
- *   customer situation + playbook guidance + live KB → LLM generates arguments
+ * Build Stage 3A Classification prompt for scenario variant.
+ * Same classification schema as matrix variant, but also matches playbook scenarios.
+ * Includes scenario NAMES only (not full guidance) for matching.
+ */
+export function buildStage3AScenarioClassificationPrompt(
+  stage2Result: any,
+  extractedSignals: any,
+  visitComments: string
+): string {
+  const persona = stage2Result?.persona || "Unknown";
+  const primaryConcern = stage2Result?.primary_concern_category || null;
+  const concernCategories = stage2Result?.concern_categories || [];
+  const keyConcerns = stage2Result?.key_concerns || [];
+  const rating = stage2Result?.ai_rating || "Unknown";
+  const ppsScore = stage2Result?.pps_score || null;
+
+  const budgetStated = extractedSignals?.financial_signals?.budget_stated_cr || null;
+  const budgetGap = extractedSignals?.financial_signals?.budget_gap_percent || null;
+  const customerMentionedPriceHigh = extractedSignals?.financial_signals?.customer_mentioned_price_high || false;
+  const carpetDesired = extractedSignals?.property_preferences?.carpet_area_desired || null;
+  const configInterested = extractedSignals?.property_preferences?.config_interested || null;
+  const stagePreference = extractedSignals?.property_preferences?.stage_preference || null;
+  const possessionUrgency = extractedSignals?.engagement_signals?.possession_urgency || null;
+  const competitors = extractedSignals?.competitor_intelligence?.competitors_mentioned || [];
+  const age = extractedSignals?.demographics?.age || null;
+  const familyStage = extractedSignals?.demographics?.family_stage || null;
+  const childrenCount = extractedSignals?.demographics?.children_count || null;
+  const decisionMakers = extractedSignals?.engagement_signals?.decision_makers_present || null;
+  const nonBookingReason = extractedSignals?.engagement_signals?.non_booking_reason || null;
+  const negotiationAsks = extractedSignals?.engagement_signals?.negotiation_asks || [];
+  const visitCount = extractedSignals?.engagement_signals?.visit_count || 1;
+  const sampleFeedback = extractedSignals?.engagement_signals?.sample_feedback || "not_seen";
+  const coreMotivation = extractedSignals?.core_motivation || "";
+  const visitNotesSummary = extractedSignals?.visit_notes_summary || "";
+
+  const competitorContext = competitors.length > 0
+    ? competitors.map((c: any) =>
+        `- ${c.name}${c.project ? ` (${c.project})` : ""}: ${c.carpet_stated ? `${c.carpet_stated} sqft` : ""} ${c.price_stated_cr ? `at ₹${c.price_stated_cr} Cr` : ""} ${c.advantage_stated ? `— "${c.advantage_stated}"` : ""}`
+      ).join("\n")
+    : "None mentioned";
+
+  // Extract scenario names from playbook for matching (NOT full guidance)
+  const PLAYBOOK_SCENARIO_NAMES = [
+    "Wants RTMI at Under Construction price",
+    "Getting cheaper at competition",
+    "Getting better location at similar budget",
+    "Wants subvention without cost loading",
+    "CLP deviation making price beyond budget / too much due at booking",
+    "OCR contribution issue",
+    "Loan eligibility issue",
+    "CSOP (Current Sale of Property) required",
+    "Staying on rent, can't afford EMI and rent both",
+    "House sold, sitting on capital gains",
+    "Possession too late (e.g. 2030)",
+    "Developer delay belief / construction behind timeline",
+    "Space perception — rooms feel small",
+    "Need unit with deck",
+    "Bigger carpet area needed, not interested in jodi, wants builder finish",
+    "Want clear views, no building in front",
+    "Privacy top priority",
+    "Certain floor required for views or current residence match",
+    "Rooms not getting enough sunlight/ventilation",
+    "Room direction or house entry direction concern",
+    "Desired amenities unavailable",
+    "Want convenience for work/school/highway",
+    "Ecosystem rebuild — far from current location",
+    "Vicinity too congested / didn't like vicinity",
+    "Price for location seems low vs other micro-markets",
+    "Competitor delivered, can see finished product",
+    "Competitor has better delivery track record",
+    "Competitor has better layouts/area sizes/decks at lower price",
+    "Competitor has lower/no payment loading",
+    "Competitor location perceived more premium",
+    "Rental yield, ROI focus — rational investor behavior",
+    "Will visit all competition first before deciding",
+    "Not sure on exact area requirement",
+    "Not sure of budget, just started scouting",
+    "Family disagrees on location",
+    "Looking on behalf of someone else",
+    "Need to bring parents/influencers to decide",
+    "Want to see actual unit/site before deciding"
+  ];
+
+  const prompt = `You are an expert real estate sales analyst for Kalpataru Parkcity (premium residential township, Thane, India).
+
+Your ONLY task is to CLASSIFY this customer's situation and match 1-2 playbook scenarios. Do NOT generate talking points or actions.
+
+# CUSTOMER SITUATION
+
+## Lead Profile
+- Persona: ${persona}
+- Rating: ${rating} (PPS: ${ppsScore || "N/A"})
+- Core Motivation: ${coreMotivation}
+- Family Stage: ${familyStage || "Unknown"}, Children: ${childrenCount || "Unknown"}
+- Age: ${age || "Unknown"}
+
+## What They Want
+- Config: ${configInterested || "Not specified"}
+- Carpet Desired: ${carpetDesired || "Not specified"}
+- Budget: ${budgetStated ? `₹${budgetStated} Cr` : "Not stated"}
+- Budget Gap: ${budgetGap !== null ? `${budgetGap.toFixed(1)}%` : "Not calculated"}${customerMentionedPriceHigh ? " — Customer explicitly mentioned price is too high" : ""}
+- Stage Preference: ${stagePreference || "Not specified"}
+- Possession Urgency: ${possessionUrgency || "Not stated"}
+
+## Their Concerns
+- Primary Concern (from Stage 2): ${primaryConcern || "None detected"}
+- Key Concerns: ${keyConcerns.length > 0 ? keyConcerns.join(", ") : "None extracted"}
+- Non-Booking Reason: ${nonBookingReason || "Not stated"}
+- Negotiation Asks: ${negotiationAsks.length > 0 ? negotiationAsks.join(", ") : "None"}
+
+## Engagement Context
+- Visit Count: ${visitCount}
+- Sample Feedback: ${sampleFeedback}
+- Decision Makers: ${decisionMakers || "Unknown"}
+
+## Competitors Mentioned
+${competitorContext}
+
+## Visit Notes
+${visitNotesSummary}
+${visitComments ? `\nRaw comments: ${visitComments.substring(0, 500)}` : ""}
+
+# AVAILABLE PLAYBOOK SCENARIOS (match 1-2 that best fit this customer)
+
+${PLAYBOOK_SCENARIO_NAMES.map((s, i) => `${i + 1}. ${s}`).join("\n")}
+
+# CLASSIFICATION TASK
+
+1. **Primary Objection Category**: Choose from: Economic Fit, Possession Timeline, Inventory & Product, Location & Ecosystem, Competition, Investment, Decision Process, Special Scenarios
+2. **Primary Objection Detail**: One sentence describing the specific objection
+3. **Secondary Objections**: Other concern categories (0-3)
+4. **Customer Buying Goal**: What the customer ultimately wants (1 sentence)
+5. **Amenities/Preferences**: Specific preferences mentioned (vastu, views, greenery, walking areas, floor, ventilation, etc.)
+6. **Scenario Matched**: Pick 1-2 scenario names from the list above that best match this customer
+7. **Competitor Threat**: Level (high/medium/low/none), names, stated advantage
+8. **Key Preferences Distilled**: Config, carpet, budget, stage preference, possession urgency
+9. **Decision Blockers**: Non-objection blockers (spouse approval, comparing projects, etc.)
+
+# OUTPUT (Return ONLY valid JSON)
+{
+  "primary_objection_category": "one of the 8 categories above",
+  "primary_objection_detail": "Specific description of the primary objection",
+  "secondary_objections": ["Category1", "Category2"],
+  "customer_buying_goal": "What the customer wants (1 sentence)",
+  "amenities_preferences": ["Specific preference 1", "Specific preference 2"],
+  "scenario_matched": ["Exact scenario name from list", "Optional second scenario"],
+  "competitor_threat": {
+    "level": "high|medium|low|none",
+    "competitors": ["Name1"],
+    "stated_advantage": "What they claim is better"
+  },
+  "key_preferences_distilled": {
+    "config": "2BHK/3BHK/etc or null",
+    "carpet_desired": "sqft or null",
+    "budget_cr": number or null,
+    "stage_preference": "UC/RTMI/No preference",
+    "possession_urgency": "immediate/moderate/flexible/not_stated"
+  },
+  "decision_blockers": ["Blocker 1", "Blocker 2"]
+}`;
+
+  console.log(`[Stage3A-Scenario] Classification prompt length: ${prompt.length} chars`);
+  return prompt;
+}
+
+
+// ============= HELPER: Filter Playbook by Matched Scenarios =============
+
+/**
+ * Extract only the guidance sections for matched scenarios from the full playbook.
+ * Returns a filtered playbook string with only relevant scenario guidance.
+ */
+export function filterPlaybookByScenarios(matchedScenarios: string[]): string {
+  if (!matchedScenarios || matchedScenarios.length === 0) {
+    return OBJECTION_PLAYBOOK; // fallback to full playbook
+  }
+
+  const lines = OBJECTION_PLAYBOOK.split("\n");
+  let filtered = "# FILTERED PLAYBOOK (Matched Scenarios Only)\n";
+  let currentCategory = "";
+  let currentSubCategory = "";
+  let inMatchedScenario = false;
+  let scenarioBuffer: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Track category headers
+    if (line.startsWith("### ")) {
+      currentCategory = line;
+      continue;
+    }
+    if (line.startsWith("**") && line.endsWith("**")) {
+      currentSubCategory = line;
+      continue;
+    }
+
+    // Check if this is a SCENARIO line
+    if (line.startsWith("SCENARIO:")) {
+      // Flush previous matched scenario
+      if (inMatchedScenario && scenarioBuffer.length > 0) {
+        filtered += scenarioBuffer.join("\n") + "\n\n";
+      }
+
+      const scenarioText = line.replace("SCENARIO:", "").trim();
+      // Check if any matched scenario is a substring match
+      inMatchedScenario = matchedScenarios.some(ms =>
+        scenarioText.toLowerCase().includes(ms.toLowerCase()) ||
+        ms.toLowerCase().includes(scenarioText.toLowerCase())
+      );
+
+      if (inMatchedScenario) {
+        scenarioBuffer = [`\n${currentCategory}`, currentSubCategory, line];
+      } else {
+        scenarioBuffer = [];
+      }
+      continue;
+    }
+
+    // GUIDANCE lines belong to current scenario
+    if (line.startsWith("GUIDANCE:") && inMatchedScenario) {
+      scenarioBuffer.push(line);
+      continue;
+    }
+
+    // Category separators
+    if (line.startsWith("---")) {
+      if (inMatchedScenario && scenarioBuffer.length > 0) {
+        filtered += scenarioBuffer.join("\n") + "\n\n";
+        scenarioBuffer = [];
+      }
+      inMatchedScenario = false;
+      continue;
+    }
+  }
+
+  // Flush last scenario
+  if (inMatchedScenario && scenarioBuffer.length > 0) {
+    filtered += scenarioBuffer.join("\n") + "\n";
+  }
+
+  // If nothing matched, return full playbook as fallback
+  if (filtered.trim() === "# FILTERED PLAYBOOK (Matched Scenarios Only)") {
+    console.warn("[Stage3B-Scenario] No scenarios matched in playbook, using full playbook");
+    return OBJECTION_PLAYBOOK;
+  }
+
+  return filtered;
+}
+
+
+// ============= SCENARIO-DRIVEN STAGE 3B GENERATION PROMPT BUILDER =============
+
+/**
+ * Build Stage 3B prompt using scenario-driven approach.
+ * Receives 3A classification result and uses only matched scenario guidance.
  *
  * Same inputs and output schema as buildStage3Prompt() in nba-framework.ts
  */
@@ -259,7 +508,8 @@ export function buildStage3ScenarioPrompt(
   visitComments: string,
   towerInventory?: any[],
   competitorPricing?: any[],
-  projectMetadata?: any
+  projectMetadata?: any,
+  classificationResult?: any
 ): string {
   // Reuse safety checks from matrix framework
   const safetyCheck = checkSafetyConditions(
@@ -326,16 +576,42 @@ This overrides all other considerations.
       ).join("\n")
     : "None mentioned";
 
+  // Determine playbook content: use filtered if classification available, otherwise full
+  const matchedScenarios = classificationResult?.scenario_matched || [];
+  const playbookContent = matchedScenarios.length > 0
+    ? filterPlaybookByScenarios(matchedScenarios)
+    : OBJECTION_PLAYBOOK;
+
+  // Build classification context section if 3A result available
+  const classificationSection = classificationResult ? `
+# CLASSIFICATION RESULT (from Stage 3A — use as ground truth)
+
+- **Primary Objection**: ${classificationResult.primary_objection_category || "Unknown"} — ${classificationResult.primary_objection_detail || ""}
+- **Secondary Objections**: ${(classificationResult.secondary_objections || []).join(", ") || "None"}
+- **Customer Buying Goal**: ${classificationResult.customer_buying_goal || "Unknown"}
+- **Amenities/Preferences**: ${(classificationResult.amenities_preferences || []).join(", ") || "None stated"}
+- **Scenarios Matched**: ${matchedScenarios.join(", ") || "None"}
+- **Competitor Threat**: ${classificationResult.competitor_threat?.level || "none"} ${classificationResult.competitor_threat?.competitors?.length > 0 ? `(${classificationResult.competitor_threat.competitors.join(", ")}: ${classificationResult.competitor_threat.stated_advantage || ""})` : ""}
+- **Key Preferences**: Config=${classificationResult.key_preferences_distilled?.config || "?"}, Budget=${classificationResult.key_preferences_distilled?.budget_cr ? `₹${classificationResult.key_preferences_distilled.budget_cr} Cr` : "?"}, Stage=${classificationResult.key_preferences_distilled?.stage_preference || "?"}, Urgency=${classificationResult.key_preferences_distilled?.possession_urgency || "?"}
+- **Decision Blockers**: ${(classificationResult.decision_blockers || []).join(", ") || "None"}
+
+Use this classification as the basis for your generation. Do NOT re-classify — focus on generating compelling arguments.
+` : "";
+
   const prompt = `You are an expert real estate sales strategist for Kalpataru Parkcity (premium residential township, Thane, India).
 
 Generate the OPTIMAL Next Best Action and 2-3 Talking Points for this lead.
 
 # YOUR APPROACH
 
-1. **CLASSIFY THE SCENARIO**: Read the customer's situation and identify which 1-2 scenarios from the Playbook best match.
+${classificationResult ? `1. **USE THE CLASSIFICATION**: The customer's objections and goals have already been identified (see CLASSIFICATION RESULT below).
+2. **GENERATE ARGUMENTS**: Using Playbook strategic guidance AND live Knowledge Base data, craft specific, data-backed talking points with REAL numbers.
+3. **PERSONALIZE**: Adjust tone based on persona and specific situation.` : `1. **CLASSIFY THE SCENARIO**: Read the customer's situation and identify which 1-2 scenarios from the Playbook best match.
 2. **IDENTIFY THE GOAL**: What are we trying to achieve? (Close deal, overcome objection, redirect to better-fit product, create urgency, etc.)
 3. **GENERATE ARGUMENTS**: Using Playbook strategic guidance AND live Knowledge Base data, craft specific, data-backed talking points with REAL numbers.
-4. **PERSONALIZE**: Adjust tone based on persona and specific situation.
+4. **PERSONALIZE**: Adjust tone based on persona and specific situation.`}
+
+${classificationSection}
 
 # CUSTOMER SITUATION
 
@@ -375,15 +651,15 @@ ${visitComments ? `\nRaw comments: ${visitComments.substring(0, 400)}` : ""}
 
 ${safetySection}
 
-# STRATEGIC PLAYBOOK (Match scenarios to this customer)
+# STRATEGIC PLAYBOOK${matchedScenarios.length > 0 ? " (Filtered to matched scenarios)" : ""}
 
-${OBJECTION_PLAYBOOK}
+${playbookContent}
 
 ${kbSection}
 
 # GENERATION RULES
 
-1. Match 1-2 scenarios from Playbook that best fit this customer
+1. ${classificationResult ? "Use the matched scenarios from the CLASSIFICATION RESULT" : "Match 1-2 scenarios from Playbook that best fit this customer"}
 2. Use Playbook guidance as reasoning framework — it tells you WHAT arguments to make
 3. Fill in REAL numbers from Knowledge Base — never placeholder or example numbers
 4. Each talking point = specific, data-backed argument that persuades (not informs)
@@ -419,6 +695,6 @@ ${kbSection}
   "safety_check_triggered": ${safetyCheck.triggered ? `"${safetyCheck.safetyRule}"` : "null"}
 }`;
 
-  console.log(`[ScenarioVariant] Stage 3 prompt length: ${prompt.length} chars`);
+  console.log(`[ScenarioVariant] Stage 3B prompt length: ${prompt.length} chars, classification available: ${!!classificationResult}, filtered scenarios: ${matchedScenarios.length}`);
   return prompt;
 }
