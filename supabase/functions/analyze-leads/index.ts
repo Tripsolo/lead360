@@ -577,7 +577,7 @@ ${outputStructure}`;
 
 // ============= Model Configuration =============
 // Stage 1: Gemini 3 Flash Preview (Primary) / Gemini 2.5 Flash (Fallback)
-// Stage 2 & 3: Claude Sonnet 4.5 via OpenRouter (Primary) / Gemini 2.5 Pro/Flash (Fallback)
+// Stage 2 & 3: Claude Sonnet 4.5 via OpenRouter (Primary) / Gemini 3 Pro Preview (Fallback)
 
 // ============= Gemini API Call Helper (gemini-2.5-pro - Stage 2 Fallback) =============
 async function callGeminiAPI(
@@ -711,6 +711,76 @@ async function callGemini3FlashAPI(
 
   if (!response?.ok) {
     throw lastError || new Error("Gemini 3 Flash API call failed after retries");
+  }
+
+  const data = await response.json();
+  const candidate = data?.candidates?.[0];
+  const part = candidate?.content?.parts?.[0];
+  return typeof part?.text === "string" ? part.text : JSON.stringify(candidate ?? data);
+}
+
+// ============= Gemini 3 Pro Preview API (Stage 2 & 3 Fallback) =============
+async function callGemini3ProAPI(
+  prompt: string,
+  googleApiKey: string,
+  useJsonMode: boolean = true,
+  maxRetries: number = 3,
+): Promise<string> {
+  let lastError: Error | null = null;
+  let response: Response | null = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const generationConfig: any = {
+        temperature: 0.2,
+        topK: 40,
+        topP: 0.95,
+        maxOutputTokens: 8192,
+      };
+
+      if (useJsonMode) {
+        generationConfig.responseMimeType = "application/json";
+      }
+
+      response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent?key=${googleApiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig,
+          }),
+        },
+      );
+
+      if (response.ok) {
+        break;
+      }
+
+      const errorText = await response.text();
+
+      if ((response.status === 503 || response.status === 429) && attempt < maxRetries) {
+        const backoffMs = Math.pow(2, attempt) * 1000;
+        console.warn(`Gemini 3 Pro Preview API overloaded (attempt ${attempt}/${maxRetries}), retrying in ${backoffMs}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+        continue;
+      }
+
+      console.error("Gemini 3 Pro Preview API error:", errorText);
+      lastError = new Error(`Gemini 3 Pro Preview API call failed: ${errorText}`);
+    } catch (fetchError) {
+      lastError = fetchError instanceof Error ? fetchError : new Error(String(fetchError));
+      if (attempt < maxRetries) {
+        const backoffMs = Math.pow(2, attempt) * 1000;
+        console.warn(`Gemini 3 Pro Preview fetch error (attempt ${attempt}/${maxRetries}), retrying in ${backoffMs}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+      }
+    }
+  }
+
+  if (!response?.ok) {
+    throw lastError || new Error("Gemini 3 Pro Preview API call failed after retries");
   }
 
   const data = await response.json();
@@ -2837,8 +2907,8 @@ IMPORTANT SCORING RULES:
         analysisResult = JSON.parse(cleanedResponse.trim());
         console.log(`Stage 2 complete for lead ${lead.id} using ${stage2Model}`);
       } catch (stage2PrimaryError) {
-        console.warn(`Stage 2 primary (${stage2Model}) failed for lead ${lead.id}, trying fallback (gemini-2.5-pro)...`);
-        stage2Model = "gemini-2.5-pro (fallback)";
+        console.warn(`Stage 2 primary (${stage2Model}) failed for lead ${lead.id}, trying fallback (gemini-3-pro-preview)...`);
+        stage2Model = "gemini-3-pro-preview (fallback)";
         
         // Build the original combined prompt for Gemini fallback
         const stage2Prompt = buildStage2Prompt(
@@ -2857,20 +2927,13 @@ IMPORTANT SCORING RULES:
         );
         
         try {
-          const stage2Response = await callGeminiAPI(stage2Prompt, googleApiKey!, true);
+          const stage2Response = await callGemini3ProAPI(stage2Prompt, googleApiKey!, true);
           analysisResult = JSON.parse(stage2Response);
           console.log(`Stage 2 complete for lead ${lead.id} using ${stage2Model}`);
         } catch (stage2FallbackError) {
           parseSuccess = false;
-          stage2Model = "rule-based fallback";
-          console.error(`Stage 2 fallback failed for lead ${lead.id}:`, stage2FallbackError);
-          analysisResult = {
-            ai_rating: "Warm",
-            rating_confidence: "Low",
-            rating_rationale: "Analysis completed with limited structure",
-            summary: extractedSignals.visit_notes_summary || "Unable to analyze lead",
-            mql_data_available: mqlAvailable,
-          };
+          console.error(`Stage 2 fallback (gemini-3-pro-preview) also failed for lead ${lead.id}:`, stage2FallbackError);
+          analysisResult = {};
         }
       }
 
@@ -3046,8 +3109,8 @@ IMPORTANT SCORING RULES:
             analysisResult.safety_check_triggered = stage3Result.safety_check_triggered;
 
           } catch (stage3PrimaryError) {
-            console.warn(`Stage 3 Scenario primary failed for lead ${lead.id}, trying Gemini fallback...`, stage3PrimaryError);
-            stage3Model = "gemini-2.5-flash (scenario-fallback)";
+            console.warn(`Stage 3 Scenario primary failed for lead ${lead.id}, trying Gemini 3 Pro Preview fallback...`, stage3PrimaryError);
+            stage3Model = "gemini-3-pro-preview (scenario-fallback)";
 
             try {
               const stage3Prompt = buildStage3ScenarioPrompt(
@@ -3059,7 +3122,7 @@ IMPORTANT SCORING RULES:
                 projectMetadata
               );
 
-              const stage3Response = await callGemini25FlashAPI(stage3Prompt, googleApiKey!, true);
+              const stage3Response = await callGemini3ProAPI(stage3Prompt, googleApiKey!, true);
               const stage3Result = JSON.parse(stage3Response);
               console.log(`Stage 3 Scenario fallback complete for lead ${lead.id}`);
 
@@ -3137,8 +3200,8 @@ IMPORTANT SCORING RULES:
             analysisResult.safety_check_triggered = stage3Result.safety_check_triggered;
 
           } catch (stage3PrimaryError) {
-            console.warn(`Stage 3 primary (${stage3Model}) failed for lead ${lead.id}, trying fallback (gemini-2.5-flash)...`, stage3PrimaryError);
-            stage3Model = "gemini-2.5-flash (fallback)";
+            console.warn(`Stage 3 primary (${stage3Model}) failed for lead ${lead.id}, trying fallback (gemini-3-pro-preview)...`, stage3PrimaryError);
+            stage3Model = "gemini-3-pro-preview (fallback)";
 
             try {
               const stage3Prompt = buildStage3Prompt(
@@ -3152,7 +3215,7 @@ IMPORTANT SCORING RULES:
                 preSelectedTpIds
               );
 
-              const stage3Response = await callGemini25FlashAPI(stage3Prompt, googleApiKey!, true);
+              const stage3Response = await callGemini3ProAPI(stage3Prompt, googleApiKey!, true);
               const stage3Result = JSON.parse(stage3Response);
               console.log(`Stage 3 complete for lead ${lead.id} using ${stage3Model}`);
 
