@@ -788,7 +788,7 @@ async function callGemini25FlashAPI(
   return typeof part?.text === "string" ? part.text : JSON.stringify(candidate ?? data);
 }
 
-// ============= OpenRouter API (Stage 2 Primary - Claude Opus 4.5) =============
+// ============= OpenRouter API (Stage 2 & 3 Primary - Claude Sonnet 4.5) =============
 async function callOpenRouterAPI(
   systemPrompt: string,
   userPrompt: string,
