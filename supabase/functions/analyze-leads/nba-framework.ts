@@ -2234,18 +2234,55 @@ MANDATORY: Use NBA-ID ${safetyCheck.overrideNbaId} and corresponding talking poi
 DO NOT recommend any Under Construction pitch.`
     : "";
 
-  const frameworkSection = `# DECISION TREE FRAMEWORK
+  let frameworkSection = "";
+  if (preSelectedNba && preSelectedTpIds && preSelectedTpIds.length > 0) {
+    // Minimal reference — actual definitions are already in preSelectionSection
+    frameworkSection = `# FRAMEWORK REFERENCE (IDs only)
+
+## ID Format Reference
+- Talking Point IDs follow format: TP-XXX-NNN (e.g., TP-ECO-007, TP-COMP-003)
+- NBA IDs follow format: NBA-XXX-NNN (e.g., NBA-OFF-001, NBA-ESC-003)
+
+## Talking Point Types
+1. **Objection handling** — Addresses a specific customer concern (budget, location, timeline, etc.)
+2. **Competitor handling** — Positions against a specific competitor with data-backed comparison
+3. **Highlight** — Proactively surfaces a project strength relevant to this persona
+
+**IMPORTANT**: Use the pre-selected NBA-ID and TP-IDs from the MANDATORY section above. Do NOT select different IDs from the framework.`;
+  } else {
+    // Trimmed fallback — limited matrix rows, abbreviated TPs and NBAs
+    const limitedMatrixExcerpt = Object.entries(personaMatrix)
+      .filter(([objection]) => objectionCategories.length === 0 || objectionCategories.some(cat => objection.toLowerCase().includes(cat.toLowerCase())))
+      .slice(0, 3)
+      .map(([objection, entry]: [string, any]) => `| ${objection} | ${entry.nba_id} | ${entry.tp_ids.join(", ")} | ${entry.action_summary} |`)
+      .join("\n");
+
+    const limitedTpRef = frameworkSubset.talkingPoints.slice(0, 6).map(tp => `
+**${tp.tp_id}** (${tp.category} - ${tp.sub_category})
+- Talking Point: ${tp.talking_point}
+- Key Data: ${tp.key_data_points}
+- Emotional Hook: ${tp.emotional_hook}`
+    ).join("\n");
+
+    const limitedNbaRef = frameworkSubset.nbaRules.slice(0, 3).map(nba => `
+**${nba.nba_id}** (${nba.action_category})
+- Action: ${nba.specific_action}
+- Linked TPs: ${nba.linked_talking_points.join(", ")}`
+    ).join("\n");
+
+    frameworkSection = `# DECISION TREE FRAMEWORK (TRIMMED)
 
 ## Persona-Objection Matrix for "${normalizedPersona}"
 | Objection | NBA-ID | TP-IDs | Action Summary |
 |-----------|--------|--------|----------------|
-${matrixExcerpt}
+${limitedMatrixExcerpt || matrixExcerpt.split("\n").slice(0, 3).join("\n")}
 
-## Relevant Talking Points
-${tpReference}
+## Relevant Talking Points (Top 6)
+${limitedTpRef}
 
-## Relevant NBA Rules
-${nbaReference}`;
+## Relevant NBA Rules (Top 3)
+${limitedNbaRef}`;
+  }
 
   const instructionsSection = `# GENERATION INSTRUCTIONS
 
