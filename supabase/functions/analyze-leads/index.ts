@@ -651,6 +651,14 @@ You are provided with PRE-EXTRACTED SIGNALS from CRM and MQL data (not raw data)
    - Consider: budget constraints, RTMI needs, config preference, GCP view interest
    - Generate cross_sell_recommendation if a clear match exists, otherwise set to null
 
+## FINANCIAL CAPABILITY ASSESSMENT (from Stage 1)
+Use the financial_capability_assessment from extracted signals for enhanced scoring:
+- combined_affordability_tier informs Financial Capability (A) dimension
+- budget_stretch_probability and budget_stretch_range_cr inform whether the lead can be pitched slightly above-budget options (within 25% guardrail)
+- employer_verified = true with Large Enterprise adds +2 pts to Financial Capability
+- intent_from_capability directly modifies Intent & Engagement scoring
+- If combined_income_signal = "Elite" or "High" AND budget_stretch_probability = "High": Consider adding +3 pts to Financial Capability
+
 ## USING EXTRACTED EVIDENCE IN OUTPUTS (CRITICAL)
 
 When generating persona_description, summary, and talking_points, reference the evidence sections:
