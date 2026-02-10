@@ -2352,6 +2352,13 @@ You MUST:
 - Carpet Desired: ${carpetDesired || "Not specified"}
 - Unit Interested: ${unitInterested ? unitInterested.join(", ") : "Not specified"}
 
+## Financial Capability Context
+- Budget Stretch: ${extractedSignals?.financial_capability_assessment?.budget_stretch_probability || "Unknown"} (${extractedSignals?.financial_capability_assessment?.budget_stretch_range_cr ? `₹${extractedSignals.financial_capability_assessment.budget_stretch_range_cr.min}-${extractedSignals.financial_capability_assessment.budget_stretch_range_cr.max} Cr` : "N/A"})
+- Affordability: ${extractedSignals?.financial_capability_assessment?.combined_affordability_tier || "Unknown"}
+- Employer: ${extractedSignals?.financial_capability_assessment?.employer_verified ? "Verified" : "Unverified"} (${extractedSignals?.financial_capability_assessment?.employer_size || "Unknown"})
+- Intent from Capability: ${extractedSignals?.financial_capability_assessment?.intent_from_capability || "Unknown"}
+- Combined Income Signal: ${extractedSignals?.financial_capability_assessment?.combined_income_signal || "Unknown"}
+
 ## Competitors Mentioned
 ${competitors.length > 0 
   ? competitors.map((c: any) => `- ${c.name}: ${c.carpet_stated || "N/A"} sqft at ₹${c.price_stated_cr || "N/A"} Cr (${c.advantage_stated || "No advantage stated"})`).join("\n")

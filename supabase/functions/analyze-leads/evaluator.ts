@@ -434,6 +434,14 @@ ${JSON.stringify(crossSellOutput, null, 2)}
 - Core Motivation: ${leadContext.core_motivation || "Unknown"}
 - Customer Buying Goal: ${leadContext.customer_buying_goal || "Unknown"}
 
+### Financial Capability Assessment
+- Budget Stretch Probability: ${extractedSignals?.financial_capability_assessment?.budget_stretch_probability || "Unknown"}
+- Budget Stretch Range: ${extractedSignals?.financial_capability_assessment?.budget_stretch_range_cr ? `₹${extractedSignals.financial_capability_assessment.budget_stretch_range_cr.min} - ₹${extractedSignals.financial_capability_assessment.budget_stretch_range_cr.max} Cr` : "N/A"}
+- Combined Affordability Tier: ${extractedSignals?.financial_capability_assessment?.combined_affordability_tier || "Unknown"}
+- Employer Verified: ${extractedSignals?.financial_capability_assessment?.employer_verified ? "Yes" : "No"} (${extractedSignals?.financial_capability_assessment?.employer_size || "Unknown"})
+- Intent from Capability: ${extractedSignals?.financial_capability_assessment?.intent_from_capability || "Unknown"}
+- Combined Income Signal: ${extractedSignals?.financial_capability_assessment?.combined_income_signal || "Unknown"}
+
 ### Extracted Signals Summary
 \`\`\`json
 ${JSON.stringify({
@@ -441,6 +449,7 @@ ${JSON.stringify({
   financial_signals: extractedSignals?.financial_signals,
   property_preferences: extractedSignals?.property_preferences,
   competitor_intelligence: extractedSignals?.competitor_intelligence,
+  financial_capability_assessment: extractedSignals?.financial_capability_assessment,
 }, null, 2)}
 \`\`\``;
 
