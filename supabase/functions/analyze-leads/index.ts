@@ -2788,7 +2788,7 @@ IMPORTANT SCORING RULES:
     
     console.log(`Parallel Stage 1 complete for all ${leadsToAnalyze.length} leads`);
 
-    // ===== SEQUENTIAL STAGE 2 SCORING (Claude Opus 4.5 via OpenRouter) + STAGE 3 NBA/TP (Gemini 3 Flash) =====
+    // ===== SEQUENTIAL STAGE 2 SCORING (Claude Sonnet 4.5 via OpenRouter) + STAGE 3 NBA/TP (Claude Sonnet 4.5) =====
     const freshResults: any[] = [];
 
     for (let index = 0; index < stage1Results.length; index++) {
