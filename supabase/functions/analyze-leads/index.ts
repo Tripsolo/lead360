@@ -1197,6 +1197,7 @@ If multiple sister projects pass all rules, prioritize:
 3. Log which rules pass/fail for each project.
 4. If no project passes all rules, return null.
 5. If one or more pass, select the best match per priority rules.
+6. The data_source field is for tracking only. If closing_price_min_cr and closing_price_max_cr are populated, use them for Rule 1 evaluation regardless of whether data_source is "tower_inventory" or "metadata_fallback".
 
 ## OUTPUT STRUCTURE
 Return a JSON object with ONLY these fields:
