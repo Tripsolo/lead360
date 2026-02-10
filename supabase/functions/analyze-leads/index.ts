@@ -718,7 +718,8 @@ ${outputStructure}`;
 }
 
 // ============= Model Configuration =============
-// Stage 1: Gemini 3 Flash Preview (Primary) / Gemini 2.5 Flash (Fallback)
+// Stage 1A: Gemini 3 Pro Preview with Google Search Grounding (employer verification)
+// Stage 1B: Gemini 3 Pro Preview (Primary) / Gemini 3 Flash (Fallback) / Gemini 2.5 Flash (Fallback 2)
 // Stage 2 & 3: Claude Sonnet 4.5 via OpenRouter (Primary) / Gemini 3 Pro Preview (Fallback)
 
 // ============= Gemini API Call Helper (gemini-2.5-pro - Stage 2 Fallback) =============
