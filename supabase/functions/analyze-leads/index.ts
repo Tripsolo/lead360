@@ -3213,7 +3213,8 @@ IMPORTANT SCORING RULES:
             (competitorPricing || []) as CompetitorPricingRow[],
             (sisterProjects || []) as SisterProjectRow[],
             projectMetadata || {},
-            openRouterKey
+            openRouterKey,
+            stage3Variant
           );
           
           if (evaluatedOutput) {
