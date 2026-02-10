@@ -1291,6 +1291,9 @@ You are evaluating whether a lead should be recommended a sister project from th
 - Persona: ${analysisResult.persona || "Unknown"}
 - Primary Concern: ${analysisResult.primary_concern_category || "Unknown"}
 - Core Motivation: ${analysisResult.extracted_signals?.core_motivation || "Unknown"}
+- Budget Stretch Probability: ${extractedSignals?.financial_capability_assessment?.budget_stretch_probability || "Unknown"}
+- Budget Stretch Range: ${extractedSignals?.financial_capability_assessment?.budget_stretch_range_cr ? `₹${extractedSignals.financial_capability_assessment.budget_stretch_range_cr.min} - ₹${extractedSignals.financial_capability_assessment.budget_stretch_range_cr.max} Cr` : "N/A"}
+- Affordability Tier: ${extractedSignals?.financial_capability_assessment?.combined_affordability_tier || "Unknown"}
 
 ## SISTER PROJECTS AVAILABLE (with CLOSING PRICES)
 ${JSON.stringify(sisterProjectsData, null, 2)}
