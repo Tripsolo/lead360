@@ -208,6 +208,11 @@ async function processEnrichmentBatch(
       const bankingLoans = mqlData.banking_loans || [];
       const bankingCards = mqlData.banking_cards || [];
       const businessDetails = mqlData.business_details || {};
+      
+      // Extract RTO / vehicle ownership data
+      const rtoDetails = mqlData.rto_details || {};
+      const rtoVehicles = Array.isArray(rtoDetails.vehicles) ? rtoDetails.vehicles : [];
+      const rtoIncomeRange = rtoDetails.income_range_rto || {};
 
       // Check if enrichment failed
       const status = mqlData.status || "SUCCESS";
@@ -341,6 +346,12 @@ async function processEnrichmentBatch(
         has_premium_cards: hasPremiumCards,
         latest_home_loan_date: latestHomeLoanDate?.toISOString() || null,
         credit_behavior_signal: creditBehaviorSignal,
+        // RTO / Vehicle ownership fields
+        rto_vehicle_count: rtoVehicles.length > 0 ? rtoVehicles.length : null,
+        rto_vehicle_value: rtoIncomeRange.vehicle_value || null,
+        rto_pre_tax_income: rtoDetails.pre_tax_income_rto || null,
+        rto_lifestyle: rtoVehicles[0]?.lifestyle || null,
+        rto_vehicle_details: rtoVehicles.length > 0 ? rtoVehicles : null,
         raw_response: batchResponse,
       };
 
