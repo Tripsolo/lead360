@@ -944,7 +944,7 @@ const Index = () => {
             <h1 className="text-3xl font-bold">Customer360</h1>
             <p className="text-sm text-muted-foreground">Powered by Raisn.ai</p>
           </div>
-          <div className="flex flex-col items-end gap-1">
+          <div className="flex flex-row items-center gap-2">
             {user?.email?.endsWith('@raisn.ai') && leads.length > 0 && (
               <Button 
                 variant="ghost" 
@@ -1005,7 +1005,7 @@ const Index = () => {
               </Button>
               <Button variant="outline" onClick={handleReset}>
                 <Upload className="mr-2 h-4 w-4" />
-                New Leads
+                New
               </Button>
               <Button 
                 variant="outline" 

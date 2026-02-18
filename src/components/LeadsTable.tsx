@@ -63,7 +63,7 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: Leads
       String(lead.phone || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       String(lead.name || '').toLowerCase().includes(searchTerm.toLowerCase());
     
-    // Summary card filter (Upgraded/Downgraded/Unchanged)
+    // Summary card filter (Upgraded/Downgraded/Unchanged or Hot/Warm/Cold)
     let matchesRatingComparison = true;
     if (ratingFilter === 'Upgraded') {
       matchesRatingComparison = !!(lead.rating && lead.managerRating && getRatingValue(lead.rating) > getRatingValue(lead.managerRating));
@@ -71,6 +71,12 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: Leads
       matchesRatingComparison = !!(lead.rating && lead.managerRating && getRatingValue(lead.rating) < getRatingValue(lead.managerRating));
     } else if (ratingFilter === 'Unchanged') {
       matchesRatingComparison = !!(lead.rating && lead.managerRating && getRatingValue(lead.rating) === getRatingValue(lead.managerRating));
+    } else if (ratingFilter === 'Hot') {
+      matchesRatingComparison = lead.managerRating?.toLowerCase() === 'hot';
+    } else if (ratingFilter === 'Warm') {
+      matchesRatingComparison = lead.managerRating?.toLowerCase() === 'warm';
+    } else if (ratingFilter === 'Cold') {
+      matchesRatingComparison = lead.managerRating?.toLowerCase() === 'cold';
     }
 
     const matchesOwner = ownerFilter === 'all' || lead.leadOwner === ownerFilter;
