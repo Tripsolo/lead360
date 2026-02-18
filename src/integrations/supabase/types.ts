@@ -194,6 +194,11 @@ export type Database = {
           pre_tax_income_lacs: number | null
           project_id: string | null
           raw_response: Json | null
+          rto_lifestyle: string | null
+          rto_pre_tax_income: number | null
+          rto_vehicle_count: number | null
+          rto_vehicle_details: Json | null
+          rto_vehicle_value: number | null
           total_loans: number | null
           turnover_slab: string | null
           updated_at: string
@@ -237,6 +242,11 @@ export type Database = {
           pre_tax_income_lacs?: number | null
           project_id?: string | null
           raw_response?: Json | null
+          rto_lifestyle?: string | null
+          rto_pre_tax_income?: number | null
+          rto_vehicle_count?: number | null
+          rto_vehicle_details?: Json | null
+          rto_vehicle_value?: number | null
           total_loans?: number | null
           turnover_slab?: string | null
           updated_at?: string
@@ -280,6 +290,11 @@ export type Database = {
           pre_tax_income_lacs?: number | null
           project_id?: string | null
           raw_response?: Json | null
+          rto_lifestyle?: string | null
+          rto_pre_tax_income?: number | null
+          rto_vehicle_count?: number | null
+          rto_vehicle_details?: Json | null
+          rto_vehicle_value?: number | null
           total_loans?: number | null
           turnover_slab?: string | null
           updated_at?: string

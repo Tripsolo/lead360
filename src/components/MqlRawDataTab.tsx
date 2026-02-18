@@ -122,6 +122,9 @@ export const MqlRawDataTab = ({ lead }: MqlRawDataTabProps) => {
   const employmentDetails = leadData.employment_details as Record<string, unknown>[] | undefined;
   const linkedinDetails = leadData.linkedin_details as Record<string, unknown> | undefined;
   const creditScore = leadData.credit_score;
+  const rtoDetails = leadData.rto_details as Record<string, unknown> | undefined;
+  const rtoVehicles = (rtoDetails?.vehicles as Record<string, unknown>[]) || [];
+  const rtoIncomeRange = rtoDetails?.income_range_rto as Record<string, unknown> | undefined;
 
   return (
     <ScrollArea className="h-[60vh]">
@@ -255,6 +258,35 @@ export const MqlRawDataTab = ({ lead }: MqlRawDataTabProps) => {
               { key: 'is_current', label: 'Current' },
             ]}
           />
+        </Section>
+
+        <Separator />
+
+        {/* RTO / Vehicle Ownership */}
+        <Section title="RTO / Vehicle Ownership">
+          {rtoVehicles.length > 0 ? (
+            <>
+              <ArrayTable
+                data={rtoVehicles}
+                columns={[
+                  { key: 'maker', label: 'Maker' },
+                  { key: 'model', label: 'Model' },
+                  { key: 'year', label: 'Year' },
+                  { key: 'price', label: 'Price' },
+                  { key: 'fuel_type', label: 'Fuel' },
+                  { key: 'lifestyle', label: 'Lifestyle' },
+                ]}
+              />
+              {rtoIncomeRange && (
+                <div className="mt-3 grid md:grid-cols-2 gap-x-6">
+                  <DataRow label="Vehicle Value" value={rtoIncomeRange?.vehicle_value} />
+                  <DataRow label="RTO Pre-Tax Income" value={rtoDetails?.pre_tax_income_rto} />
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">No vehicle data available</p>
+          )}
         </Section>
 
         <Separator />
