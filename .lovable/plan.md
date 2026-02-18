@@ -1,26 +1,52 @@
 
 
-## UI Tweaks: Vehicle Ownership, Financial Summary
+## Fix Financial Summary Data Extraction and Remove Vehicle Fields
+
+### Root Cause Found
+
+The MQL API response uses **`is_active: true/false`** (a boolean field) for both loans and credit cards -- NOT a `status` string field. The current reconciliation logic in `mqlReconciliation.ts` checks `status === 'active'` and `status === 'closed'`, which never matches, producing zeros for all loan/card/EMI counts.
+
+**Evidence from actual data:**
+```
+is_active: true, loan_type: "Housing Loan", installment_amount: 155842
+is_active: true, loan_type: "Auto Loan (Personal)", installment_amount: 26923
+is_active: false, date_closed: "2025-12-10"
+```
 
 ### Changes
 
-#### 1. Rename "RTO / Vehicle Ownership" to "Vehicle Ownership" and remove Lifestyle column
-In `src/components/MqlRawDataTab.tsx`:
-- Change section title from "RTO / Vehicle Ownership" to "Vehicle Ownership"
-- Remove the `{ key: 'lifestyle', label: 'Lifestyle' }` column from the ArrayTable
-- Keep Vehicle Value and RTO Pre-Tax Income fields (already present)
+#### File: `src/utils/mqlReconciliation.ts`
 
-#### 2. Financial Summary -- Headline Income + Closed Home Loans
+1. **Fix `isActiveLoan`**: Change from checking `status === 'active'` to checking `is_active === true` (boolean). Loans without `is_active` field and without `date_closed` are treated as active.
 
-**Section header redesign**: Replace the plain `<Section title="Financial Summary">` with a custom header that shows "Financial Summary" on the left and the Final Income value as a headline metric on the top right (e.g., "12.5 Lacs"). Remove the Final Income DataRow from the grid since it moves to the header.
+2. **Fix `closedHomeLoans`**: Change from checking `status === 'closed'` to checking `is_active === false` (or has `date_closed` set) combined with home/housing loan type match.
 
-**New field**: Add "Closed Home Loans" to the grid, showing the count of home/housing loans with a closed/inactive status.
+3. **Fix `activeCards`**: Change from checking `status === 'active'` to checking `is_active === true`. Cards use the same boolean pattern.
 
-**Utility changes** in `src/utils/mqlReconciliation.ts`:
-- Add `closedHomeLoans: number` to the `FinancialSummary` interface
-- Calculate closed home loans: filter `bankingLoans` for non-active status + home/housing loan type keywords
+#### File: `src/components/MqlRawDataTab.tsx`
 
-### Files Changed
-- `src/components/MqlRawDataTab.tsx` -- Section rename, lifestyle column removal, financial header with headline income, closed home loans row
-- `src/utils/mqlReconciliation.ts` -- Add `closedHomeLoans` to interface and calculation
+4. **Remove Vehicle Value and RTO Pre-Tax Income** rows from the Vehicle Ownership section (lines 232-237). Keep the vehicle table itself.
 
+### Technical Detail
+
+The `isActiveLoan` function becomes:
+```typescript
+const isActiveLoan = (loan) => {
+  if (loan.is_active === true) return true;
+  if (loan.is_active === false) return false;
+  // fallback: no date_closed means active
+  return !loan.date_closed;
+};
+```
+
+Closed home loans become:
+```typescript
+const isClosedLoan = (loan) => loan.is_active === false || !!loan.date_closed;
+```
+
+Active cards become:
+```typescript
+const isActiveCard = (card) => card.is_active === true;
+```
+
+No backend changes needed.
