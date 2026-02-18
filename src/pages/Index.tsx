@@ -10,7 +10,7 @@ import { exportLeadsToExcel } from '@/utils/excelExport';
 import { Lead, AnalysisResult, MqlEnrichment } from '@/types/lead';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Sparkles, Upload, LogOut, Database, BarChart3, RefreshCw, Loader2 } from 'lucide-react';
+import { Sparkles, Upload, LogOut, Database, BarChart3, RefreshCw, Loader2, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { ExcelSchema } from '@/config/projects';
 import type { User, Session } from '@supabase/supabase-js';
@@ -944,10 +944,23 @@ const Index = () => {
             <h1 className="text-3xl font-bold">Customer360</h1>
             <p className="text-sm text-muted-foreground">Powered by Raisn.ai</p>
           </div>
-          <button onClick={handleLogout} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
-            <LogOut className="h-4 w-4" />
-            Logout
-          </button>
+          <div className="flex flex-col items-end gap-1">
+            {user?.email?.endsWith('@raisn.ai') && leads.length > 0 && (
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => setShowClearCacheConfirm(true)} 
+                className="text-destructive hover:text-destructive"
+                disabled={isClearingCache}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+            <button onClick={handleLogout} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+              <LogOut className="h-4 w-4" />
+              Logout
+            </button>
+          </div>
         </div>
 
         {leads.length === 0 && !isLoading ? (
@@ -1017,10 +1030,6 @@ const Index = () => {
               onLeadClick={handleLeadClick}
               ratingFilter={ratingFilter}
               onExport={handleExport}
-              
-              userEmail={user?.email}
-              onClearCache={() => setShowClearCacheConfirm(true)}
-              isClearingCache={isClearingCache}
             />
 
             {/* Lead Report Modal */}

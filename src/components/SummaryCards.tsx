@@ -1,61 +1,62 @@
 import { Card, CardContent } from '@/components/ui/card';
-import { TrendingUp, Thermometer, Snowflake } from 'lucide-react';
+import { ArrowUp, ArrowDown, Minus } from 'lucide-react';
 import { Lead } from '@/types/lead';
 
 interface SummaryCardsProps {
   leads: Lead[];
-  onFilterChange: (rating: 'Hot' | 'Warm' | 'Cold' | null) => void;
+  onFilterChange: (category: 'Upgraded' | 'Downgraded' | 'Unchanged' | null) => void;
   activeFilter: string | null;
 }
 
-export const SummaryCards = ({ leads, onFilterChange, activeFilter }: SummaryCardsProps) => {
-  // Use AI rating if available (from cache), otherwise use manager rating
-  const hotCount = leads.filter(l => (l.rating || l.managerRating) === 'Hot').length;
-  const warmCount = leads.filter(l => (l.rating || l.managerRating) === 'Warm').length;
-  const coldCount = leads.filter(l => (l.rating || l.managerRating) === 'Cold').length;
-  const total = leads.length;
+const ratingOrder: Record<string, number> = { 'hot': 3, 'warm': 2, 'cold': 1 };
 
-  const hotPercentage = total > 0 ? ((hotCount / total) * 100).toFixed(1) : '0';
-  const warmPercentage = total > 0 ? ((warmCount / total) * 100).toFixed(1) : '0';
-  const coldPercentage = total > 0 ? ((coldCount / total) * 100).toFixed(1) : '0';
+const getRatingValue = (rating?: string) => ratingOrder[String(rating || '').toLowerCase()] || 0;
+
+export const SummaryCards = ({ leads, onFilterChange, activeFilter }: SummaryCardsProps) => {
+  // Only count leads that have BOTH AI rating and Manager rating
+  const leadsWithBoth = leads.filter(l => l.rating && l.managerRating);
+  const total = leadsWithBoth.length;
+
+  const upgradedCount = leadsWithBoth.filter(l => getRatingValue(l.rating) > getRatingValue(l.managerRating)).length;
+  const downgradedCount = leadsWithBoth.filter(l => getRatingValue(l.rating) < getRatingValue(l.managerRating)).length;
+  const unchangedCount = leadsWithBoth.filter(l => getRatingValue(l.rating) === getRatingValue(l.managerRating)).length;
+
+  const pct = (count: number) => total > 0 ? ((count / total) * 100).toFixed(1) : '0';
 
   const cardData = [
     {
-      rating: 'Hot' as const,
-      count: hotCount,
-      percentage: hotPercentage,
-      icon: TrendingUp,
+      category: 'Upgraded' as const,
+      count: upgradedCount,
+      percentage: pct(upgradedCount),
+      icon: ArrowUp,
       color: 'bg-status-hot',
-      hoverColor: 'hover:bg-status-hot/90',
-      borderColor: activeFilter === 'Hot' ? 'border-status-hot border-2' : 'border-border'
+      borderColor: activeFilter === 'Upgraded' ? 'border-status-hot border-2' : 'border-border',
     },
     {
-      rating: 'Warm' as const,
-      count: warmCount,
-      percentage: warmPercentage,
-      icon: Thermometer,
-      color: 'bg-status-warm',
-      hoverColor: 'hover:bg-status-warm/90',
-      borderColor: activeFilter === 'Warm' ? 'border-status-warm border-2' : 'border-border'
-    },
-    {
-      rating: 'Cold' as const,
-      count: coldCount,
-      percentage: coldPercentage,
-      icon: Snowflake,
+      category: 'Downgraded' as const,
+      count: downgradedCount,
+      percentage: pct(downgradedCount),
+      icon: ArrowDown,
       color: 'bg-status-cold',
-      hoverColor: 'hover:bg-status-cold/90',
-      borderColor: activeFilter === 'Cold' ? 'border-status-cold border-2' : 'border-border'
-    }
+      borderColor: activeFilter === 'Downgraded' ? 'border-status-cold border-2' : 'border-border',
+    },
+    {
+      category: 'Unchanged' as const,
+      count: unchangedCount,
+      percentage: pct(unchangedCount),
+      icon: Minus,
+      color: 'bg-status-warm',
+      borderColor: activeFilter === 'Unchanged' ? 'border-status-warm border-2' : 'border-border',
+    },
   ];
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      {cardData.map(({ rating, count, percentage, icon: Icon, color, hoverColor, borderColor }) => (
+      {cardData.map(({ category, count, percentage, icon: Icon, color, borderColor }) => (
         <Card
-          key={rating}
-          className={`cursor-pointer transition-all ${borderColor} ${hoverColor}`}
-          onClick={() => onFilterChange(activeFilter === rating ? null : rating)}
+          key={category}
+          className={`cursor-pointer transition-all ${borderColor} hover:shadow-md`}
+          onClick={() => onFilterChange(activeFilter === category ? null : category)}
         >
           <CardContent className="p-3">
             <div className="flex items-center justify-between">
@@ -63,7 +64,7 @@ export const SummaryCards = ({ leads, onFilterChange, activeFilter }: SummaryCar
                 <div className={`p-1.5 rounded-lg ${color} text-white`}>
                   <Icon className="h-5 w-5" />
                 </div>
-                <span className="font-semibold">{rating}</span>
+                <span className="font-semibold">{category}</span>
               </div>
               <div className="text-right">
                 <span className="text-2xl font-bold">{count}</span>
