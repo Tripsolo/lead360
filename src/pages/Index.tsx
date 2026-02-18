@@ -963,20 +963,10 @@ const Index = () => {
             <h1 className="text-3xl font-bold">Customer360</h1>
             <p className="text-sm text-muted-foreground">Powered by Raisn.ai</p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button 
-              variant="outline" 
-              onClick={() => navigate('/project-analytics')} 
-              size="sm"
-            >
-              <BarChart3 className="mr-2 h-4 w-4" />
-              View Analytics
-            </Button>
-            <Button variant="outline" onClick={handleLogout} size="sm">
-              <LogOut className="mr-2 h-4 w-4" />
-              Logout
-            </Button>
-          </div>
+          <button onClick={handleLogout} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+            <LogOut className="h-4 w-4" />
+            Logout
+          </button>
         </div>
 
         {leads.length === 0 && !isLoading ? (
@@ -1022,9 +1012,9 @@ const Index = () => {
                 </Button>
               )}
               <div className="flex-1" />
-              <Button variant="outline" onClick={handleReset} size="lg">
-                <Upload className="mr-2 h-5 w-5" />
-                Upload New File
+              <Button variant="outline" onClick={handleReset}>
+                <Upload className="mr-2 h-4 w-4" />
+                New Leads
               </Button>
               <Button 
                 variant="outline" 

@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, ArrowUpDown, ArrowUp, ArrowDown, Download, Trash2, FileSpreadsheet } from 'lucide-react';
+import { format } from 'date-fns';
 
 interface LeadsTableProps {
   leads: Lead[];
@@ -209,7 +210,7 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport, onExpor
                 </Button>
               </TableHead>
               <TableHead>Project</TableHead>
-              <TableHead>Lead ID</TableHead>
+              
               <TableHead>
                 <Button variant="ghost" onClick={() => handleSort('phone')} className="h-8 px-2">
                   Phone
@@ -238,7 +239,7 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport, onExpor
               </TableHead>
               <TableHead>
                 <Button variant="ghost" onClick={() => handleSort('ppsScore')} className="h-8 px-2">
-                  PPS Score
+                  PPS
                   <SortIcon field="ppsScore" />
                 </Button>
               </TableHead>
@@ -248,7 +249,7 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport, onExpor
           <TableBody>
             {filteredLeads.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                   No leads found matching your filters
                 </TableCell>
               </TableRow>
@@ -261,11 +262,11 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport, onExpor
                 >
                   <TableCell className="font-medium">{lead.name}</TableCell>
                   <TableCell>{lead.projectInterest || '-'}</TableCell>
-                  <TableCell className="text-muted-foreground text-sm">{lead.id}</TableCell>
+                  
                   <TableCell>{lead.phone || '-'}</TableCell>
                   <TableCell>{lead.leadOwner || '-'}</TableCell>
                   <TableCell>
-                    {lead.date ? new Date(lead.date).toLocaleDateString() : '-'}
+                    {lead.date ? format(new Date(lead.date), 'dd MMM') : '-'}
                   </TableCell>
                   <TableCell>
                     {lead.rating ? (
