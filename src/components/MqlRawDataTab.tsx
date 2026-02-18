@@ -189,23 +189,34 @@ export const MqlRawDataTab = ({ lead }: MqlRawDataTabProps) => {
         <Separator />
 
         {/* 3. Financial Summary */}
-        <Section title="Financial Summary">
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="font-semibold text-sm text-foreground">Financial Summary</h4>
+            {financial.finalIncomeLacs != null && (
+              <div className="text-right">
+                <span className="text-xs text-muted-foreground mr-1.5">Income</span>
+                <span className="text-lg font-bold text-foreground">{financial.finalIncomeLacs} <span className="text-xs font-normal text-muted-foreground">Lacs</span></span>
+              </div>
+            )}
+          </div>
+          <div className="bg-muted/30 rounded-lg p-4">
           <div className="grid md:grid-cols-2 gap-x-6">
             <DataRow label="Credit Score Range" value={financial.creditScoreRange} />
-            <DataRow label="Final Income (Lacs)" value={financial.finalIncomeLacs} />
             <DataRow label="Total Active Loans" value={financial.totalActiveLoans} />
             <DataRow label="Active Home Loans" value={financial.activeHomeLoans} />
+            <DataRow label="Closed Home Loans" value={financial.closedHomeLoans} />
             <DataRow label="Active Auto Loans" value={financial.activeAutoLoans} />
             <DataRow label="Active Credit Cards" value={financial.activeCreditCards} />
             <DataRow label="Total Home + Auto EMI" value={financial.totalHomeAutoEmi > 0 ? `₹${financial.totalHomeAutoEmi.toLocaleString()}` : 'N/A'} />
             <DataRow label="EMI to Monthly Income Ratio" value={financial.emiToIncomeRatio} />
           </div>
-        </Section>
+          </div>
+        </div>
 
         <Separator />
 
-        {/* 4. RTO / Vehicle Ownership (unchanged) */}
-        <Section title="RTO / Vehicle Ownership">
+        {/* 4. Vehicle Ownership */}
+        <Section title="Vehicle Ownership">
           {rtoVehicles.length > 0 ? (
             <>
               <ArrayTable
@@ -216,7 +227,6 @@ export const MqlRawDataTab = ({ lead }: MqlRawDataTabProps) => {
                   { key: 'manufacture_year', label: 'Year' },
                   { key: 'registration_price', label: 'Price' },
                   { key: 'fuel_type', label: 'Fuel' },
-                  { key: 'lifestyle', label: 'Lifestyle' },
                 ]}
               />
               {rtoIncomeRange && (

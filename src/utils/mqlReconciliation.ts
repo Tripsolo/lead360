@@ -106,6 +106,7 @@ export interface FinancialSummary {
   finalIncomeLacs: number | null;
   totalActiveLoans: number | null;
   activeHomeLoans: number;
+  closedHomeLoans: number;
   activeAutoLoans: number;
   activeCreditCards: number;
   totalHomeAutoEmi: number;
@@ -146,6 +147,11 @@ export function calculateFinancialSummary(
   const activeHome = activeLoans.filter((l) => matchType(l, homeKeywords));
   const activeAuto = activeLoans.filter((l) => matchType(l, autoKeywords));
 
+  const closedHomeLoans = (bankingLoans || []).filter((l) => {
+    const status = String(l.status || '').toLowerCase();
+    return (status === 'closed' || status === 'inactive' || status === 'paid') && matchType(l, homeKeywords);
+  }).length;
+
   const emiSum = [...activeHome, ...activeAuto].reduce((sum, l) => {
     const amt = Number(l.installment_amount || l.emi_amount || 0);
     return sum + (isNaN(amt) ? 0 : amt);
@@ -168,6 +174,7 @@ export function calculateFinancialSummary(
     finalIncomeLacs: finalIncome,
     totalActiveLoans: bankingSummary?.active_loans != null ? Number(bankingSummary.active_loans) : null,
     activeHomeLoans: activeHome.length,
+    closedHomeLoans,
     activeAutoLoans: activeAuto.length,
     activeCreditCards: activeCards.length,
     totalHomeAutoEmi: emiSum,
