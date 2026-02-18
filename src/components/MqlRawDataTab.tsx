@@ -2,7 +2,11 @@ import { Lead } from '@/types/lead';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Database } from 'lucide-react';
+import { Database, Briefcase, Building2 } from 'lucide-react';
+import {
+  reconcileProfessionalData,
+  calculateFinancialSummary,
+} from '@/utils/mqlReconciliation';
 
 interface MqlRawDataTabProps {
   lead: Lead;
@@ -40,12 +44,12 @@ const DataRow = ({ label, value }: { label: string; value: unknown }) => (
 );
 
 // Mini table for arrays
-const ArrayTable = ({ 
-  data, 
-  columns 
-}: { 
-  data: Record<string, unknown>[] | undefined; 
-  columns: { key: string; label: string }[] 
+const ArrayTable = ({
+  data,
+  columns,
+}: {
+  data: Record<string, unknown>[] | undefined;
+  columns: { key: string; label: string }[];
 }) => {
   if (!data || data.length === 0) {
     return <p className="text-sm text-muted-foreground">No data available</p>;
@@ -56,7 +60,7 @@ const ArrayTable = ({
       <table className="w-full text-xs">
         <thead>
           <tr className="border-b border-border">
-            {columns.map(col => (
+            {columns.map((col) => (
               <th key={col.key} className="text-left py-2 px-2 font-medium text-muted-foreground">
                 {col.label}
               </th>
@@ -66,7 +70,7 @@ const ArrayTable = ({
         <tbody>
           {data.map((row, idx) => (
             <tr key={idx} className="border-b border-border/50 last:border-0 even:bg-muted/20">
-              {columns.map(col => (
+              {columns.map((col) => (
                 <td key={col.key} className="py-2 px-2">
                   {formatMqlValue(row[col.key])}
                 </td>
@@ -83,7 +87,6 @@ export const MqlRawDataTab = ({ lead }: MqlRawDataTabProps) => {
   const rawResponse = lead.mqlEnrichment?.rawResponse as Record<string, unknown> | undefined;
   const enrichedAt = lead.mqlEnrichment?.enrichedAt;
 
-  // Check if we have MQL data
   if (!rawResponse) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -96,7 +99,6 @@ export const MqlRawDataTab = ({ lead }: MqlRawDataTabProps) => {
     );
   }
 
-  // Extract the lead data from response structure
   const leads = rawResponse.leads as Record<string, unknown>[] | undefined;
   const leadData = leads?.[0] as Record<string, unknown> | undefined;
 
@@ -105,9 +107,7 @@ export const MqlRawDataTab = ({ lead }: MqlRawDataTabProps) => {
       <div className="flex flex-col items-center justify-center py-12 text-center">
         <Database className="h-12 w-12 text-muted-foreground/50 mb-4" />
         <h4 className="text-lg font-semibold mb-2">Empty MQL Response</h4>
-        <p className="text-sm text-muted-foreground">
-          The MQL response does not contain lead data.
-        </p>
+        <p className="text-sm text-muted-foreground">The MQL response does not contain lead data.</p>
       </div>
     );
   }
@@ -118,13 +118,17 @@ export const MqlRawDataTab = ({ lead }: MqlRawDataTabProps) => {
   const bankingSummary = leadData.banking_summary as Record<string, unknown> | undefined;
   const bankingLoans = leadData.banking_loans as Record<string, unknown>[] | undefined;
   const bankingCards = leadData.banking_cards as Record<string, unknown>[] | undefined;
-  const businessDetails = leadData.business_details as Record<string, unknown> | undefined;
+  const businessDetails = leadData.business_details as Record<string, unknown>[] | undefined;
   const employmentDetails = leadData.employment_details as Record<string, unknown>[] | undefined;
   const linkedinDetails = leadData.linkedin_details as Record<string, unknown> | undefined;
   const creditScore = leadData.credit_score;
   const rtoDetails = leadData.rto_details as Record<string, unknown> | undefined;
   const rtoVehicles = (rtoDetails?.vehicles as Record<string, unknown>[]) || [];
   const rtoIncomeRange = rtoDetails?.income_range_rto as Record<string, unknown> | undefined;
+
+  // Reconciled data
+  const professional = reconcileProfessionalData(employmentDetails, linkedinDetails, businessDetails, demography);
+  const financial = calculateFinancialSummary(creditScore, income, bankingSummary, bankingLoans, bankingCards);
 
   return (
     <ScrollArea className="h-[60vh]">
@@ -137,12 +141,13 @@ export const MqlRawDataTab = ({ lead }: MqlRawDataTabProps) => {
           </div>
         )}
 
-        {/* Person Info */}
-        <Section title="Person Info">
+        {/* 1. Personal Info (with Location from demography) */}
+        <Section title="Personal Info">
           <div className="grid md:grid-cols-2 gap-x-6">
             <DataRow label="MQL Rating" value={personInfo?.rating} />
             <DataRow label="Age" value={demography?.age} />
             <DataRow label="Gender" value={demography?.gender} />
+            <DataRow label="Location" value={demography?.location} />
             <DataRow label="Locality Grade" value={personInfo?.locality_grade} />
             <DataRow label="Lifestyle" value={personInfo?.lifestyle} />
             <DataRow label="Capability" value={personInfo?.capability} />
@@ -151,130 +156,67 @@ export const MqlRawDataTab = ({ lead }: MqlRawDataTabProps) => {
 
         <Separator />
 
-        {/* Credit Score */}
-        <Section title="Credit Score">
-          <DataRow label="Score" value={creditScore} />
-        </Section>
+        {/* 2. Professional Summary */}
+        <Section title="Professional Summary">
+          <div className="space-y-3">
+            <div className="grid md:grid-cols-2 gap-x-6">
+              <DataRow label="Current Role" value={professional.currentRole} />
+              <DataRow label="Employment Type" value={professional.employmentType} />
+              <DataRow label="Current Tenure" value={professional.currentTenure} />
+              {professional.activeBusiness && (
+                <DataRow label="Business (GST)" value={professional.activeBusiness} />
+              )}
+            </div>
 
-        <Separator />
-
-        {/* Income */}
-        <Section title="Income">
-          <div className="grid md:grid-cols-2 gap-x-6">
-            <DataRow label="Final Income (Lacs)" value={income?.final_income_lacs} />
-            <DataRow label="Pre-Tax Income (Lacs)" value={income?.pre_tax_income_lacs} />
+            {professional.previousEmployers.length > 0 && (
+              <div className="mt-2">
+                <p className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
+                  <Building2 className="h-3 w-3" /> Previous Employers
+                </p>
+                <div className="space-y-1">
+                  {professional.previousEmployers.map((emp, idx) => (
+                    <div key={idx} className="flex justify-between items-center text-xs py-1 border-b border-border/30 last:border-0">
+                      <span className="text-foreground">{emp.name}</span>
+                      <span className="text-muted-foreground">{emp.tenure}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </Section>
 
         <Separator />
 
-        {/* Demography */}
-        <Section title="Demography">
+        {/* 3. Financial Summary */}
+        <Section title="Financial Summary">
           <div className="grid md:grid-cols-2 gap-x-6">
-            <DataRow label="Location" value={demography?.location} />
-            <DataRow label="Designation" value={demography?.designation} />
-            <DataRow label="City" value={demography?.city} />
-            <DataRow label="State" value={demography?.state} />
-            <DataRow label="Pincode" value={demography?.pincode} />
+            <DataRow label="Credit Score Range" value={financial.creditScoreRange} />
+            <DataRow label="Final Income (Lacs)" value={financial.finalIncomeLacs} />
+            <DataRow label="Total Active Loans" value={financial.totalActiveLoans} />
+            <DataRow label="Active Home Loans" value={financial.activeHomeLoans} />
+            <DataRow label="Active Auto Loans" value={financial.activeAutoLoans} />
+            <DataRow label="Active Credit Cards" value={financial.activeCreditCards} />
+            <DataRow label="Total Home + Auto EMI" value={financial.totalHomeAutoEmi > 0 ? `₹${financial.totalHomeAutoEmi.toLocaleString()}` : 'N/A'} />
+            <DataRow label="EMI to Monthly Income Ratio" value={financial.emiToIncomeRatio} />
           </div>
         </Section>
 
         <Separator />
 
-        {/* Banking Summary */}
-        <Section title="Banking Summary">
-          <div className="grid md:grid-cols-2 gap-x-6">
-            <DataRow label="Total Loans" value={bankingSummary?.total_loans} />
-            <DataRow label="Active Loans" value={bankingSummary?.active_loans} />
-            <DataRow label="Home Loans" value={bankingSummary?.home_loans} />
-            <DataRow label="Auto Loans" value={bankingSummary?.auto_loans} />
-            <DataRow label="Consumer Loans" value={bankingSummary?.consumer_loan_count} />
-            <DataRow label="Credit Card Count" value={bankingSummary?.credit_card_count} />
-            <DataRow label="Has Premium Cards" value={bankingSummary?.has_premium_cards} />
-            <DataRow label="Is Amex Holder" value={bankingSummary?.is_amex_holder} />
-            <DataRow label="Highest Card Usage %" value={bankingSummary?.highest_card_usage_percent} />
-            <DataRow label="Active EMI Burden" value={bankingSummary?.active_emi_burden} />
-            <DataRow label="EMI to Income Ratio" value={bankingSummary?.emi_to_income_ratio} />
-          </div>
-        </Section>
-
-        <Separator />
-
-        {/* Banking Loans */}
-        <Section title="Banking Loans">
-          <ArrayTable
-            data={bankingLoans}
-            columns={[
-              { key: 'loan_type', label: 'Type' },
-              { key: 'sanction_date', label: 'Sanction Date' },
-              { key: 'sanction_amount', label: 'Amount' },
-              { key: 'emi_amount', label: 'EMI' },
-              { key: 'current_balance', label: 'Balance' },
-              { key: 'status', label: 'Status' },
-            ]}
-          />
-        </Section>
-
-        <Separator />
-
-        {/* Banking Cards */}
-        <Section title="Banking Cards">
-          <ArrayTable
-            data={bankingCards}
-            columns={[
-              { key: 'card_type', label: 'Type' },
-              { key: 'card_name', label: 'Name' },
-              { key: 'credit_limit', label: 'Limit' },
-              { key: 'usage_percent', label: 'Usage %' },
-              { key: 'is_premium', label: 'Premium' },
-            ]}
-          />
-        </Section>
-
-        <Separator />
-
-        {/* Business Details */}
-        <Section title="Business Details">
-          <div className="grid md:grid-cols-2 gap-x-6">
-            <DataRow label="GST Number" value={businessDetails?.gst_number} />
-            <DataRow label="Business Name" value={businessDetails?.business_name} />
-            <DataRow label="Business Type" value={businessDetails?.business_type} />
-            <DataRow label="Industry" value={businessDetails?.industry} />
-            <DataRow label="Turnover Slab" value={businessDetails?.turnover_slab} />
-          </div>
-        </Section>
-
-        <Separator />
-
-        {/* Employment Details */}
-        <Section title="Employment Details">
-          <ArrayTable
-            data={employmentDetails}
-            columns={[
-              { key: 'employer_name', label: 'Employer' },
-              { key: 'designation', label: 'Designation' },
-              { key: 'start_date', label: 'Start Date' },
-              { key: 'end_date', label: 'End Date' },
-              { key: 'is_current', label: 'Current' },
-            ]}
-          />
-        </Section>
-
-        <Separator />
-
-        {/* RTO / Vehicle Ownership */}
+        {/* 4. RTO / Vehicle Ownership (unchanged) */}
         <Section title="RTO / Vehicle Ownership">
           {rtoVehicles.length > 0 ? (
             <>
               <ArrayTable
                 data={rtoVehicles}
                 columns={[
-              { key: 'vehicle_maker', label: 'Maker' },
-              { key: 'vehicle_model', label: 'Model' },
-              { key: 'manufacture_year', label: 'Year' },
-              { key: 'registration_price', label: 'Price' },
-              { key: 'fuel_type', label: 'Fuel' },
-              { key: 'lifestyle', label: 'Lifestyle' },
+                  { key: 'vehicle_maker', label: 'Maker' },
+                  { key: 'vehicle_model', label: 'Model' },
+                  { key: 'manufacture_year', label: 'Year' },
+                  { key: 'registration_price', label: 'Price' },
+                  { key: 'fuel_type', label: 'Fuel' },
+                  { key: 'lifestyle', label: 'Lifestyle' },
                 ]}
               />
               {rtoIncomeRange && (
@@ -286,26 +228,6 @@ export const MqlRawDataTab = ({ lead }: MqlRawDataTabProps) => {
             </>
           ) : (
             <p className="text-sm text-muted-foreground">No vehicle data available</p>
-          )}
-        </Section>
-
-        <Separator />
-
-        {/* LinkedIn Details */}
-        <Section title="LinkedIn Details">
-          {linkedinDetails && Object.keys(linkedinDetails).length > 0 ? (
-            <div className="grid md:grid-cols-2 gap-x-6">
-              <DataRow label="Profile URL" value={linkedinDetails?.profile_url} />
-              <DataRow label="Total Experience (Years)" value={linkedinDetails?.total_years_experience} />
-              <DataRow label="Current Designation" value={linkedinDetails?.current_designation} />
-              <DataRow label="Current Employer" value={linkedinDetails?.current_employer} />
-              <DataRow label="Highest Education" value={linkedinDetails?.highest_education} />
-              <DataRow label="Job Stable" value={linkedinDetails?.job_stable} />
-              <DataRow label="Network Score" value={linkedinDetails?.network_score} />
-              <DataRow label="Connection Count" value={linkedinDetails?.connection_count} />
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">No LinkedIn data available</p>
           )}
         </Section>
       </div>
