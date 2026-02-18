@@ -6,7 +6,7 @@ import { LeadsTable } from '@/components/LeadsTable';
 import { LeadReportModal } from '@/components/LeadReportModal';
 import { parseExcelFile } from '@/utils/excelParser';
 import { exportLeadsToExcel } from '@/utils/excelExport';
-import { exportDerivedFieldsToCSV } from '@/utils/derivedFieldsExport';
+
 import { Lead, AnalysisResult, MqlEnrichment } from '@/types/lead';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -767,25 +767,6 @@ const Index = () => {
     });
   };
 
-  const handleExportDerived = async () => {
-    try {
-      toast({
-        title: 'Exporting...',
-        description: 'Preparing derived data CSV export.',
-      });
-      await exportDerivedFieldsToCSV(selectedProjectId || undefined);
-      toast({
-        title: 'Export successful',
-        description: 'Derived data has been exported to CSV.',
-      });
-    } catch (error) {
-      toast({
-        title: 'Export failed',
-        description: error instanceof Error ? error.message : 'Failed to export derived data.',
-        variant: 'destructive',
-      });
-    }
-  };
 
   const handleLeadClick = (lead: Lead) => {
     setSelectedLead(lead);
@@ -980,38 +961,35 @@ const Index = () => {
           <div className="space-y-8">
             {/* Action Buttons */}
             <div className="flex flex-wrap gap-3 items-center">
-              <Button 
-                onClick={handleEnrichLeads} 
-                disabled={isEnriching || isAnalyzing} 
-                size="lg"
-                variant="outline"
-                className="border-primary text-primary hover:bg-primary/10"
-              >
-                <Database className="mr-2 h-5 w-5" />
-                {isEnriching ? 'Enriching...' : 'Enrich with Data'}
-              </Button>
-              <Button 
-                onClick={() => handleAnalyzeLeads()} 
-                disabled={isAnalyzing || isEnriching || isReanalyzing} 
-                size="lg"
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
-              >
-                <Sparkles className="mr-2 h-5 w-5" />
-                {isAnalyzing ? 'Analyzing...' : 'Analyze with AI'}
-              </Button>
               {failedAnalysisCount > 0 && (
                 <Button 
                   onClick={handleReanalyzeFailedLeads} 
                   disabled={isReanalyzing || isAnalyzing || isEnriching} 
-                  size="lg"
                   variant="outline"
                   className="border-amber-500 text-amber-600 hover:bg-amber-50"
                 >
-                  <RefreshCw className={`mr-2 h-5 w-5 ${isReanalyzing ? 'animate-spin' : ''}`} />
+                  <RefreshCw className={`mr-2 h-4 w-4 ${isReanalyzing ? 'animate-spin' : ''}`} />
                   {isReanalyzing ? 'Re-analyzing...' : `Re-analyze Failed (${failedAnalysisCount})`}
                 </Button>
               )}
               <div className="flex-1" />
+              <Button 
+                onClick={handleEnrichLeads} 
+                disabled={isEnriching || isAnalyzing} 
+                variant="outline"
+                className="border-primary text-primary hover:bg-primary/10"
+              >
+                <Database className="mr-2 h-4 w-4" />
+                {isEnriching ? 'Enriching...' : 'Enrich'}
+              </Button>
+              <Button 
+                onClick={() => handleAnalyzeLeads()} 
+                disabled={isAnalyzing || isEnriching || isReanalyzing} 
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+              >
+                <Sparkles className="mr-2 h-4 w-4" />
+                {isAnalyzing ? 'Analyzing...' : 'Ask AI'}
+              </Button>
               <Button variant="outline" onClick={handleReset}>
                 <Upload className="mr-2 h-4 w-4" />
                 New Leads
@@ -1039,7 +1017,7 @@ const Index = () => {
               onLeadClick={handleLeadClick}
               ratingFilter={ratingFilter}
               onExport={handleExport}
-              onExportDerived={handleExportDerived}
+              
               userEmail={user?.email}
               onClearCache={() => setShowClearCacheConfirm(true)}
               isClearingCache={isClearingCache}

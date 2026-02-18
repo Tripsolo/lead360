@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, ArrowUpDown, ArrowUp, ArrowDown, Download, Trash2, FileSpreadsheet } from 'lucide-react';
+import { Search, ArrowUpDown, ArrowUp, ArrowDown, Download, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface LeadsTableProps {
@@ -20,7 +20,6 @@ interface LeadsTableProps {
   onLeadClick: (lead: Lead) => void;
   ratingFilter: string | null;
   onExport: () => void;
-  onExportDerived?: () => void;
   userEmail?: string;
   onClearCache?: () => void;
   isClearingCache?: boolean;
@@ -29,7 +28,7 @@ interface LeadsTableProps {
 type SortField = 'name' | 'date' | 'rating' | 'phone' | 'mqlRating' | 'ppsScore';
 type SortDirection = 'asc' | 'desc' | null;
 
-export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport, onExportDerived, userEmail, onClearCache, isClearingCache }: LeadsTableProps) => {
+export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport, userEmail, onClearCache, isClearingCache }: LeadsTableProps) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [ownerFilter, setOwnerFilter] = useState<string>('all');
   const [projectFilter, setProjectFilter] = useState<string>('all');
@@ -191,11 +190,6 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport, onExpor
         <Button variant="outline" onClick={onExport} size="sm" className="md:w-auto" title="Export Raw Data">
           <Download className="h-4 w-4" />
         </Button>
-        {onExportDerived && (
-          <Button variant="outline" onClick={onExportDerived} size="sm" className="md:w-auto" title="Export Derived Data (CSV)">
-            <FileSpreadsheet className="h-4 w-4" />
-          </Button>
-        )}
       </div>
 
       {/* Table */}
