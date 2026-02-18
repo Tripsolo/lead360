@@ -104,9 +104,9 @@ async function processEnrichmentBatch(
       console.log(`[MQL Request] Headers: { "x-schema": "${mqlSchema}", "authorization": "***", "Content-Type": "application/json" }`);
       console.log(`[MQL Request] Body: ${JSON.stringify(payload)}`);
 
-      // Add 55-second timeout to prevent edge function from hanging
+      // Add 140-second timeout to prevent edge function from hanging
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 55000);
+      const timeoutId = setTimeout(() => controller.abort(), 140000);
 
       let mqlResponse: Response;
       try {
@@ -125,14 +125,14 @@ async function processEnrichmentBatch(
         clearTimeout(timeoutId);
         
         if (fetchError.name === 'AbortError') {
-          console.log(`[MQL Timeout] Lead ${lead.id}: MQL API timed out after 55 seconds`);
+          console.log(`[MQL Timeout] Lead ${lead.id}: MQL API timed out after 140 seconds`);
           
           await supabase.from("lead_enrichments").upsert({
             lead_id: lead.id,
             project_id: projectId,
             enriched_at: new Date().toISOString(),
             mql_rating: "N/A",
-            raw_response: { status: "TIMEOUT", error: "MQL API timeout after 55 seconds - retry later" },
+            raw_response: { status: "TIMEOUT", error: "MQL API timeout after 140 seconds - retry later" },
           }, { onConflict: "lead_id,project_id" });
           
           continue;
