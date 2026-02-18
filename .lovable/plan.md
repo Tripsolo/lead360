@@ -1,27 +1,60 @@
-
-## Fix Financial Summary Display and Remove Vehicle Fields
-
-### Investigation Results
-
-The database **does contain** the loan, EMI, and card data. For example:
-- Lead `006fv000005uKvh`: 1 active Housing Loan, EMI of Rs 78,029, 11 total loans
-- Lead `006fv000005un85`: 1 active Commercial Vehicle Loan, 6 total loans, 4 active credit cards
-
-The reconciliation logic in `mqlReconciliation.ts` (using `is_active === true` boolean checks) is correct and should produce the right values. The most likely cause is that the **previous code edits have not yet been reflected** in the running app build.
-
-To ensure this works reliably going forward, I will:
+## Lead Modal UI Tweaks
 
 ### Changes
 
-#### 1. Remove Vehicle Value and RTO Pre-Tax Income from Vehicle Ownership
-In `src/components/MqlRawDataTab.tsx`: These rows were supposed to be removed earlier but may still be present. Confirm removal.
+#### 1. Fix "Current Role" fallback when no employment data exists
 
-#### 2. Add "Property Loan" to home loan keywords
-The MQL data contains loans typed as "Property Loan" which are essentially home loans (home equity / LAP). The current keywords `['home', 'housing']` miss these. Adding `'property'` to `homeKeywords` in `src/utils/mqlReconciliation.ts` will capture Property Loans in the home loan counts.
+**File: `src/utils/mqlReconciliation.ts**`
 
-#### 3. Add console logging for debugging
-Add a temporary `console.log` in `MqlRawDataTab.tsx` to output the computed `financial` object so we can verify values are being calculated. This helps confirm the code is executing with the latest logic.
+Currently line 94 always produces `"Professional at Unknown"` when both LinkedIn designation and EPFO employer are missing. Change logic so that if both `designation` and `employerName` resolve to their defaults ("Professional" and "Unknown"), return `"N/A"` instead.
+
+Updated logic:
+
+```
+const hasDesignation = linkedinDetails?.current_designation;
+const hasEmployer = currentEmployment?.employer_name;
+if (!hasDesignation && !hasEmployer) currentRole = 'N/A';
+else currentRole = `${designation} at ${employerName}`;
+```
+
+#### 2. Round income to 0 decimals and make the label bigger
+
+**File: `src/components/MqlRawDataTab.tsx**`
+
+In the Financial Summary header (lines 199-203):
+
+- Change `financial.finalIncomeLacs` display to `Math.round(financial.finalIncomeLacs)` (no decimals)
+- Change the "Income" label from `text-xs` to `text-sm font-medium` so it stands out more
+
+#### 3. Restructure Personal Info into two parts
+
+**File: `src/components/MqlRawDataTab.tsx**`
+
+Replace the current "Personal Info" section (lines 149-159) with:
+
+**a) MQL Highlights section** -- a highlighted row of 4 badges/chips showing:
+
+- MQL Rating (with color badge)
+- Capability (with color badge)
+- Lifestyle (with color badge)
+- Locality Grade (with color badge)
+
+Styled as a horizontal row with colored backgrounds, visually distinct.
+
+**b) Personal Info section** -- double columns, 2 rows of factual data:
+
+- Age
+- Gender
+- Location (with pincode extracted out)
+- Pincode (extracted from location string using regex `/\b\d{6}\b/`)
+
+#### 4. Remove enrichment timestamp
+
+**File: `src/components/MqlRawDataTab.tsx**`
+
+Remove lines 141-146 (the enriched-at badge block).
 
 ### Files Changed
-- `src/utils/mqlReconciliation.ts` -- Add `'property'` to `homeKeywords` array
-- `src/components/MqlRawDataTab.tsx` -- Confirm vehicle field removal, add debug logging for financial summary
+
+- `src/utils/mqlReconciliation.ts` -- Current role N/A fallback
+- `src/components/MqlRawDataTab.tsx` -- Income rounding, label size, personal info restructure, pincode extraction, and remove timestamp
