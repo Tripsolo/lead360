@@ -90,8 +90,12 @@ export function reconcileProfessionalData(
       tenure: calcEmployerTenure(e.date_of_joining as string | undefined, e.date_of_exit as string | undefined),
     }));
 
+  const hasDesignation = !!linkedinDetails?.current_designation;
+  const hasEmployer = !!(currentEmployment?.employer_name);
+  const currentRole = (!hasDesignation && !hasEmployer) ? 'N/A' : `${designation} at ${employerName}`;
+
   return {
-    currentRole: `${designation} at ${employerName}`,
+    currentRole,
     employmentType,
     currentTenure,
     activeBusiness,
