@@ -141,8 +141,8 @@ export const MqlRawDataTab = ({ lead }: MqlRawDataTabProps) => {
         <Section title="Person Info">
           <div className="grid md:grid-cols-2 gap-x-6">
             <DataRow label="MQL Rating" value={personInfo?.rating} />
-            <DataRow label="Age" value={personInfo?.age} />
-            <DataRow label="Gender" value={personInfo?.gender} />
+            <DataRow label="Age" value={demography?.age} />
+            <DataRow label="Gender" value={demography?.gender} />
             <DataRow label="Locality Grade" value={personInfo?.locality_grade} />
             <DataRow label="Lifestyle" value={personInfo?.lifestyle} />
             <DataRow label="Capability" value={personInfo?.capability} />
@@ -269,12 +269,12 @@ export const MqlRawDataTab = ({ lead }: MqlRawDataTabProps) => {
               <ArrayTable
                 data={rtoVehicles}
                 columns={[
-                  { key: 'maker', label: 'Maker' },
-                  { key: 'model', label: 'Model' },
-                  { key: 'year', label: 'Year' },
-                  { key: 'price', label: 'Price' },
-                  { key: 'fuel_type', label: 'Fuel' },
-                  { key: 'lifestyle', label: 'Lifestyle' },
+              { key: 'vehicle_maker', label: 'Maker' },
+              { key: 'vehicle_model', label: 'Model' },
+              { key: 'manufacture_year', label: 'Year' },
+              { key: 'registration_price', label: 'Price' },
+              { key: 'fuel_type', label: 'Fuel' },
+              { key: 'lifestyle', label: 'Lifestyle' },
                 ]}
               />
               {rtoIncomeRange && (
