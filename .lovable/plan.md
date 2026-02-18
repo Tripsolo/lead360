@@ -1,52 +1,27 @@
 
+## Fix Financial Summary Display and Remove Vehicle Fields
 
-## Fix Financial Summary Data Extraction and Remove Vehicle Fields
+### Investigation Results
 
-### Root Cause Found
+The database **does contain** the loan, EMI, and card data. For example:
+- Lead `006fv000005uKvh`: 1 active Housing Loan, EMI of Rs 78,029, 11 total loans
+- Lead `006fv000005un85`: 1 active Commercial Vehicle Loan, 6 total loans, 4 active credit cards
 
-The MQL API response uses **`is_active: true/false`** (a boolean field) for both loans and credit cards -- NOT a `status` string field. The current reconciliation logic in `mqlReconciliation.ts` checks `status === 'active'` and `status === 'closed'`, which never matches, producing zeros for all loan/card/EMI counts.
+The reconciliation logic in `mqlReconciliation.ts` (using `is_active === true` boolean checks) is correct and should produce the right values. The most likely cause is that the **previous code edits have not yet been reflected** in the running app build.
 
-**Evidence from actual data:**
-```
-is_active: true, loan_type: "Housing Loan", installment_amount: 155842
-is_active: true, loan_type: "Auto Loan (Personal)", installment_amount: 26923
-is_active: false, date_closed: "2025-12-10"
-```
+To ensure this works reliably going forward, I will:
 
 ### Changes
 
-#### File: `src/utils/mqlReconciliation.ts`
+#### 1. Remove Vehicle Value and RTO Pre-Tax Income from Vehicle Ownership
+In `src/components/MqlRawDataTab.tsx`: These rows were supposed to be removed earlier but may still be present. Confirm removal.
 
-1. **Fix `isActiveLoan`**: Change from checking `status === 'active'` to checking `is_active === true` (boolean). Loans without `is_active` field and without `date_closed` are treated as active.
+#### 2. Add "Property Loan" to home loan keywords
+The MQL data contains loans typed as "Property Loan" which are essentially home loans (home equity / LAP). The current keywords `['home', 'housing']` miss these. Adding `'property'` to `homeKeywords` in `src/utils/mqlReconciliation.ts` will capture Property Loans in the home loan counts.
 
-2. **Fix `closedHomeLoans`**: Change from checking `status === 'closed'` to checking `is_active === false` (or has `date_closed` set) combined with home/housing loan type match.
+#### 3. Add console logging for debugging
+Add a temporary `console.log` in `MqlRawDataTab.tsx` to output the computed `financial` object so we can verify values are being calculated. This helps confirm the code is executing with the latest logic.
 
-3. **Fix `activeCards`**: Change from checking `status === 'active'` to checking `is_active === true`. Cards use the same boolean pattern.
-
-#### File: `src/components/MqlRawDataTab.tsx`
-
-4. **Remove Vehicle Value and RTO Pre-Tax Income** rows from the Vehicle Ownership section (lines 232-237). Keep the vehicle table itself.
-
-### Technical Detail
-
-The `isActiveLoan` function becomes:
-```typescript
-const isActiveLoan = (loan) => {
-  if (loan.is_active === true) return true;
-  if (loan.is_active === false) return false;
-  // fallback: no date_closed means active
-  return !loan.date_closed;
-};
-```
-
-Closed home loans become:
-```typescript
-const isClosedLoan = (loan) => loan.is_active === false || !!loan.date_closed;
-```
-
-Active cards become:
-```typescript
-const isActiveCard = (card) => card.is_active === true;
-```
-
-No backend changes needed.
+### Files Changed
+- `src/utils/mqlReconciliation.ts` -- Add `'property'` to `homeKeywords` array
+- `src/components/MqlRawDataTab.tsx` -- Confirm vehicle field removal, add debug logging for financial summary
