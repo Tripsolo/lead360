@@ -57,17 +57,19 @@ export const SummaryCards = ({ leads, onFilterChange, activeFilter }: SummaryCar
           className={`cursor-pointer transition-all ${borderColor} ${hoverColor}`}
           onClick={() => onFilterChange(activeFilter === rating ? null : rating)}
         >
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className={`p-2 rounded-lg ${color} text-white`}>
-                <Icon className="h-6 w-6" />
+          <CardContent className="p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className={`p-1.5 rounded-lg ${color} text-white`}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <span className="font-semibold">{rating}</span>
               </div>
               <div className="text-right">
-                <p className="text-3xl font-bold">{count}</p>
-                <p className="text-sm text-muted-foreground">{percentage}%</p>
+                <span className="text-2xl font-bold">{count}</span>
+                <span className="text-xs text-muted-foreground ml-1">{percentage}%</span>
               </div>
             </div>
-            <h3 className="text-lg font-semibold">{rating} Leads</h3>
           </CardContent>
         </Card>
       ))}
