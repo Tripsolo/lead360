@@ -12,7 +12,8 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, ArrowUpDown, ArrowUp, ArrowDown, Download, Trash2 } from 'lucide-react';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Search, ArrowUpDown, ArrowUp, ArrowDown, Download, Filter } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface LeadsTableProps {
@@ -20,24 +21,40 @@ interface LeadsTableProps {
   onLeadClick: (lead: Lead) => void;
   ratingFilter: string | null;
   onExport: () => void;
-  userEmail?: string;
-  onClearCache?: () => void;
-  isClearingCache?: boolean;
 }
 
 type SortField = 'name' | 'date' | 'rating' | 'phone' | 'mqlRating' | 'ppsScore';
 type SortDirection = 'asc' | 'desc' | null;
 
-export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport, userEmail, onClearCache, isClearingCache }: LeadsTableProps) => {
+const ratingOrder: Record<string, number> = { 'hot': 3, 'warm': 2, 'cold': 1 };
+const getRatingValue = (rating?: string) => ratingOrder[String(rating || '').toLowerCase()] || 0;
+
+export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: LeadsTableProps) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [ownerFilter, setOwnerFilter] = useState<string>('all');
   const [projectFilter, setProjectFilter] = useState<string>('all');
+  const [managerRatingFilter, setManagerRatingFilter] = useState<string>('all');
+  const [aiRatingFilter, setAiRatingFilter] = useState<string>('all');
+  const [mqlRatingFilter, setMqlRatingFilter] = useState<string>('all');
+  const [concernFilter, setConcernFilter] = useState<string>('all');
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
 
-  // Get unique lead owners and projects
   const leadOwners = Array.from(new Set(leads.map(l => l.leadOwner).filter(Boolean)));
   const projects = Array.from(new Set(leads.map(l => l.projectInterest).filter(Boolean)));
+  const concerns = Array.from(new Set(leads.map(l => l.fullAnalysis?.primary_concern_category).filter(Boolean)));
+
+  const activeFilterCount = [ownerFilter, projectFilter, managerRatingFilter, aiRatingFilter, mqlRatingFilter, concernFilter]
+    .filter(f => f !== 'all').length;
+
+  const resetFilters = () => {
+    setOwnerFilter('all');
+    setProjectFilter('all');
+    setManagerRatingFilter('all');
+    setAiRatingFilter('all');
+    setMqlRatingFilter('all');
+    setConcernFilter('all');
+  };
 
   // Filter leads
   let filteredLeads = leads.filter(lead => {
@@ -46,11 +63,24 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport, userEma
       String(lead.phone || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       String(lead.name || '').toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesRating = !ratingFilter || lead.rating === ratingFilter;
+    // Summary card filter (Upgraded/Downgraded/Unchanged)
+    let matchesRatingComparison = true;
+    if (ratingFilter === 'Upgraded') {
+      matchesRatingComparison = !!(lead.rating && lead.managerRating && getRatingValue(lead.rating) > getRatingValue(lead.managerRating));
+    } else if (ratingFilter === 'Downgraded') {
+      matchesRatingComparison = !!(lead.rating && lead.managerRating && getRatingValue(lead.rating) < getRatingValue(lead.managerRating));
+    } else if (ratingFilter === 'Unchanged') {
+      matchesRatingComparison = !!(lead.rating && lead.managerRating && getRatingValue(lead.rating) === getRatingValue(lead.managerRating));
+    }
+
     const matchesOwner = ownerFilter === 'all' || lead.leadOwner === ownerFilter;
     const matchesProject = projectFilter === 'all' || lead.projectInterest === projectFilter;
+    const matchesManagerRating = managerRatingFilter === 'all' || lead.managerRating?.toLowerCase() === managerRatingFilter.toLowerCase();
+    const matchesAiRating = aiRatingFilter === 'all' || lead.rating?.toLowerCase() === aiRatingFilter.toLowerCase();
+    const matchesMqlRating = mqlRatingFilter === 'all' || lead.mqlEnrichment?.mqlRating === mqlRatingFilter;
+    const matchesConcern = concernFilter === 'all' || lead.fullAnalysis?.primary_concern_category === concernFilter;
 
-    return matchesSearch && matchesRating && matchesOwner && matchesProject;
+    return matchesSearch && matchesRatingComparison && matchesOwner && matchesProject && matchesManagerRating && matchesAiRating && matchesMqlRating && matchesConcern;
   });
 
   // Sort leads
@@ -75,10 +105,9 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport, userEma
         aVal = new Date(aVal || 0).getTime();
         bVal = new Date(bVal || 0).getTime();
       } else if (sortField === 'rating') {
-        const ratingOrder: Record<string, number> = { 'hot': 3, 'warm': 2, 'cold': 1 };
         aVal = ratingOrder[String(aVal || '').toLowerCase()] || 0;
         bVal = ratingOrder[String(bVal || '').toLowerCase()] || 0;
-      } else if (sortField !== 'mqlRating') {
+      } else if (sortField !== 'mqlRating' && sortField !== 'ppsScore') {
         aVal = String(aVal || '').toLowerCase();
         bVal = String(bVal || '').toLowerCase();
       }
@@ -93,12 +122,8 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport, userEma
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
-      if (sortDirection === 'asc') {
-        setSortDirection('desc');
-      } else if (sortDirection === 'desc') {
-        setSortDirection(null);
-        setSortField(null);
-      }
+      if (sortDirection === 'asc') setSortDirection('desc');
+      else if (sortDirection === 'desc') { setSortDirection(null); setSortField(null); }
     } else {
       setSortField(field);
       setSortDirection('asc');
@@ -113,12 +138,11 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport, userEma
   };
 
   const getRatingColor = (rating?: string) => {
-    const normalizedRating = rating?.toLowerCase();
-    switch (normalizedRating) {
+    switch (rating?.toLowerCase()) {
       case 'hot': return 'bg-status-hot text-white';
       case 'warm': return 'bg-status-warm text-white';
       case 'cold': return 'bg-status-cold text-white';
-      default: return 'bg-gray-400 text-white';
+      default: return 'bg-muted text-muted-foreground';
     }
   };
 
@@ -132,8 +156,7 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport, userEma
       case 'P0': return 'bg-status-hot text-white';
       case 'P1': return 'bg-status-warm text-white';
       case 'P2': return 'bg-status-cold text-white';
-      case 'N/A': return 'bg-gray-400 text-white';
-      default: return 'bg-gray-400 text-white';
+      default: return 'bg-muted text-muted-foreground';
     }
   };
 
@@ -150,43 +173,92 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport, userEma
             className="pl-10"
           />
         </div>
-        <Select value={projectFilter} onValueChange={setProjectFilter}>
-          <SelectTrigger className="w-full md:flex-1">
-            <SelectValue placeholder="Project" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Projects</SelectItem>
-            {projects.map(project => (
-              <SelectItem key={project} value={project!}>
-                {project}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={ownerFilter} onValueChange={setOwnerFilter}>
-          <SelectTrigger className="w-full md:flex-1">
-            <SelectValue placeholder="Lead Owner" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Owners</SelectItem>
-            {leadOwners.map(owner => (
-              <SelectItem key={owner} value={owner!}>
-                {owner}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {userEmail?.endsWith('@raisn.ai') && onClearCache && (
-          <Button 
-            variant="outline" 
-            onClick={onClearCache} 
-            size="sm" 
-            className="md:w-auto text-destructive border-destructive hover:bg-destructive/10"
-            disabled={isClearingCache}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        )}
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button variant="outline" size="sm" className="md:w-auto relative">
+              <Filter className="h-4 w-4" />
+              {activeFilterCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-xs rounded-full h-4 w-4 flex items-center justify-center">
+                  {activeFilterCount}
+                </span>
+              )}
+            </Button>
+          </SheetTrigger>
+          <SheetContent>
+            <SheetHeader>
+              <SheetTitle>Filters</SheetTitle>
+            </SheetHeader>
+            <div className="space-y-4 mt-6">
+              <div>
+                <label className="text-sm font-medium mb-1 block">Project</label>
+                <Select value={projectFilter} onValueChange={setProjectFilter}>
+                  <SelectTrigger><SelectValue placeholder="All Projects" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Projects</SelectItem>
+                    {projects.map(p => <SelectItem key={p} value={p!}>{p}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1 block">Owner</label>
+                <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+                  <SelectTrigger><SelectValue placeholder="All Owners" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Owners</SelectItem>
+                    {leadOwners.map(o => <SelectItem key={o} value={o!}>{o}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1 block">Manager Rating</label>
+                <Select value={managerRatingFilter} onValueChange={setManagerRatingFilter}>
+                  <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="Hot">Hot</SelectItem>
+                    <SelectItem value="Warm">Warm</SelectItem>
+                    <SelectItem value="Cold">Cold</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1 block">AI Rating</label>
+                <Select value={aiRatingFilter} onValueChange={setAiRatingFilter}>
+                  <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="Hot">Hot</SelectItem>
+                    <SelectItem value="Warm">Warm</SelectItem>
+                    <SelectItem value="Cold">Cold</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1 block">MQL Rating</label>
+                <Select value={mqlRatingFilter} onValueChange={setMqlRatingFilter}>
+                  <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    {['P0','P1','P2','P3','P4','P5'].map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1 block">Key Concern</label>
+                <Select value={concernFilter} onValueChange={setConcernFilter}>
+                  <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    {concerns.map(c => <SelectItem key={c} value={c!}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button variant="outline" onClick={resetFilters} className="w-full mt-4">
+                Reset Filters
+              </Button>
+            </div>
+          </SheetContent>
+        </Sheet>
         <Button variant="outline" onClick={onExport} size="sm" className="md:w-auto" title="Export Raw Data">
           <Download className="h-4 w-4" />
         </Button>
@@ -199,19 +271,18 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport, userEma
             <TableRow>
               <TableHead>
                 <Button variant="ghost" onClick={() => handleSort('name')} className="h-8 px-2">
-                  Lead Name
+                  Name
                   <SortIcon field="name" />
                 </Button>
               </TableHead>
               <TableHead>Project</TableHead>
-              
               <TableHead>
                 <Button variant="ghost" onClick={() => handleSort('phone')} className="h-8 px-2">
                   Phone
                   <SortIcon field="phone" />
                 </Button>
               </TableHead>
-              <TableHead>Lead Owner</TableHead>
+              <TableHead>Owner</TableHead>
               <TableHead>
                 <Button variant="ghost" onClick={() => handleSort('date')} className="h-8 px-2">
                   Last Visit
@@ -256,7 +327,6 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport, userEma
                 >
                   <TableCell className="font-medium">{lead.name}</TableCell>
                   <TableCell>{lead.projectInterest || '-'}</TableCell>
-                  
                   <TableCell>{lead.phone || '-'}</TableCell>
                   <TableCell>{lead.leadOwner || '-'}</TableCell>
                   <TableCell>
@@ -268,7 +338,7 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport, userEma
                         {formatRating(lead.rating)}
                       </Badge>
                     ) : (
-                      <Badge className="bg-gray-400 text-white min-w-[60px] justify-center">-</Badge>
+                      <Badge className="bg-muted text-muted-foreground min-w-[60px] justify-center">-</Badge>
                     )}
                   </TableCell>
                   <TableCell>
@@ -277,7 +347,7 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport, userEma
                         {formatRating(lead.managerRating)}
                       </Badge>
                     ) : (
-                      <Badge className="bg-gray-400 text-white min-w-[60px] justify-center">-</Badge>
+                      <Badge className="bg-muted text-muted-foreground min-w-[60px] justify-center">-</Badge>
                     )}
                   </TableCell>
                   <TableCell>
