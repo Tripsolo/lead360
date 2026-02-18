@@ -229,12 +229,6 @@ export const MqlRawDataTab = ({ lead }: MqlRawDataTabProps) => {
                   { key: 'fuel_type', label: 'Fuel' },
                 ]}
               />
-              {rtoIncomeRange && (
-                <div className="mt-3 grid md:grid-cols-2 gap-x-6">
-                  <DataRow label="Vehicle Value" value={rtoIncomeRange?.vehicle_value} />
-                  <DataRow label="RTO Pre-Tax Income" value={rtoDetails?.pre_tax_income_rto} />
-                </div>
-              )}
             </>
           ) : (
             <p className="text-sm text-muted-foreground">No vehicle data available</p>

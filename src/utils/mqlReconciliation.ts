@@ -131,8 +131,9 @@ export function calculateFinancialSummary(
   bankingCards: Record<string, unknown>[] | undefined,
 ): FinancialSummary {
   const isActiveLoan = (loan: Record<string, unknown>) => {
-    const status = String(loan.status || '').toLowerCase();
-    return status === 'active' || status === 'current';
+    if (loan.is_active === true) return true;
+    if (loan.is_active === false) return false;
+    return !loan.date_closed;
   };
 
   const activeLoans = (bankingLoans || []).filter(isActiveLoan);
@@ -148,8 +149,8 @@ export function calculateFinancialSummary(
   const activeAuto = activeLoans.filter((l) => matchType(l, autoKeywords));
 
   const closedHomeLoans = (bankingLoans || []).filter((l) => {
-    const status = String(l.status || '').toLowerCase();
-    return (status === 'closed' || status === 'inactive' || status === 'paid') && matchType(l, homeKeywords);
+    const closed = l.is_active === false || !!l.date_closed;
+    return closed && matchType(l, homeKeywords);
   }).length;
 
   const emiSum = [...activeHome, ...activeAuto].reduce((sum, l) => {
@@ -157,10 +158,7 @@ export function calculateFinancialSummary(
     return sum + (isNaN(amt) ? 0 : amt);
   }, 0);
 
-  const activeCards = (bankingCards || []).filter((c) => {
-    const s = String(c.status || '').toLowerCase();
-    return s === 'active' || s === 'current' || !c.status; // cards without status assumed active
-  });
+  const activeCards = (bankingCards || []).filter((c) => c.is_active === true);
 
   const finalIncome = income?.final_income_lacs != null ? Number(income.final_income_lacs) : null;
   const monthlyIncome = finalIncome != null ? (finalIncome * 100000) / 12 : null;
