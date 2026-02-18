@@ -130,63 +130,52 @@ export const MqlRawDataTab = ({ lead }: MqlRawDataTabProps) => {
   const professional = reconcileProfessionalData(employmentDetails, linkedinDetails, businessDetails, demography);
   const financial = calculateFinancialSummary(creditScore, income, bankingSummary, bankingLoans, bankingCards);
 
-  console.log('[MQL Debug] bankingLoans:', bankingLoans);
-  console.log('[MQL Debug] bankingCards:', bankingCards);
-  console.log('[MQL Debug] Computed financial:', financial);
+  // Extract pincode from location
+  const locationStr = (demography?.location as string) || '';
+  const pincodeMatch = locationStr.match(/\b\d{6}\b/);
+  const pincode = pincodeMatch ? pincodeMatch[0] : 'N/A';
+  const locationWithoutPincode = locationStr.replace(/\b\d{6}\b/, '').replace(/,\s*$/, '').trim() || 'N/A';
+
+  // Badge color helper
+  const getHighlightColor = (value: unknown): string => {
+    const v = String(value || '').toLowerCase();
+    if (['a', 'a+', 'high', 'premium', 'affluent'].some(k => v.includes(k))) return 'bg-emerald-500/15 text-emerald-700 border-emerald-500/30';
+    if (['b', 'medium', 'mid', 'moderate'].some(k => v.includes(k))) return 'bg-amber-500/15 text-amber-700 border-amber-500/30';
+    if (['c', 'd', 'low'].some(k => v.includes(k))) return 'bg-red-500/15 text-red-700 border-red-500/30';
+    return 'bg-muted text-muted-foreground border-border';
+  };
 
   return (
     <ScrollArea className="h-[60vh]">
       <div className="space-y-6 pr-4">
-        {/* Enrichment Timestamp */}
-        {enrichedAt && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span>Enriched at:</span>
-            <Badge variant="outline">{new Date(enrichedAt).toLocaleString()}</Badge>
-          </div>
-        )}
 
-        {/* 1. Personal Info (with Location from demography) */}
-        <Section title="Personal Info">
-          <div className="grid md:grid-cols-2 gap-x-6">
-            <DataRow label="MQL Rating" value={personInfo?.rating} />
-            <DataRow label="Age" value={demography?.age} />
-            <DataRow label="Gender" value={demography?.gender} />
-            <DataRow label="Location" value={demography?.location} />
-            <DataRow label="Locality Grade" value={personInfo?.locality_grade} />
-            <DataRow label="Lifestyle" value={personInfo?.lifestyle} />
-            <DataRow label="Capability" value={personInfo?.capability} />
+        {/* 1a. MQL Highlights */}
+        <div className="space-y-3">
+          <h4 className="font-semibold text-sm text-foreground">MQL Highlights</h4>
+          <div className="flex flex-wrap gap-3">
+            {[
+              { label: 'MQL Rating', value: personInfo?.rating },
+              { label: 'Capability', value: personInfo?.capability },
+              { label: 'Lifestyle', value: personInfo?.lifestyle },
+              { label: 'Locality Grade', value: personInfo?.locality_grade },
+            ].map(({ label, value }) => (
+              <div key={label} className={`rounded-lg border px-3 py-2 text-center min-w-[100px] ${getHighlightColor(value)}`}>
+                <p className="text-[10px] uppercase tracking-wider opacity-70 mb-0.5">{label}</p>
+                <p className="text-sm font-semibold">{formatMqlValue(value)}</p>
+              </div>
+            ))}
           </div>
-        </Section>
+        </div>
 
         <Separator />
 
-        {/* 2. Professional Summary */}
-        <Section title="Professional Summary">
-          <div className="space-y-3">
-            <div className="grid md:grid-cols-2 gap-x-6">
-              <DataRow label="Current Role" value={professional.currentRole} />
-              <DataRow label="Employment Type" value={professional.employmentType} />
-              <DataRow label="Current Tenure" value={professional.currentTenure} />
-              {professional.activeBusiness && (
-                <DataRow label="Business (GST)" value={professional.activeBusiness} />
-              )}
-            </div>
-
-            {professional.previousEmployers.length > 0 && (
-              <div className="mt-2">
-                <p className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
-                  <Building2 className="h-3 w-3" /> Previous Employers
-                </p>
-                <div className="space-y-1">
-                  {professional.previousEmployers.map((emp, idx) => (
-                    <div key={idx} className="flex justify-between items-center text-xs py-1 border-b border-border/30 last:border-0">
-                      <span className="text-foreground">{emp.name}</span>
-                      <span className="text-muted-foreground">{emp.tenure}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+        {/* 1b. Personal Info (factual) */}
+        <Section title="Personal Info">
+          <div className="grid grid-cols-2 gap-x-6">
+            <DataRow label="Age" value={demography?.age} />
+            <DataRow label="Gender" value={demography?.gender} />
+            <DataRow label="Location" value={locationWithoutPincode} />
+            <DataRow label="Pincode" value={pincode} />
           </div>
         </Section>
 
@@ -198,8 +187,8 @@ export const MqlRawDataTab = ({ lead }: MqlRawDataTabProps) => {
             <h4 className="font-semibold text-sm text-foreground">Financial Summary</h4>
             {financial.finalIncomeLacs != null && (
               <div className="text-right">
-                <span className="text-xs text-muted-foreground mr-1.5">Income</span>
-                <span className="text-lg font-bold text-foreground">{financial.finalIncomeLacs} <span className="text-xs font-normal text-muted-foreground">Lacs</span></span>
+                <span className="text-sm font-medium text-muted-foreground mr-1.5">Income</span>
+                <span className="text-lg font-bold text-foreground">{Math.round(financial.finalIncomeLacs)} <span className="text-xs font-normal text-muted-foreground">Lacs</span></span>
               </div>
             )}
           </div>
