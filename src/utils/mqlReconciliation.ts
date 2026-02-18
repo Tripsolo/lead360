@@ -138,7 +138,7 @@ export function calculateFinancialSummary(
 
   const activeLoans = (bankingLoans || []).filter(isActiveLoan);
 
-  const homeKeywords = ['home', 'housing'];
+  const homeKeywords = ['home', 'housing', 'property'];
   const autoKeywords = ['auto', 'vehicle'];
   const matchType = (loan: Record<string, unknown>, keywords: string[]) => {
     const t = String(loan.loan_type || '').toLowerCase();

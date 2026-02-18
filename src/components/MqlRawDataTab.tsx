@@ -130,6 +130,10 @@ export const MqlRawDataTab = ({ lead }: MqlRawDataTabProps) => {
   const professional = reconcileProfessionalData(employmentDetails, linkedinDetails, businessDetails, demography);
   const financial = calculateFinancialSummary(creditScore, income, bankingSummary, bankingLoans, bankingCards);
 
+  console.log('[MQL Debug] bankingLoans:', bankingLoans);
+  console.log('[MQL Debug] bankingCards:', bankingCards);
+  console.log('[MQL Debug] Computed financial:', financial);
+
   return (
     <ScrollArea className="h-[60vh]">
       <div className="space-y-6 pr-4">
