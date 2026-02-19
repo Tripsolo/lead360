@@ -1,62 +1,63 @@
 
 
-## Move Rationale and Buyer Persona into the Ratings Row
+## Move Ratings to Header & Clean Up MQL Tab
 
-### Changes in `src/pages/LeadProfile.tsx`
+### Changes Overview
 
-**Current layout:**
-- Row 1: Rating cards + Rationale (rationale takes remaining space via `flex-1`)
-- Row 2: 3-column grid with Lead Details, Property Preferences, Buyer Persona
+Move the four key ratings (Manager, MQL, AI, PPS) out of the Overview tab and into the persistent header area next to the lead name. Move the persona badge below the name. Remove the MQL Highlights section from the MQL Raw Data tab.
+
+---
+
+### 1. Restructure lead header area (`src/pages/LeadProfile.tsx`)
+
+**Current layout (lines 241-247):**
+- Lead name + persona badge in one row
 
 **New layout:**
-- Row 1: Rating cards (auto width) + Rating Rationale (30% width) + Buyer Persona (30% width), all in one flex row
-- Row 2: 2-column grid with Lead Details and Property Preferences only
+- Row 1: Lead name on the left, rating cards (Manager, MQL, AI, PPS circle) on the right -- all in one flex row
+- Row 2: Persona badge below the name (small text, left-aligned)
 
-### Specific edits:
+This section sits above the Tabs component, so ratings are always visible regardless of which tab is active.
 
-1. **Ratings row (lines 257-284):** Change the outer flex container to keep all three items in one row. The rating cards keep `shrink-0`. The Rationale card gets `w-[30%]` instead of `flex-1`, with height adjusting to content. 
+### 2. Remove ratings from Overview tab (`src/pages/LeadProfile.tsx`)
 
-2. **Add Buyer Persona into the same row:** Move the Buyer Persona card (currently at lines 381-397) into the ratings row flex container, right after Rationale. Give it the same `w-[30%]` width and matching border/padding style as the Rationale card.
+**Current (lines 257-271):** Rating cards row inside the Overview tab content.
 
-3. **Remove Buyer Persona from the 3-column grid (lines 289-398):** Change the grid to `md:grid-cols-2` with only Lead Details and Property Preferences remaining.
+Remove the Manager, MQL, AI, and PPS rating cards from inside the Overview tab. Keep the Rating Rationale and Buyer Persona cards as-is but adjust them to fill the row (since they no longer share space with rating cards).
+
+### 3. Remove MQL Highlights from MQL Raw Data tab (`src/components/MqlRawDataTab.tsx`)
+
+**Current (lines 152-170):** "MQL Highlights" heading + 4 colored cards (MQL Rating, Capability, Lifestyle, Locality Grade) + Separator.
+
+Delete this entire block (lines 152-170) so the MQL Raw Data tab starts directly with "Personal Info".
+
+---
 
 ### Technical Details
 
-The ratings row will become:
+**New header structure in LeadProfile.tsx:**
 ```text
-<div className="flex flex-wrap gap-4 items-start">
-  {/* Rating cards - shrink-0 */}
-  <div className="flex flex-wrap gap-3 items-center shrink-0">
-    ... Manager, MQL, AI, PPS cards ...
-  </div>
-
-  {/* Rating Rationale - 30% width */}
-  <div className="w-[30%] rounded-lg border border-border bg-muted/30 px-4 py-3">
-    <p className="text-[10px] uppercase ...">Rating Rationale</p>
-    <ul className="list-disc list-inside space-y-1">
-      {rationalePoints.map(...)}
-    </ul>
-  </div>
-
-  {/* Buyer Persona - 30% width, same style */}
-  <div className="w-[30%] rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
-    <div className="flex items-center gap-2 mb-2">
-      <Users ... />
-      <h4 ...>Buyer Persona</h4>
+<div className="mb-6">
+  <div className="flex items-center justify-between gap-4">
+    <h1 className="text-xl font-semibold">{lead.name}</h1>
+    <div className="flex items-center gap-3 shrink-0">
+      <RatingCard label="Manager" value={...} colorClass={...} />
+      <RatingCard label="MQL" value={...} colorClass={...} />
+      <RatingCard label="AI Rating" value={...} colorClass={...} />
+      {PPS circle or N/A card}
     </div>
-    <p className="text-sm font-semibold mb-1">{analysis?.persona || 'N/A'}</p>
-    <p className="text-sm text-muted-foreground">{persona_description}</p>
   </div>
+  {analysis?.persona && (
+    <Badge variant="outline" className="mt-1">{analysis.persona}</Badge>
+  )}
 </div>
 ```
 
-The Lead Details / Property Preferences grid becomes:
-```text
-<div className="grid md:grid-cols-2 gap-6">
-  {/* Lead Details */}
-  {/* Property Preferences */}
-</div>
-```
+**Overview tab adjustment:** The ratings row container (lines 257-271) is removed. The Rationale and Buyer Persona cards remain but are wrapped in their own flex row without the rating cards.
+
+**MQL Raw Data tab:** Delete lines 152-170 (the "MQL Highlights" section heading, the 4 cards, and the Separator after it).
 
 ### Files Changed
-- `src/pages/LeadProfile.tsx` -- Restructure ratings row to include Rationale and Buyer Persona side-by-side at 30% width each; simplify grid below to 2 columns
+- `src/pages/LeadProfile.tsx` -- Move ratings to header, persona below name, remove ratings from overview tab
+- `src/components/MqlRawDataTab.tsx` -- Remove MQL Highlights section and its heading
+
