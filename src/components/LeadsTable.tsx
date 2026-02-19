@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Lead } from '@/types/lead';
+import { PpsCircle } from '@/components/PpsCircle';
 import {
   Table,
   TableBody,
@@ -61,23 +62,7 @@ const formatRating = (rating?: string) => {
   return rating.charAt(0).toUpperCase() + rating.slice(1).toLowerCase();
 };
 
-const PpsCircle = ({ score }: { score: number }) => {
-  const radius = 14;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (score / 100) * circumference;
-  const color = score >= 85 ? 'text-status-hot' : score >= 65 ? 'text-status-warm' : 'text-status-cold';
-  return (
-    <svg width="36" height="36" className={color}>
-      <circle cx="18" cy="18" r={radius} fill="none" stroke="currentColor"
-              strokeWidth="3" opacity="0.2" />
-      <circle cx="18" cy="18" r={radius} fill="none" stroke="currentColor"
-              strokeWidth="3" strokeDasharray={circumference} strokeDashoffset={offset}
-              strokeLinecap="round" transform="rotate(-90 18 18)" />
-      <text x="18" y="18" textAnchor="middle" dominantBaseline="central"
-            className="fill-current text-[10px] font-bold">{score}</text>
-    </svg>
-  );
-};
+// PpsCircle imported from shared component
 
 export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: LeadsTableProps) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -390,7 +375,7 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: Leads
                   {/* PPS - circular progress */}
                   <TableCell>
                     {lead.fullAnalysis?.pps_score ? (
-                      <PpsCircle score={lead.fullAnalysis.pps_score} />
+                      <PpsCircle score={lead.fullAnalysis.pps_score} size="sm" />
                     ) : (
                       <span className="text-muted-foreground">-</span>
                     )}

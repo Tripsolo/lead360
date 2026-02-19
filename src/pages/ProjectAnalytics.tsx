@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ArrowLeft, Users, Flame, Sun, Snowflake, TrendingUp, Loader2, Eye, ArrowUp, ArrowDown, CalendarIcon, X, Calculator } from "lucide-react";
+import raisnLogo from '@/assets/raisn-logo.png';
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useProjectAnalytics } from "@/hooks/useProjectAnalytics";
@@ -193,27 +194,29 @@ const ProjectAnalytics = () => {
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="flex items-center gap-4 mb-6">
-          <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back
-          </Button>
-        </div>
+        {/* Branded navbar */}
+        <nav className="bg-card border-b border-border sticky top-0 z-50 -mx-4 -mt-8 px-4 mb-6">
+          <div className="container mx-auto flex items-center justify-between h-14">
+            <div className="flex items-center gap-3">
+              <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="mr-1">
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+              <img src={raisnLogo} alt="Raisn" className="h-8" />
+              <span className="text-lg font-semibold text-foreground">Customer360</span>
+            </div>
+            <Button 
+              onClick={handleViewLeads}
+              disabled={analytics.totalLeads === 0}
+              className="bg-primary"
+            >
+              <Eye className="mr-2 h-4 w-4" />
+              View AI Rated Leads
+            </Button>
+          </div>
+        </nav>
 
         <div className="flex justify-between items-start mb-8">
-          <div>
-            <h1 className="text-3xl font-bold">Project Analytics</h1>
-            <p className="text-sm text-muted-foreground">Powered by Raisn.ai · Showing AI-rated leads only</p>
-          </div>
-          <Button 
-            onClick={handleViewLeads}
-            disabled={analytics.totalLeads === 0}
-            className="bg-primary"
-          >
-            <Eye className="mr-2 h-4 w-4" />
-            View AI Rated Leads
-          </Button>
+          <h1 className="text-xl font-semibold">Project Analytics</h1>
         </div>
 
         {/* Filters */}
@@ -358,36 +361,36 @@ const ProjectAnalytics = () => {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <Flame className="h-4 w-4 text-rating-hot" />
+                    <Flame className="h-4 w-4 text-status-hot" />
                     Hot Leads
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-3xl font-bold text-rating-hot">{analytics.hotLeads}</p>
+                  <p className="text-3xl font-bold text-status-hot">{analytics.hotLeads}</p>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <Sun className="h-4 w-4 text-rating-warm" />
+                    <Sun className="h-4 w-4 text-status-warm" />
                     Warm Leads
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-3xl font-bold text-rating-warm">{analytics.warmLeads}</p>
+                  <p className="text-3xl font-bold text-status-warm">{analytics.warmLeads}</p>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <Snowflake className="h-4 w-4 text-rating-cold" />
+                    <Snowflake className="h-4 w-4 text-status-cold" />
                     Cold Leads
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-3xl font-bold text-rating-cold">{analytics.coldLeads}</p>
+                  <p className="text-3xl font-bold text-status-cold">{analytics.coldLeads}</p>
                 </CardContent>
               </Card>
 
@@ -451,17 +454,17 @@ const ProjectAnalytics = () => {
                           <TableCell className="font-medium">{manager.name}</TableCell>
                           <TableCell className="text-center">{manager.total}</TableCell>
                           <TableCell className="text-center">
-                            <Badge variant="outline" className="bg-rating-hot/10 text-rating-hot border-rating-hot/20">
+                            <Badge variant="outline" className="bg-status-hot/10 text-status-hot border-status-hot/20">
                               {manager.hot}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-center">
-                            <Badge variant="outline" className="bg-rating-warm/10 text-rating-warm border-rating-warm/20">
+                            <Badge variant="outline" className="bg-status-warm/10 text-status-warm border-status-warm/20">
                               {manager.warm}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-center">
-                            <Badge variant="outline" className="bg-rating-cold/10 text-rating-cold border-rating-cold/20">
+                            <Badge variant="outline" className="bg-status-cold/10 text-status-cold border-status-cold/20">
                               {manager.cold}
                             </Badge>
                           </TableCell>
@@ -473,10 +476,10 @@ const ProjectAnalytics = () => {
                               variant="outline" 
                               className={
                                 manager.avgCIS >= 70 
-                                  ? "bg-rating-hot/10 text-rating-hot border-rating-hot/20" 
+                                  ? "bg-status-hot/10 text-status-hot border-status-hot/20" 
                                   : manager.avgCIS >= 50 
-                                    ? "bg-rating-warm/10 text-rating-warm border-rating-warm/20" 
-                                    : "bg-rating-cold/10 text-rating-cold border-rating-cold/20"
+                                    ? "bg-status-warm/10 text-status-warm border-status-warm/20" 
+                                    : "bg-status-cold/10 text-status-cold border-status-cold/20"
                               }
                             >
                               {manager.avgCIS > 0 ? manager.avgCIS : 'N/A'}
@@ -536,17 +539,17 @@ const ProjectAnalytics = () => {
                           <TableCell className="font-medium">{source.subSource}</TableCell>
                           <TableCell className="text-center">{source.total}</TableCell>
                           <TableCell className="text-center">
-                            <Badge variant="outline" className="bg-rating-hot/10 text-rating-hot border-rating-hot/20">
+                            <Badge variant="outline" className="bg-status-hot/10 text-status-hot border-status-hot/20">
                               {source.hot}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-center">
-                            <Badge variant="outline" className="bg-rating-warm/10 text-rating-warm border-rating-warm/20">
+                            <Badge variant="outline" className="bg-status-warm/10 text-status-warm border-status-warm/20">
                               {source.warm}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-center">
-                            <Badge variant="outline" className="bg-rating-cold/10 text-rating-cold border-rating-cold/20">
+                            <Badge variant="outline" className="bg-status-cold/10 text-status-cold border-status-cold/20">
                               {source.cold}
                             </Badge>
                           </TableCell>
