@@ -1,63 +1,105 @@
 
+## Overview Tab Layout Changes in `src/pages/LeadProfile.tsx`
 
-## Move Ratings to Header & Clean Up MQL Tab
+### 1. Match Rationale and Buyer Persona card sizes
 
-### Changes Overview
+Both cards currently use `flex-1 min-w-[250px]`. They will be changed to use equal fixed widths and a shared minimum height so they always match. Both cards will use the same border/background style for visual consistency.
 
-Move the four key ratings (Manager, MQL, AI, PPS) out of the Overview tab and into the persistent header area next to the lead name. Move the persona badge below the name. Remove the MQL Highlights section from the MQL Raw Data tab.
+### 2. Move Persona badge into Buyer Persona card
 
----
+Remove the `Badge` showing `analysis.persona` from below the lead name (lines 259-261). Instead, place the persona name (e.g., "Aspirant Upgrader") as a badge in the top-right corner of the Buyer Persona card using `flex justify-between` in the card header.
 
-### 1. Restructure lead header area (`src/pages/LeadProfile.tsx`)
+### 3. Buyer Persona description as bullet points
 
-**Current layout (lines 241-247):**
-- Lead name + persona badge in one row
+Split `analysis.persona_description` into bullet points the same way rationale is split (on sentence boundaries), and render as a `<ul>` list matching the rationale style.
 
-**New layout:**
-- Row 1: Lead name on the left, rating cards (Manager, MQL, AI, PPS circle) on the right -- all in one flex row
-- Row 2: Persona badge below the name (small text, left-aligned)
+### 4. Move Financial Profile into a third column
 
-This section sits above the Tabs component, so ratings are always visible regardless of which tab is active.
+Remove the standalone Financial Profile section (lines 394-421, including its Separator). Add a third column to the grid at line 301, changing it from `md:grid-cols-2` to `md:grid-cols-3`. The new column will show Budget, In-Hand Funds, and Funding Source as text-label rows (same style as Property Preferences uses: `<span className="text-muted-foreground">Label: </span><span>Value</span>`).
 
-### 2. Remove ratings from Overview tab (`src/pages/LeadProfile.tsx`)
+### 5. Clean up Lead Details
 
-**Current (lines 257-271):** Rating cards row inside the Overview tab content.
+Remove:
+- Phone number row (lines 305-310)
+- Age/Gender row (lines 317-324)
 
-Remove the Manager, MQL, AI, and PPS rating cards from inside the Overview tab. Keep the Rating Rationale and Buyer Persona cards as-is but adjust them to fill the row (since they no longer share space with rating cards).
-
-### 3. Remove MQL Highlights from MQL Raw Data tab (`src/components/MqlRawDataTab.tsx`)
-
-**Current (lines 152-170):** "MQL Highlights" heading + 4 colored cards (MQL Rating, Capability, Lifestyle, Locality Grade) + Separator.
-
-Delete this entire block (lines 152-170) so the MQL Raw Data tab starts directly with "Personal Info".
+Replace icon-based labels with text labels for remaining fields. Each field will use the pattern:
+```text
+<div className="text-sm">
+  <span className="text-muted-foreground">Designation: </span>
+  <span>{value}</span>
+</div>
+```
 
 ---
 
 ### Technical Details
 
-**New header structure in LeadProfile.tsx:**
+**Rationale/Persona row (lines 272-296):**
 ```text
-<div className="mb-6">
-  <div className="flex items-center justify-between gap-4">
-    <h1 className="text-xl font-semibold">{lead.name}</h1>
-    <div className="flex items-center gap-3 shrink-0">
-      <RatingCard label="Manager" value={...} colorClass={...} />
-      <RatingCard label="MQL" value={...} colorClass={...} />
-      <RatingCard label="AI Rating" value={...} colorClass={...} />
-      {PPS circle or N/A card}
-    </div>
+<div className="grid grid-cols-2 gap-4">
+  <!-- Rating Rationale -->
+  <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+    <p className="text-[10px] uppercase ...">Rating Rationale</p>
+    <ul className="list-disc list-inside space-y-1">
+      {rationalePoints.map(...)}
+    </ul>
   </div>
-  {analysis?.persona && (
-    <Badge variant="outline" className="mt-1">{analysis.persona}</Badge>
-  )}
+
+  <!-- Buyer Persona -->
+  <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+    <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center gap-2">
+        <Users ... />
+        <h4>Buyer Persona</h4>
+      </div>
+      <Badge variant="outline">{analysis?.persona || 'N/A'}</Badge>
+    </div>
+    <ul className="list-disc list-inside space-y-1">
+      {personaPoints.map(...)}
+    </ul>
+  </div>
 </div>
 ```
 
-**Overview tab adjustment:** The ratings row container (lines 257-271) is removed. The Rationale and Buyer Persona cards remain but are wrapped in their own flex row without the rating cards.
+**Persona description split logic:**
+```text
+const personaPoints = (analysis?.persona_description || '')
+  .split(/(?<=\.)\s+/)
+  .filter(s => s.trim().length > 0);
+```
 
-**MQL Raw Data tab:** Delete lines 152-170 (the "MQL Highlights" section heading, the 4 cards, and the Separator after it).
+**Three-column grid (lines 301-392 become 301-new):**
+```text
+<div className="grid md:grid-cols-3 gap-6">
+  <!-- Lead Details (text labels, no phone/age/gender) -->
+  <!-- Property Preferences (unchanged) -->
+  <!-- Financial Profile (text label style) -->
+  <div className="space-y-4">
+    <h3 className="font-semibold text-sm">Financial Profile</h3>
+    <div className="text-sm">
+      <span className="text-muted-foreground">Budget: </span>
+      <span>{formatBudget(...)}</span>
+    </div>
+    <div className="text-sm">
+      <span className="text-muted-foreground">In-Hand Funds: </span>
+      <span>{formatInHandFunds(...)}</span>
+    </div>
+    <div className="text-sm">
+      <span className="text-muted-foreground">Funding Source: </span>
+      <span>{lead.fundingSource || 'No data available'}</span>
+    </div>
+  </div>
+</div>
+```
+
+**Lead Details text labels (replacing icons):**
+- "Email" instead of Mail icon
+- "Designation" instead of Briefcase icon
+- "Employer" instead of Briefcase icon
+- "Work Location" instead of Building2 icon
+- "Building" instead of Home icon
+- "Residence" instead of Home icon (with locality grade badge inline)
 
 ### Files Changed
-- `src/pages/LeadProfile.tsx` -- Move ratings to header, persona below name, remove ratings from overview tab
-- `src/components/MqlRawDataTab.tsx` -- Remove MQL Highlights section and its heading
-
+- `src/pages/LeadProfile.tsx`
