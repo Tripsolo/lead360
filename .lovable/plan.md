@@ -1,55 +1,135 @@
+## Leads Dashboard Visual Overhaul
 
+### Changes Overview
 
-## Dashboard Tweaks
+Five changes: remove badge capsules from MQL/Manager ratings (use colored text instead), compress and reposition search bar, add circular PPS progress indicator next to AI rating, reorder rating columns, and add a branded Raisn header/navbar.
 
-### 1. Align Delete and Logout icons horizontally
-**File: `src/pages/Index.tsx`** (lines 947-963)
+---
 
-Change the header right section from a vertical stack (`flex-col`) to horizontal (`flex-row items-center gap-2`). Both the Trash2 icon and the Logout text+icon sit side by side.
+### 1. Remove capsule badges from Manager Rating and MQL Rating columns
 
-### 2. Compact "New Leads" button to "New"
-**File: `src/pages/Index.tsx`** (lines 1006-1009)
+**File: `src/components/LeadsTable.tsx**`
 
-Change the button text from "New Leads" to "New". Keep the Upload icon.
+Replace the `<Badge>` wrappers for Manager Rating and MQL Rating cells with plain `<span>` elements. Use the same color-mapping logic but apply it as `text-status-hot`, `text-status-warm`, `text-status-cold` font colors instead of background fills.
 
-### 3. Summary Cards: show Hot/Warm/Cold for CRM-only data, Upgraded/Downgraded/Unchanged after AI analysis
-**File: `src/components/SummaryCards.tsx`**
+- Manager Rating cell: `<span className="font-semibold text-status-hot">Hot</span>` (no Badge)
+- MQL Rating cell: `<span className="font-semibold text-status-hot">P0</span>` (no Badge)
+- AI Rating keeps its Badge capsule as-is
 
-Detect whether any leads have an AI `rating`. If no leads have AI ratings (CRM-only batch), show three cards based on `managerRating`:
-- **Hot** -- count of leads with managerRating = Hot
-- **Warm** -- count of leads with managerRating = Warm
-- **Cold** -- count of leads with managerRating = Cold
+Helper functions `getRatingTextColor` and `getMqlRatingTextColor` return Tailwind text color classes instead of background classes.
 
-If at least one lead has an AI `rating`, show the current Upgraded/Downgraded/Unchanged cards.
+### 2. Compress search bar and move it next to the filter icon (right-aligned)
 
-The `onFilterChange` prop type will expand to accept `'Hot' | 'Warm' | 'Cold' | 'Upgraded' | 'Downgraded' | 'Unchanged' | null`.
+**File: `src/components/LeadsTable.tsx**`
 
-**File: `src/components/LeadsTable.tsx`**
+Change the filter bar layout:
 
-Extend the `ratingFilter` handling to also support `'Hot'`, `'Warm'`, `'Cold'` values, filtering by `managerRating` match.
+- Remove `flex-1` from the search input wrapper
+- Set it to a fixed width of roughly 50% (`w-1/2` or `max-w-xs`)
+- Reorder elements so the search bar sits on the right, next to the Filter icon and Download icon
+- Use `flex-1` spacer on the left to push everything right
 
-**File: `src/pages/Index.tsx`**
+New layout order: `[spacer] [Search] [Filter icon] [Download icon]`
 
-Update the `ratingFilter` state type comment (no code change needed since it's already `string | null`).
+### 3. PPS as circular progress bar next to AI Rating
+
+**File: `src/components/LeadsTable.tsx**`
+
+Create an inline circular progress indicator for the PPS score (0-100 scale). Use an SVG circle with a stroke-dasharray/dashoffset approach:
+
+- 36px diameter circle
+- Score text centered inside
+- Color: green for 85+, orange for 65-84, red for below 65 (matching Hot/Warm/Cold thresholds)
+
+### 4. Reorder rating columns
+
+**File: `src/components/LeadsTable.tsx**`
+
+New column order:
+
+1. Name
+2. Project
+3. Phone
+4. Owner
+5. Last Visit
+6. **Manager** (was after AI)
+7. **MQL** (was after Manager)
+8. **AI**
+9. **PPS**
+10. **Key Concern**
+
+Update both `<TableHeader>` and `<TableBody>` cell order to match. 
+
+### 5. Add branded Raisn header/navigation bar
+
+**Files: `src/pages/Index.tsx`, new asset `src/assets/raisn-logo.png**`
+
+Replace the current plain text header with a proper navigation bar:
+
+- Copy the uploaded Raisn logo to `src/assets/raisn-logo.png`
+- Add a full-width nav bar at the top of the page (outside the container) with:
+  - Left: Raisn logo image (height ~32px)
+  - Center or left-of-center: "Customer360" product name
+  - Right: Delete icon (if applicable) and Logout button (horizontally aligned, as currently implemented)
+- Style: white background, subtle bottom border, horizontal padding
+- Remove the old `<h1>Customer360</h1>` and subtitle from the container body
 
 ---
 
 ### Technical Details
 
-**SummaryCards detection logic:**
-```
-const hasAiRatings = leads.some(l => l.rating);
-```
-When `hasAiRatings` is false, render Hot/Warm/Cold cards using `managerRating` counts. When true, render existing Upgraded/Downgraded/Unchanged cards.
+**Circular PPS Component (inline in LeadsTable.tsx):**
 
-**LeadsTable filter extension** -- add three cases:
+```text
+const PpsCircle = ({ score }: { score: number }) => {
+  const radius = 14, circumference = 2 * Math.PI * radius;
+  const offset = circumference - (score / 100) * circumference;
+  const color = score >= 85 ? 'text-status-hot' : score >= 65 ? 'text-status-warm' : 'text-status-cold';
+  return (
+    <svg width="36" height="36" className={color}>
+      <circle cx="18" cy="18" r={radius} fill="none" stroke="currentColor" 
+              strokeWidth="3" opacity="0.2" />
+      <circle cx="18" cy="18" r={radius} fill="none" stroke="currentColor" 
+              strokeWidth="3" strokeDasharray={circumference} strokeDashoffset={offset}
+              strokeLinecap="round" transform="rotate(-90 18 18)" />
+      <text x="18" y="18" textAnchor="middle" dominantBaseline="central" 
+            className="fill-current text-[10px] font-bold">{score}</text>
+    </svg>
+  );
+};
 ```
-if (ratingFilter === 'Hot') matchesRating = lead.managerRating?.toLowerCase() === 'hot';
-if (ratingFilter === 'Warm') matchesRating = lead.managerRating?.toLowerCase() === 'warm';
-if (ratingFilter === 'Cold') matchesRating = lead.managerRating?.toLowerCase() === 'cold';
+
+**Rating text color helpers:**
+
+```text
+const getRatingTextColor = (rating?: string) => {
+  switch (rating?.toLowerCase()) {
+    case 'hot': return 'text-status-hot';
+    case 'warm': return 'text-status-warm';
+    case 'cold': return 'text-status-cold';
+    default: return 'text-muted-foreground';
+  }
+};
+```
+
+**Navbar structure:**
+
+```text
+<nav className="bg-white border-b border-border sticky top-0 z-50">
+  <div className="container mx-auto px-4 flex items-center justify-between h-14">
+    <div className="flex items-center gap-3">
+      <img src={raisnLogo} alt="Raisn" className="h-8" />
+      <span className="text-lg font-semibold text-foreground">Customer360</span>
+    </div>
+    <div className="flex items-center gap-2">
+      {/* Delete + Logout */}
+    </div>
+  </div>
+</nav>
 ```
 
 ### Files Changed
-- `src/pages/Index.tsx` -- Horizontal delete+logout alignment, "New" button text
-- `src/components/SummaryCards.tsx` -- Dual-mode cards (CRM vs AI-analyzed)
-- `src/components/LeadsTable.tsx` -- Support Hot/Warm/Cold filter values
+
+- `src/assets/raisn-logo.png` -- Copy uploaded logo
+- `src/pages/Index.tsx` -- Replace header with branded navbar, move delete+logout into navbar
+- `src/components/LeadsTable.tsx` -- Remove Badge capsules from Manager/MQL, compress search bar to right, reorder columns, add PPS circle
