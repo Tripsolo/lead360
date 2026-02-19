@@ -238,11 +238,26 @@ const LeadProfile = () => {
       </nav>
 
       <div className="container mx-auto px-4 py-6 max-w-5xl">
-        {/* Lead name + persona */}
-        <div className="flex items-center gap-3 mb-6">
-          <h1 className="text-xl font-semibold">{lead.name}</h1>
+        {/* Lead name + ratings header (always visible) */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between gap-4">
+            <h1 className="text-xl font-semibold">{lead.name}</h1>
+            <div className="flex items-center gap-3 shrink-0">
+              <RatingCard label="Manager" value={lead.managerRating || '-'} colorClass={getHighlightColor(lead.managerRating)} />
+              <RatingCard label="MQL" value={mql?.mqlRating || 'N/A'} colorClass={getHighlightColor(mql?.mqlRating)} />
+              <RatingCard label="AI Rating" value={lead.rating || '-'} colorClass={getHighlightColor(lead.rating)} />
+              {analysis?.pps_score !== undefined ? (
+                <div className="flex flex-col items-center min-w-[48px]">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">PPS</p>
+                  <PpsCircle score={analysis.pps_score} />
+                </div>
+              ) : (
+                <RatingCard label="PPS" value="N/A" colorClass="bg-muted text-muted-foreground border-border" />
+              )}
+            </div>
+          </div>
           {analysis?.persona && (
-            <Badge variant="outline" className="w-fit">{analysis.persona}</Badge>
+            <Badge variant="outline" className="w-fit mt-1">{analysis.persona}</Badge>
           )}
         </div>
 
@@ -253,26 +268,11 @@ const LeadProfile = () => {
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
-            {/* Ratings row + Rationale side by side */}
+            {/* Rationale + Buyer Persona row */}
             <div className="flex flex-wrap gap-4 items-start">
-              {/* Ratings cards row */}
-              <div className="flex flex-wrap gap-3 items-center shrink-0">
-                <RatingCard label="Manager" value={lead.managerRating || '-'} colorClass={getHighlightColor(lead.managerRating)} />
-                <RatingCard label="MQL" value={mql?.mqlRating || 'N/A'} colorClass={getHighlightColor(mql?.mqlRating)} />
-                <RatingCard label="AI Rating" value={lead.rating || '-'} colorClass={getHighlightColor(lead.rating)} />
-                {analysis?.pps_score !== undefined ? (
-                  <div className="flex flex-col items-center min-w-[48px]">
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">PPS</p>
-                    <PpsCircle score={analysis.pps_score} />
-                  </div>
-                ) : (
-                  <RatingCard label="PPS" value="N/A" colorClass="bg-muted text-muted-foreground border-border" />
-                )}
-              </div>
-
-              {/* Rating Rationale - 30% width */}
+              {/* Rating Rationale */}
               {rationalePoints.length > 0 && (
-                <div className="w-[30%] rounded-lg border border-border bg-muted/30 px-4 py-3">
+                <div className="flex-1 min-w-[250px] rounded-lg border border-border bg-muted/30 px-4 py-3">
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Rating Rationale</p>
                   <ul className="list-disc list-inside space-y-1">
                     {rationalePoints.map((point, idx) => (
@@ -282,8 +282,8 @@ const LeadProfile = () => {
                 </div>
               )}
 
-              {/* Buyer Persona - 30% width */}
-              <div className="w-[30%] rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
+              {/* Buyer Persona */}
+              <div className="flex-1 min-w-[250px] rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
                 <div className="flex items-center gap-2 mb-2">
                   <Users className="h-4 w-4 text-primary" />
                   <h4 className="font-semibold text-sm">Buyer Persona</h4>
