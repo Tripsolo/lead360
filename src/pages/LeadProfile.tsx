@@ -237,7 +237,7 @@ const LeadProfile = () => {
         <Tabs defaultValue="overview" className="w-full">
           <TabsList className="mb-4">
             <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="mql-raw">MQL Raw Data</TabsTrigger>
+            <TabsTrigger value="mql-raw">MQL Data</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
@@ -245,7 +245,10 @@ const LeadProfile = () => {
             <div className="grid grid-cols-2 gap-4">
               {/* Rating Rationale */}
               <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Rating Rationale</p>
+                <div className="flex items-center gap-2 mb-2">
+                  <Lightbulb className="h-4 w-4 text-primary" />
+                  <h4 className="font-semibold text-sm">Rating Rationale</h4>
+                </div>
                 {rationalePoints.length > 0 ? (
                   <ul className="list-disc list-inside space-y-1">
                     {rationalePoints.map((point, idx) => (

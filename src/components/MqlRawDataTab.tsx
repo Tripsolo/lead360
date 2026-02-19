@@ -135,7 +135,7 @@ export const MqlRawDataTab = ({ lead }: MqlRawDataTabProps) => {
   const locationStr = (demography?.location as string) || '';
   const pincodeMatch = locationStr.match(/\b\d{6}\b/);
   const pincode = pincodeMatch ? pincodeMatch[0] : 'N/A';
-  const locationWithoutPincode = locationStr.replace(/\b\d{6}\b/, '').replace(/,\s*$/, '').trim() || 'N/A';
+  const locationWithoutPincode = locationStr.replace(/\b\d{6}\b/, '').replace(/\(\s*\)/, '').replace(/,\s*$/, '').trim() || 'N/A';
 
   // getHighlightColor imported from shared utility
 
