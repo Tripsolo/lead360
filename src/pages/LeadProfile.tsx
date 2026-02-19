@@ -48,23 +48,9 @@ const formatInHandFunds = (
   return 'No data available';
 };
 
-// Highlight color helper (same as MQL Highlights in MqlRawDataTab)
-const getHighlightColor = (value: unknown): string => {
-  const v = String(value || '').toLowerCase();
-  if (['a', 'a+', 'high', 'premium', 'affluent', 'hot', 'p0'].some(k => v.includes(k) || v === k)) return 'bg-emerald-500/15 text-emerald-700 border-emerald-500/30';
-  if (['b', 'medium', 'mid', 'moderate', 'warm', 'p1', 'popular'].some(k => v.includes(k) || v === k)) return 'bg-amber-500/15 text-amber-700 border-amber-500/30';
-  if (['c', 'd', 'low', 'cold', 'p2', 'affordable'].some(k => v.includes(k) || v === k)) return 'bg-red-500/15 text-red-700 border-red-500/30';
-  return 'bg-muted text-muted-foreground border-border';
-};
-
-const getLocalityGradeColor = (grade?: string) => {
-  switch (grade?.toLowerCase()) {
-    case 'premium': return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400';
-    case 'popular': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400';
-    case 'affordable': return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400';
-    default: return 'bg-muted text-muted-foreground';
-  }
-};
+// Use shared utilities
+import { getHighlightColor } from '@/utils/highlightColor';
+import { PpsCircle } from '@/components/PpsCircle';
 
 const getCapabilityColor = (capability?: string) => {
   switch (capability?.toLowerCase()) {
@@ -75,23 +61,7 @@ const getCapabilityColor = (capability?: string) => {
   }
 };
 
-// PPS circular progress bar
-const PpsCircle = ({ score }: { score: number }) => {
-  const radius = 18;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (score / 100) * circumference;
-  const color = score >= 85 ? 'text-status-hot' : score >= 65 ? 'text-status-warm' : 'text-status-cold';
-  return (
-    <svg width="48" height="48" className={color}>
-      <circle cx="24" cy="24" r={radius} fill="none" stroke="currentColor" strokeWidth="3" opacity="0.2" />
-      <circle cx="24" cy="24" r={radius} fill="none" stroke="currentColor" strokeWidth="3"
-              strokeDasharray={circumference} strokeDashoffset={offset}
-              strokeLinecap="round" transform="rotate(-90 24 24)" />
-      <text x="24" y="24" textAnchor="middle" dominantBaseline="central"
-            className="fill-current text-xs font-bold">{score}</text>
-    </svg>
-  );
-};
+// PpsCircle imported from shared component
 
 // Rating card (same style as MQL Highlights)
 const RatingCard = ({ label, value, colorClass }: { label: string; value: string; colorClass: string }) => (
@@ -230,10 +200,10 @@ const LeadProfile = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Branded navbar with back button */}
-      <nav className="bg-white border-b border-border sticky top-0 z-50">
+      <nav className="bg-card border-b border-border sticky top-0 z-50">
         <div className="container mx-auto px-4 flex items-center justify-between h-14">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="mr-1">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="mr-1">
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <img src={raisnLogo} alt="Raisn" className="h-8" />
@@ -244,7 +214,7 @@ const LeadProfile = () => {
 
       <div className="container mx-auto px-4 py-6 max-w-5xl">
         {/* Lead name + ratings header (always visible) */}
-        <div className="mb-6">
+        <div className="mb-3">
           <div className="flex items-center justify-between gap-4">
             <h1 className="text-xl font-semibold">{lead.name}</h1>
             <div className="flex items-center gap-3 shrink-0">
@@ -315,12 +285,6 @@ const LeadProfile = () => {
               {/* Lead Details */}
               <div className="space-y-4">
                 <h3 className="font-semibold text-sm">Lead Details</h3>
-                {lead.email && (
-                  <div className="text-sm">
-                    <span className="text-muted-foreground">Email: </span>
-                    <span>{lead.email}</span>
-                  </div>
-                )}
                 {standardized.designation && (
                   <div className="text-sm">
                     <span className="text-muted-foreground">Designation: </span>
@@ -346,22 +310,9 @@ const LeadProfile = () => {
                   </div>
                 )}
                 {standardized.location && (
-                  <div className="text-sm flex items-center gap-1 flex-wrap">
+                  <div className="text-sm">
                     <span className="text-muted-foreground">Residence: </span>
                     <span>{standardized.location}</span>
-                    {standardized.localityGrade && (
-                      <Badge variant="outline" className={`${getLocalityGradeColor(standardized.localityGrade)} text-xs`}>
-                        {standardized.localityGrade}
-                      </Badge>
-                    )}
-                  </div>
-                )}
-                {!standardized.location && standardized.localityGrade && (
-                  <div className="text-sm flex items-center gap-1">
-                    <span className="text-muted-foreground">Locality: </span>
-                    <Badge variant="outline" className={getLocalityGradeColor(standardized.localityGrade)}>
-                      {standardized.localityGrade}
-                    </Badge>
                   </div>
                 )}
               </div>
@@ -411,7 +362,7 @@ const LeadProfile = () => {
 
             {/* AI Analysis */}
             <div className="space-y-4">
-              <h3 className="font-semibold text-lg">AI Analysis</h3>
+              <h3 className="font-semibold text-sm">AI Analysis</h3>
               <div className="grid md:grid-cols-3 gap-6">
                 <div className="p-4 bg-muted/50 rounded-lg">
                   <div className="flex items-center gap-2 mb-2">
@@ -459,9 +410,6 @@ const LeadProfile = () => {
                       ? analysis.next_best_action
                       : analysis?.next_best_action?.action || 'N/A'}
                   </p>
-                  {typeof analysis?.next_best_action === 'object' && analysis.next_best_action?.nba_id && (
-                    <p className="text-xs text-muted-foreground mt-1">ID: {analysis.next_best_action.nba_id}</p>
-                  )}
                 </div>
               </div>
 
@@ -485,11 +433,6 @@ const LeadProfile = () => {
                           }`}>
                             {item.type}
                           </span>
-                          {item.tp_id && (
-                            <code className="text-xs bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded font-mono text-muted-foreground">
-                              {item.tp_id}
-                            </code>
-                          )}
                         </div>
                         <span className="leading-relaxed">{item.point}</span>
                       </li>

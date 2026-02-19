@@ -1,4 +1,5 @@
 import { Lead } from '@/types/lead';
+import { getHighlightColor } from '@/utils/highlightColor';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -136,14 +137,7 @@ export const MqlRawDataTab = ({ lead }: MqlRawDataTabProps) => {
   const pincode = pincodeMatch ? pincodeMatch[0] : 'N/A';
   const locationWithoutPincode = locationStr.replace(/\b\d{6}\b/, '').replace(/,\s*$/, '').trim() || 'N/A';
 
-  // Badge color helper
-  const getHighlightColor = (value: unknown): string => {
-    const v = String(value || '').toLowerCase();
-    if (['a', 'a+', 'high', 'premium', 'affluent'].some(k => v.includes(k))) return 'bg-emerald-500/15 text-emerald-700 border-emerald-500/30';
-    if (['b', 'medium', 'mid', 'moderate'].some(k => v.includes(k))) return 'bg-amber-500/15 text-amber-700 border-amber-500/30';
-    if (['c', 'd', 'low'].some(k => v.includes(k))) return 'bg-red-500/15 text-red-700 border-red-500/30';
-    return 'bg-muted text-muted-foreground border-border';
-  };
+  // getHighlightColor imported from shared utility
 
   return (
     <ScrollArea className="h-[60vh]">

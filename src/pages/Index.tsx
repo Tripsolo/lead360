@@ -937,7 +937,7 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Branded Raisn navbar */}
-      <nav className="bg-white border-b border-border sticky top-0 z-50">
+      <nav className="bg-card border-b border-border sticky top-0 z-50">
         <div className="container mx-auto px-4 flex items-center justify-between h-14">
           <div className="flex items-center gap-3">
             <img src={raisnLogo} alt="Raisn" className="h-8" />
@@ -955,10 +955,10 @@ const Index = () => {
                 <Trash2 className="h-4 w-4" />
               </Button>
             )}
-            <button onClick={handleLogout} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+            <Button variant="ghost" size="sm" onClick={handleLogout}>
               <LogOut className="h-4 w-4" />
               Logout
-            </button>
+            </Button>
           </div>
         </div>
       </nav>

@@ -242,6 +242,10 @@ export const UploadWizard = ({ onFileSelect, isLoading }: UploadWizardProps) => 
                 )}
               </div>
 
+              <Button variant="outline" onClick={handleBack} size="sm">
+                Back
+              </Button>
+
               <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary/50 transition-colors">
                 <Upload className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
                 <h3 className="text-base font-semibold mb-2">Upload Excel File</h3>
@@ -270,9 +274,6 @@ export const UploadWizard = ({ onFileSelect, isLoading }: UploadWizardProps) => 
                 </Alert>
               )}
 
-              <Button variant="outline" onClick={handleBack} size="sm">
-                Back
-              </Button>
             </div>
           )}
         </CardContent>
