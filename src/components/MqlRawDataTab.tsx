@@ -149,27 +149,7 @@ export const MqlRawDataTab = ({ lead }: MqlRawDataTabProps) => {
     <ScrollArea className="h-[60vh]">
       <div className="space-y-6 pr-4">
 
-        {/* 1a. MQL Highlights */}
-        <div className="space-y-3">
-          <h4 className="font-semibold text-sm text-foreground">MQL Highlights</h4>
-          <div className="flex flex-wrap gap-3">
-            {[
-              { label: 'MQL Rating', value: personInfo?.rating },
-              { label: 'Capability', value: personInfo?.capability },
-              { label: 'Lifestyle', value: personInfo?.lifestyle },
-              { label: 'Locality Grade', value: personInfo?.locality_grade },
-            ].map(({ label, value }) => (
-              <div key={label} className={`rounded-lg border px-3 py-2 text-center min-w-[100px] ${getHighlightColor(value)}`}>
-                <p className="text-[10px] uppercase tracking-wider opacity-70 mb-0.5">{label}</p>
-                <p className="text-sm font-semibold">{formatMqlValue(value)}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <Separator />
-
-        {/* 1b. Personal Info (factual) */}
+        {/* 1. Personal Info (factual) */}
         <Section title="Personal Info">
           <div className="grid grid-cols-2 gap-x-6">
             <DataRow label="Age" value={demography?.age} />
