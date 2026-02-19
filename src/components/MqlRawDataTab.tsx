@@ -156,6 +156,8 @@ export const MqlRawDataTab = ({ lead }: MqlRawDataTabProps) => {
             <DataRow label="Gender" value={demography?.gender} />
             <DataRow label="Location" value={locationWithoutPincode} />
             <DataRow label="Pincode" value={pincode} />
+            <DataRow label="Locality Grade" value={demography?.locality_grade || lead.mqlEnrichment?.localityGrade} />
+            <DataRow label="Lifestyle" value={lead.mqlEnrichment?.lifestyle} />
           </div>
         </Section>
 
