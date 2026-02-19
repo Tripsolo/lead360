@@ -1,98 +1,70 @@
 
+## Fix Back Navigation from Lead Profile
 
-## Move Action Buttons and Icons on the Leads List Page
+### Problem
+When clicking the back button on the lead profile page, the user returns to the Index page but sees the upload wizard instead of their leads list. This happens because:
+1. The Index page stores leads only in React state (`useState`)
+2. When navigating to `/lead/:id`, the Index component unmounts
+3. On returning, the component remounts with an empty leads array, which triggers the upload wizard view
 
-### Current Layout
-
-The leads list page (post-upload) currently has:
-- **Navbar row**: Raisn logo + Customer360 title | Clear Cache (trash) + Logout
-- **Action buttons row** (lines 977-1019): Re-analyze Failed (conditional), spacer, Enrich, Ask AI, New, Analytics icon
-- **Summary Cards**
-- **LeadsTable** which has its own toolbar: spacer, Search input, Filter icon, Export (download) icon
-
-### Proposed Layout
-
-- **Navbar row**: Raisn logo + Customer360 | Export icon, Analytics icon, Clear Cache (trash), Logout
-- **No separate action buttons row** -- remove the `space-y-8` gap from that section
-- **Summary Cards** (directly after navbar content)
-- **LeadsTable toolbar**: Re-analyze Failed (conditional), Enrich, Ask AI, New, spacer, Search, Filter
-
-This eliminates the standalone action button row and consolidates everything into logical groups.
-
----
+### Solution
+Persist the current batch context in `sessionStorage` so the Index page can restore leads when remounting.
 
 ### Technical Details
 
 **File: `src/pages/Index.tsx`**
 
-1. **Move Export and Analytics icons to the navbar** (lines 946-961): Add the Analytics icon button and Export button (currently the download icon inside LeadsTable) next to the Clear Cache and Logout buttons in the navbar.
+1. **Save batch context to sessionStorage** -- after leads are loaded (both from file upload and from "AI-rated" view), store `{ projectId, leadIds, source }` in `sessionStorage` under a key like `cx360_batch`.
 
-2. **Move Enrich, Ask AI, New buttons into LeadsTable**: Pass these as props or as a render prop/slot to LeadsTable so they appear in the search/filter row. The simplest approach: pass action button props (callbacks + disabled states) to LeadsTable and render them there.
+2. **Restore on mount** -- add a new `useEffect` that runs on mount: if `leads.length === 0` and `sessionStorage` has a saved batch, reload those leads from the database (similar to `loadAiRatedLeads` but using the stored lead IDs).
 
-3. **Remove the standalone action buttons div** (lines 976-1019): Delete this entire block.
+3. **Clear on "New"** -- when the user clicks "New" (the `handleReset` function), clear the sessionStorage entry so the upload wizard shows.
 
-4. **Remove `space-y-8`** on the wrapper div (line 975) and use `space-y-6` for tighter spacing.
+4. **Clear on logout** -- clear the sessionStorage entry when logging out.
 
-**File: `src/components/LeadsTable.tsx`**
+Specifically:
 
-5. **Extend LeadsTableProps** to accept action button props:
-```
-interface LeadsTableProps {
-  leads: Lead[];
-  onLeadClick: (lead: Lead) => void;
-  ratingFilter: string | null;
-  onExport: () => void;
-  // New props for action buttons
-  onEnrich?: () => void;
-  onAnalyze?: () => void;
-  onNew?: () => void;
-  onReanalyze?: () => void;
-  isEnriching?: boolean;
-  isAnalyzing?: boolean;
-  isReanalyzing?: boolean;
-  failedAnalysisCount?: number;
-}
-```
+- After `setLeads(enrichedLeads)` in `handleFileSelect` (~line 331), save:
+  ```
+  sessionStorage.setItem('cx360_batch', JSON.stringify({
+    projectId,
+    leadIds: enrichedLeads.map(l => l.id),
+    source: 'upload'
+  }));
+  ```
 
-6. **Update the toolbar row** (lines 182-203) to include the action buttons on the left, then spacer, then search + filter on the right:
-```
-<div className="flex flex-col md:flex-row gap-2 items-stretch w-full">
-  {/* Left: action buttons */}
-  {failedAnalysisCount > 0 && <ReanalyzeButton />}
-  {onEnrich && <EnrichButton />}
-  {onAnalyze && <AskAIButton />}
-  {onNew && <NewButton />}
-  <div className="flex-1" />
-  {/* Right: search + filter */}
-  <SearchInput />
-  <FilterButton />
-</div>
-```
+- After `setLeads(mappedLeads)` in `loadAiRatedLeads`, save:
+  ```
+  sessionStorage.setItem('cx360_batch', JSON.stringify({
+    projectId: projectId || '',
+    source: 'ai-rated'
+  }));
+  ```
 
-7. **Remove the Export (download) button** from LeadsTable toolbar since it moves to the navbar.
+- Add a new `useEffect` after the auth effect:
+  ```
+  useEffect(() => {
+    if (leads.length > 0 || isLoading) return;
+    const saved = sessionStorage.getItem('cx360_batch');
+    if (!saved) return;
+    const batch = JSON.parse(saved);
+    // Reload leads from DB using batch.projectId and batch.leadIds
+    restoreLeadsFromSession(batch);
+  }, [user]);
+  ```
 
-**File: `src/pages/Index.tsx` (navbar updates)**
+- Create a `restoreLeadsFromSession` function that fetches leads, analyses, and enrichments from the database using the saved project ID and lead IDs, then calls `setLeads(...)`.
 
-8. **Add Analytics and Export to navbar**: The navbar buttons section becomes:
-```
-<div className="flex flex-row items-center gap-2">
-  <Button variant="ghost" size="icon" onClick={handleExport} title="Export">
-    <Download className="h-4 w-4" />
-  </Button>
-  <Button variant="ghost" size="icon" onClick={() => navigate('/project-analytics')} title="Analytics">
-    <BarChart3 className="h-4 w-4" />
-  </Button>
-  {clearCacheButton}
-  {logoutButton}
-</div>
-```
+- In `handleReset`, add `sessionStorage.removeItem('cx360_batch')`.
+- In `handleLogout`, add `sessionStorage.removeItem('cx360_batch')`.
+- In `handleClearCache`, add `sessionStorage.removeItem('cx360_batch')`.
 
-Only show Export and Analytics icons when `leads.length > 0`.
+**File: `src/pages/LeadProfile.tsx`**
+
+- Keep `navigate(-1)` as-is -- this is correct since the Index page will now properly restore its state.
 
 ### Summary of files changed
 
 | File | Changes |
 |------|---------|
-| `src/pages/Index.tsx` | Move Export + Analytics icons to navbar; remove standalone action buttons row; pass action callbacks to LeadsTable; reduce spacing |
-| `src/components/LeadsTable.tsx` | Accept action button props; render Enrich/Ask AI/New/Re-analyze in toolbar row; remove Export button from toolbar |
-
+| `src/pages/Index.tsx` | Add sessionStorage persistence for batch context; add restore-on-mount logic; clear on reset/logout/clear-cache |
