@@ -181,6 +181,28 @@ export const MqlRawDataTab = ({ lead }: MqlRawDataTabProps) => {
 
         <Separator />
 
+        {/* 2. Professional Summary */}
+        <Section title="Professional Summary">
+          <div className="grid grid-cols-2 gap-x-6">
+            <DataRow label="Current Role" value={professional.currentRole} />
+            <DataRow label="Employment Type" value={professional.employmentType} />
+            <DataRow label="Current Tenure" value={professional.currentTenure} />
+            {professional.activeBusiness && (
+              <DataRow label="Business" value={professional.activeBusiness} />
+            )}
+          </div>
+          {professional.previousEmployers.length > 0 && (
+            <div className="mt-2">
+              <p className="text-xs text-muted-foreground mb-1">Previous Employers</p>
+              {professional.previousEmployers.map((emp, idx) => (
+                <DataRow key={idx} label={emp.name} value={emp.tenure} />
+              ))}
+            </div>
+          )}
+        </Section>
+
+        <Separator />
+
         {/* 3. Financial Summary */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">

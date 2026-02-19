@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { UploadWizard } from '@/components/UploadWizard';
 import { SummaryCards } from '@/components/SummaryCards';
 import { LeadsTable } from '@/components/LeadsTable';
-import { LeadReportModal } from '@/components/LeadReportModal';
+// LeadReportModal kept for reference but no longer used
 import { parseExcelFile } from '@/utils/excelParser';
 import { exportLeadsToExcel } from '@/utils/excelExport';
 
@@ -57,8 +57,6 @@ const Index = () => {
   const [isEnriching, setIsEnriching] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [ratingFilter, setRatingFilter] = useState<string | null>(null);
-  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
   const [showEnrichPrompt, setShowEnrichPrompt] = useState(false);
   const [showClearCacheConfirm, setShowClearCacheConfirm] = useState(false);
   const [isClearingCache, setIsClearingCache] = useState(false);
@@ -770,8 +768,7 @@ const Index = () => {
 
 
   const handleLeadClick = (lead: Lead) => {
-    setSelectedLead(lead);
-    setModalOpen(true);
+    navigate(`/lead/${lead.id}`, { state: { lead } });
   };
 
   const handleLogout = async () => {
@@ -1036,12 +1033,6 @@ const Index = () => {
               onExport={handleExport}
             />
 
-            {/* Lead Report Modal */}
-            <LeadReportModal
-              lead={selectedLead}
-              open={modalOpen}
-              onOpenChange={setModalOpen}
-            />
           </div>
         )}
       </div>
