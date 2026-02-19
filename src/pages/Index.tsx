@@ -11,7 +11,7 @@ import { exportLeadsToExcel } from '@/utils/excelExport';
 import { Lead, AnalysisResult, MqlEnrichment } from '@/types/lead';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Sparkles, Upload, LogOut, Database, BarChart3, RefreshCw, Loader2, Trash2 } from 'lucide-react';
+import { Upload, LogOut, BarChart3, Loader2, Trash2, Download } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { ExcelSchema } from '@/config/projects';
 import type { User, Session } from '@supabase/supabase-js';
@@ -944,6 +944,16 @@ const Index = () => {
             <span className="text-lg font-semibold text-foreground">Customer360</span>
           </div>
           <div className="flex flex-row items-center gap-2">
+            {leads.length > 0 && (
+              <>
+                <Button variant="ghost" size="icon" onClick={handleExport} title="Export">
+                  <Download className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon" onClick={() => navigate('/project-analytics')} title="Analytics">
+                  <BarChart3 className="h-4 w-4" />
+                </Button>
+              </>
+            )}
             {user?.email?.endsWith('@raisn.ai') && leads.length > 0 && (
               <Button 
                 variant="ghost" 
@@ -972,52 +982,7 @@ const Index = () => {
             <p className="text-muted-foreground">Loading leads...</p>
           </div>
         ) : (
-          <div className="space-y-8">
-            {/* Action Buttons */}
-            <div className="flex flex-wrap gap-3 items-center">
-              {failedAnalysisCount > 0 && (
-                <Button 
-                  onClick={handleReanalyzeFailedLeads} 
-                  disabled={isReanalyzing || isAnalyzing || isEnriching} 
-                  variant="outline"
-                  className="border-amber-500 text-amber-600 hover:bg-amber-50"
-                >
-                  <RefreshCw className={`mr-2 h-4 w-4 ${isReanalyzing ? 'animate-spin' : ''}`} />
-                  {isReanalyzing ? 'Re-analyzing...' : `Re-analyze Failed (${failedAnalysisCount})`}
-                </Button>
-              )}
-              <div className="flex-1" />
-              <Button 
-                onClick={handleEnrichLeads} 
-                disabled={isEnriching || isAnalyzing} 
-                variant="outline"
-                className="border-primary text-primary hover:bg-primary/10"
-              >
-                <Database className="mr-2 h-4 w-4" />
-                {isEnriching ? 'Enriching...' : 'Enrich'}
-              </Button>
-              <Button 
-                onClick={() => handleAnalyzeLeads()} 
-                disabled={isAnalyzing || isEnriching || isReanalyzing} 
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
-              >
-                <Sparkles className="mr-2 h-4 w-4" />
-                {isAnalyzing ? 'Analyzing...' : 'Ask AI'}
-              </Button>
-              <Button variant="outline" onClick={handleReset}>
-                <Upload className="mr-2 h-4 w-4" />
-                New
-              </Button>
-              <Button 
-                variant="outline" 
-                size="icon"
-                onClick={() => navigate('/project-analytics')}
-                title="Project Analytics"
-              >
-                <BarChart3 className="h-5 w-5" />
-              </Button>
-            </div>
-
+          <div className="space-y-6">
             {/* Summary Cards */}
             <SummaryCards 
               leads={leads} 
@@ -1031,6 +996,14 @@ const Index = () => {
               onLeadClick={handleLeadClick}
               ratingFilter={ratingFilter}
               onExport={handleExport}
+              onEnrich={handleEnrichLeads}
+              onAnalyze={() => handleAnalyzeLeads()}
+              onNew={handleReset}
+              onReanalyze={handleReanalyzeFailedLeads}
+              isEnriching={isEnriching}
+              isAnalyzing={isAnalyzing}
+              isReanalyzing={isReanalyzing}
+              failedAnalysisCount={failedAnalysisCount}
             />
 
           </div>
