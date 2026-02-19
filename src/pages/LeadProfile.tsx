@@ -4,7 +4,7 @@ import { Lead, MqlEnrichment } from '@/types/lead';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { ArrowLeft, Mail, Phone, Briefcase, MapPin, Home, DollarSign, Target, AlertCircle, MessageSquare, Users, Lightbulb, User, Building2, ArrowRightCircle } from 'lucide-react';
+import { ArrowLeft, Briefcase, MapPin, DollarSign, Target, AlertCircle, MessageSquare, Users, Lightbulb, Building2, ArrowRightCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { standardizeLead } from '@/utils/leadStandardization';
@@ -222,6 +222,11 @@ const LeadProfile = () => {
     .split(/(?<=\.)\s+/)
     .filter(s => s.trim().length > 0);
 
+  // Persona description as bullet points
+  const personaPoints = (analysis?.persona_description || '')
+    .split(/(?<=\.)\s+/)
+    .filter(s => s.trim().length > 0);
+
   return (
     <div className="min-h-screen bg-background">
       {/* Branded navbar with back button */}
@@ -256,9 +261,7 @@ const LeadProfile = () => {
               )}
             </div>
           </div>
-          {analysis?.persona && (
-            <Badge variant="outline" className="w-fit mt-1">{analysis.persona}</Badge>
-          )}
+          
         </div>
 
         <Tabs defaultValue="overview" className="w-full">
@@ -269,86 +272,82 @@ const LeadProfile = () => {
 
           <TabsContent value="overview" className="space-y-6">
             {/* Rationale + Buyer Persona row */}
-            <div className="flex flex-wrap gap-4 items-start">
+            <div className="grid grid-cols-2 gap-4">
               {/* Rating Rationale */}
-              {rationalePoints.length > 0 && (
-                <div className="flex-1 min-w-[250px] rounded-lg border border-border bg-muted/30 px-4 py-3">
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Rating Rationale</p>
+              <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Rating Rationale</p>
+                {rationalePoints.length > 0 ? (
                   <ul className="list-disc list-inside space-y-1">
                     {rationalePoints.map((point, idx) => (
                       <li key={idx} className="text-sm leading-snug">{point}</li>
                     ))}
                   </ul>
-                </div>
-              )}
+                ) : (
+                  <p className="text-sm text-muted-foreground">N/A</p>
+                )}
+              </div>
 
               {/* Buyer Persona */}
-              <div className="flex-1 min-w-[250px] rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <Users className="h-4 w-4 text-primary" />
-                  <h4 className="font-semibold text-sm">Buyer Persona</h4>
+              <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-primary" />
+                    <h4 className="font-semibold text-sm">Buyer Persona</h4>
+                  </div>
+                  <Badge variant="outline">{analysis?.persona || 'N/A'}</Badge>
                 </div>
-                <p className="text-sm font-semibold mb-1">{analysis?.persona || 'N/A'}</p>
-                {analysis?.persona_description && (
-                  <p className="text-sm text-muted-foreground">{formatSnakeCase(analysis.persona_description)}</p>
+                {personaPoints.length > 0 ? (
+                  <ul className="list-disc list-inside space-y-1">
+                    {personaPoints.map((point, idx) => (
+                      <li key={idx} className="text-sm leading-snug">{point}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-muted-foreground">N/A</p>
                 )}
               </div>
             </div>
 
             <Separator />
 
-            {/* Lead Details, Property Preferences & Persona */}
-            <div className="grid md:grid-cols-2 gap-6">
+            {/* Lead Details, Property Preferences & Financial Profile */}
+            <div className="grid md:grid-cols-3 gap-6">
               {/* Lead Details */}
               <div className="space-y-4">
                 <h3 className="font-semibold text-sm">Lead Details</h3>
-                {lead.phone && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Phone className="h-4 w-4 text-muted-foreground" />
-                    <span>{lead.phone}</span>
-                  </div>
-                )}
                 {lead.email && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Mail className="h-4 w-4 text-muted-foreground" />
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">Email: </span>
                     <span>{lead.email}</span>
                   </div>
                 )}
-                {(standardized.age || standardized.gender) && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <User className="h-4 w-4 text-muted-foreground" />
-                    <span>
-                      {standardized.age ? `${standardized.age} yrs` : ''}{standardized.age && standardized.gender ? ', ' : ''}{standardized.gender || ''}
-                    </span>
-                  </div>
-                )}
                 {standardized.designation && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Briefcase className="h-4 w-4 text-muted-foreground" />
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">Designation: </span>
                     <span>{standardized.designation}</span>
                   </div>
                 )}
                 {standardized.employer && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Briefcase className="h-4 w-4 text-muted-foreground" />
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">Employer: </span>
                     <span>{standardized.employer}</span>
                   </div>
                 )}
                 {lead.workLocation && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Building2 className="h-4 w-4 text-muted-foreground" />
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">Work Location: </span>
                     <span>{lead.workLocation}</span>
                   </div>
                 )}
                 {lead.buildingName && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Home className="h-4 w-4 text-muted-foreground" />
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">Building: </span>
                     <span>{lead.buildingName}</span>
                   </div>
                 )}
                 {standardized.location && (
-                  <div className="flex items-center gap-2 text-sm flex-wrap">
-                    <Home className="h-4 w-4 text-muted-foreground" />
+                  <div className="text-sm flex items-center gap-1 flex-wrap">
+                    <span className="text-muted-foreground">Residence: </span>
                     <span>{standardized.location}</span>
                     {standardized.localityGrade && (
                       <Badge variant="outline" className={`${getLocalityGradeColor(standardized.localityGrade)} text-xs`}>
@@ -358,8 +357,8 @@ const LeadProfile = () => {
                   </div>
                 )}
                 {!standardized.location && standardized.localityGrade && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <MapPin className="h-4 w-4 text-muted-foreground" />
+                  <div className="text-sm flex items-center gap-1">
+                    <span className="text-muted-foreground">Locality: </span>
                     <Badge variant="outline" className={getLocalityGradeColor(standardized.localityGrade)}>
                       {standardized.localityGrade}
                     </Badge>
@@ -389,33 +388,21 @@ const LeadProfile = () => {
                   </div>
                 )}
               </div>
-            </div>
 
-            <Separator />
-
-            {/* Financial Profile */}
-            <div>
-              <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-                <DollarSign className="h-5 w-5" />
-                Financial Profile
-                {mqlDataAvailable && mql?.mqlCapability && (
-                  <Badge variant="outline" className={getCapabilityColor(mql.mqlCapability)}>
-                    {mql.mqlCapability}
-                  </Badge>
-                )}
-              </h3>
-              <div className="grid md:grid-cols-3 gap-4">
-                <div className="p-3 bg-muted rounded-lg">
-                  <p className="text-xs text-muted-foreground mb-1">Budget</p>
-                  <p className="font-semibold">{formatBudget(analysis?.extracted_signals?.budget_stated)}</p>
+              {/* Financial Profile */}
+              <div className="space-y-4">
+                <h3 className="font-semibold text-sm">Financial Profile</h3>
+                <div className="text-sm">
+                  <span className="text-muted-foreground">Budget: </span>
+                  <span>{formatBudget(analysis?.extracted_signals?.budget_stated)}</span>
                 </div>
-                <div className="p-3 bg-muted rounded-lg">
-                  <p className="text-xs text-muted-foreground mb-1">In-Hand Funds</p>
-                  <p className="font-semibold">{formatInHandFunds(analysis?.extracted_signals?.in_hand_funds, analysis?.extracted_signals?.budget_stated)}</p>
+                <div className="text-sm">
+                  <span className="text-muted-foreground">In-Hand Funds: </span>
+                  <span>{formatInHandFunds(analysis?.extracted_signals?.in_hand_funds, analysis?.extracted_signals?.budget_stated)}</span>
                 </div>
-                <div className="p-3 bg-muted rounded-lg">
-                  <p className="text-xs text-muted-foreground mb-1">Funding Source</p>
-                  <p className="font-semibold">{lead.fundingSource || 'No data available'}</p>
+                <div className="text-sm">
+                  <span className="text-muted-foreground">Funding Source: </span>
+                  <span>{lead.fundingSource || 'No data available'}</span>
                 </div>
               </div>
             </div>
