@@ -187,6 +187,10 @@ const Index = () => {
       });
 
       setLeads(loadedLeads);
+      sessionStorage.setItem('cx360_batch', JSON.stringify({
+        projectId: projectId || '',
+        source: 'ai-rated'
+      }));
       toast({
         title: 'AI-rated leads loaded',
         description: `Loaded ${loadedLeads.length} AI-rated leads from the database.`,
@@ -218,6 +222,137 @@ const Index = () => {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // Restore leads from sessionStorage when returning from lead profile
+  const restoreLeadsFromSession = async (batch: { projectId: string; leadIds?: string[]; source: string }) => {
+    setIsLoading(true);
+    try {
+      const { projectId, source } = batch;
+      setSelectedProjectId(projectId);
+      if (source === 'ai-rated') {
+        setIsViewingAiRated(true);
+      }
+
+      // Fetch analyses for this project (optionally filtered by leadIds)
+      let analysesQuery = supabase
+        .from('lead_analyses')
+        .select('lead_id, project_id, rating, insights, full_analysis');
+      if (projectId) analysesQuery = analysesQuery.eq('project_id', projectId);
+      if (batch.leadIds) analysesQuery = analysesQuery.in('lead_id', batch.leadIds);
+
+      const { data: analysesData, error: analysesError } = await analysesQuery;
+      if (analysesError) throw analysesError;
+
+      const leadIds = batch.leadIds || [...new Set((analysesData || []).map(a => a.lead_id))];
+      if (leadIds.length === 0) {
+        sessionStorage.removeItem('cx360_batch');
+        setIsLoading(false);
+        return;
+      }
+
+      // Fetch leads
+      const { data: leadsData, error: leadsError } = await supabase
+        .from('leads')
+        .select('lead_id, project_id, crm_data')
+        .in('lead_id', leadIds);
+      if (leadsError) throw leadsError;
+
+      // Fetch enrichments
+      const { data: enrichmentsData } = await supabase
+        .from('lead_enrichments')
+        .select('*')
+        .in('lead_id', leadIds);
+
+      // Build leads array (same mapping as loadAiRatedLeads)
+      const loadedLeads: Lead[] = (leadsData || []).map(lead => {
+        const analysis = (analysesData || []).find(a => a.lead_id === lead.lead_id);
+        const enrichment = enrichmentsData?.find(e => e.lead_id === lead.lead_id);
+        const crmData = lead.crm_data as Record<string, unknown>;
+
+        let mqlEnrichment: MqlEnrichment | undefined;
+        if (enrichment) {
+          mqlEnrichment = {
+            mqlRating: enrichment.mql_rating || undefined,
+            mqlCapability: enrichment.mql_capability || undefined,
+            mqlLifestyle: enrichment.mql_lifestyle || undefined,
+            creditScore: enrichment.credit_score || undefined,
+            age: enrichment.age || undefined,
+            gender: enrichment.gender || undefined,
+            location: enrichment.location || undefined,
+            localityGrade: enrichment.locality_grade || undefined,
+            lifestyle: enrichment.lifestyle || undefined,
+            finalIncomeLacs: enrichment.final_income_lacs ? Number(enrichment.final_income_lacs) : undefined,
+            employerName: enrichment.employer_name || undefined,
+            designation: enrichment.designation || undefined,
+            totalLoans: enrichment.total_loans || undefined,
+            activeLoans: enrichment.active_loans || undefined,
+            homeLoans: enrichment.home_loans || undefined,
+            autoLoans: enrichment.auto_loans || undefined,
+            highestCardUsagePercent: enrichment.highest_card_usage_percent ? Number(enrichment.highest_card_usage_percent) : undefined,
+            isAmexHolder: enrichment.is_amex_holder || undefined,
+            enrichedAt: enrichment.enriched_at || undefined,
+            rawResponse: enrichment.raw_response as Record<string, any> || undefined,
+          };
+        }
+
+        return {
+          id: lead.lead_id,
+          name: (crmData?.['Opportunity Name'] as string) || 'Unknown',
+          phone: (crmData?.['Mobile'] as string) || '',
+          email: (crmData?.['Email Id'] as string) || '',
+          projectInterest: (crmData?.['Project'] as string) || undefined,
+          leadOwner: (crmData?.['Name of Closing Manager'] as string) || undefined,
+          date: excelDateToISOString(crmData?.['Latest Revisit Date']) || excelDateToISOString(crmData?.['Walkin Date']) || undefined,
+          managerRating: (crmData?.['Walkin Manual Rating'] as string) as Lead['managerRating'],
+          manualRating: (crmData?.['Walkin Manual Rating'] as string) as Lead['managerRating'],
+          occupation: (crmData?.['Occupation'] as string) || undefined,
+          company: (crmData?.['Place of Work (Company Name)'] as string) || undefined,
+          lastVisit: excelDateToISOString(crmData?.['Latest Revisit Date']) || excelDateToISOString(crmData?.['Walkin Date']) || undefined,
+          source: (crmData?.['Sales Walkin Source'] as string) || undefined,
+          subSource: (crmData?.['Sales Walkin Sub Source'] as string) || undefined,
+          unitInterested: (crmData?.['Interested Unit 1'] as string) || undefined,
+          towerInterested: (crmData?.['Interested Tower 1'] as string) || undefined,
+          buildingName: (crmData?.['Building Name'] as string) || undefined,
+          currentResidence: (crmData?.['Location of Residence'] as string) || undefined,
+          workLocation: (crmData?.['Location of Work'] as string) || undefined,
+          designation: (crmData?.['Designation'] as string) || undefined,
+          carpetArea: (crmData?.['Desired Carpet Area (Post-Walkin)'] as string) || undefined,
+          floorPreference: (crmData?.['Desired Floor Band'] as string) || undefined,
+          facing: (crmData?.['Desired Facing'] as string) || undefined,
+          constructionStage: (crmData?.['Stage of Construction (Post-Walkin)'] as string) || undefined,
+          fundingSource: (crmData?.['Source of Funding'] as string) || undefined,
+          rawData: crmData,
+          rating: analysis?.rating as Lead['rating'],
+          aiInsights: analysis?.insights || undefined,
+          fullAnalysis: analysis?.full_analysis as Lead['fullAnalysis'],
+          mqlEnrichment,
+        };
+      });
+
+      setLeads(loadedLeads);
+    } catch (error) {
+      console.error('Error restoring leads from session:', error);
+      sessionStorage.removeItem('cx360_batch');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Auto-restore leads from sessionStorage on mount (for back navigation)
+  useEffect(() => {
+    if (leads.length > 0 || isLoading) return;
+    // Don't restore if URL has view params (handled by separate effect)
+    const view = searchParams.get('view');
+    if (view) return;
+    const saved = sessionStorage.getItem('cx360_batch');
+    if (!saved || !user) return;
+    try {
+      const batch = JSON.parse(saved);
+      restoreLeadsFromSession(batch);
+    } catch {
+      sessionStorage.removeItem('cx360_batch');
+    }
+  }, [user]);
 
   const handleFileSelect = async (file: File, projectId: string) => {
     setIsLoading(true);
@@ -330,6 +465,11 @@ const Index = () => {
 
       setLeads(enrichedLeads);
       setSelectedProjectId(projectId);
+      sessionStorage.setItem('cx360_batch', JSON.stringify({
+        projectId,
+        leadIds: enrichedLeads.map(l => l.id),
+        source: 'upload'
+      }));
       
       const cachedCount = cachedAnalyses?.length || 0;
       const enrichedCount = cachedEnrichments?.length || 0;
@@ -754,6 +894,7 @@ const Index = () => {
     setSelectedProjectId('');
     setRatingFilter(null);
     setIsViewingAiRated(false);
+    sessionStorage.removeItem('cx360_batch');
     // Clear URL params
     navigate('/', { replace: true });
   };
@@ -772,6 +913,7 @@ const Index = () => {
   };
 
   const handleLogout = async () => {
+    sessionStorage.removeItem('cx360_batch');
     await supabase.auth.signOut();
     toast({
       title: 'Logged out',
@@ -811,6 +953,7 @@ const Index = () => {
         .eq('project_id', selectedProjectId);
 
       // Reset UI state
+      sessionStorage.removeItem('cx360_batch');
       handleReset();
       setShowClearCacheConfirm(false);
       
