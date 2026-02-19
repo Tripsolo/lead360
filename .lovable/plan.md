@@ -1,135 +1,114 @@
-## Leads Dashboard Visual Overhaul
+## Convert Lead Modal to Standalone Lead Page
 
-### Changes Overview
+### Overview
 
-Five changes: remove badge capsules from MQL/Manager ratings (use colored text instead), compress and reposition search bar, add circular PPS progress indicator next to AI rating, reorder rating columns, and add a branded Raisn header/navbar.
+Replace the current `LeadReportModal` (dialog) with a dedicated `/lead/:leadId` route page. The page will have a branded Raisn navbar with back navigation, restructured overview tab with inline rating cards and PPS circle, and the reinstated Professional Summary section in the MQL Raw Data tab.
 
 ---
 
-### 1. Remove capsule badges from Manager Rating and MQL Rating columns
+### 1. Create new Lead page: `src/pages/LeadProfile.tsx`
+
+**Structure:**
+
+- Branded navbar (same as Index page): Raisn logo + "Customer360" on left, back arrow/button on left or right to navigate back to the leads list
+- Lead name + persona badge below the navbar
+- Tabs: Overview | MQL Raw Data (same as current modal)
+
+**Overview tab changes:**
+
+**Ratings row** -- Use the same card style from the MQL Highlights section (colored border cards with label on top, value below). All in a single horizontal row in this order:
+
+- Manager Rating (card)
+- MQL Rating (card)  
+- AI Rating (card)
+- PPS (circular progress bar, same `PpsCircle` component from LeadsTable)
+
+**Rating Rationale** -- Displayed as a wide, short card directly below the ratings row. The rationale text is split into bullet points (split on `.`  or sentence boundaries) for readability. Uses `flex` layout: wider and shorter than the current tall narrow card.
+
+All other content (Lead Details, Property Preferences, Buyer Persona, Financial Profile, AI Analysis, Talking Points, Cross-Sell) remains the same as the current modal, just rendered on the full page.
+
+### 2. Reinstate Professional Summary in MQL Raw Data tab
+
+**File: `src/components/MqlRawDataTab.tsx**`
+
+Add a "Professional Summary" section between "Personal Info" and "Financial Summary" sections. Uses the existing `reconcileProfessionalData` function from `mqlReconciliation.ts`:
+
+- Current Role: `professional.currentRole`
+- Employment Type: `professional.employmentType`
+- Current Tenure: `professional.currentTenure`
+- Active Business: `professional.activeBusiness` (if exists)
+- Previous Employers: listed if any exist
+
+Uses the Briefcase/Building2 icons already imported.
+
+### 3. Update routing and navigation
+
+**File: `src/App.tsx**`
+
+- Add route: `<Route path="/lead/:leadId" element={<ProtectedRoute><LeadProfile /></ProtectedRoute>} />`
 
 **File: `src/components/LeadsTable.tsx**`
 
-Replace the `<Badge>` wrappers for Manager Rating and MQL Rating cells with plain `<span>` elements. Use the same color-mapping logic but apply it as `text-status-hot`, `text-status-warm`, `text-status-cold` font colors instead of background fills.
+- Change `onLeadClick` to navigate to `/lead/:leadId` instead of opening a modal
+- Pass the lead data via React Router state (`navigate(`/lead/${lead.id}`, { state: { lead } })`)
 
-- Manager Rating cell: `<span className="font-semibold text-status-hot">Hot</span>` (no Badge)
-- MQL Rating cell: `<span className="font-semibold text-status-hot">P0</span>` (no Badge)
-- AI Rating keeps its Badge capsule as-is
+**File: `src/pages/Index.tsx**`
 
-Helper functions `getRatingTextColor` and `getMqlRatingTextColor` return Tailwind text color classes instead of background classes.
+- Remove `LeadReportModal` import and usage
+- Remove `selectedLead` and `modalOpen` state
+- Update `handleLeadClick` to use `navigate` instead of opening modal
 
-### 2. Compress search bar and move it next to the filter icon (right-aligned)
+### 4. Keep LeadReportModal.tsx
 
-**File: `src/components/LeadsTable.tsx**`
-
-Change the filter bar layout:
-
-- Remove `flex-1` from the search input wrapper
-- Set it to a fixed width of roughly 50% (`w-1/2` or `max-w-xs`)
-- Reorder elements so the search bar sits on the right, next to the Filter icon and Download icon
-- Use `flex-1` spacer on the left to push everything right
-
-New layout order: `[spacer] [Search] [Filter icon] [Download icon]`
-
-### 3. PPS as circular progress bar next to AI Rating
-
-**File: `src/components/LeadsTable.tsx**`
-
-Create an inline circular progress indicator for the PPS score (0-100 scale). Use an SVG circle with a stroke-dasharray/dashoffset approach:
-
-- 36px diameter circle
-- Score text centered inside
-- Color: green for 85+, orange for 65-84, red for below 65 (matching Hot/Warm/Cold thresholds)
-
-### 4. Reorder rating columns
-
-**File: `src/components/LeadsTable.tsx**`
-
-New column order:
-
-1. Name
-2. Project
-3. Phone
-4. Owner
-5. Last Visit
-6. **Manager** (was after AI)
-7. **MQL** (was after Manager)
-8. **AI**
-9. **PPS**
-10. **Key Concern**
-
-Update both `<TableHeader>` and `<TableBody>` cell order to match. 
-
-### 5. Add branded Raisn header/navigation bar
-
-**Files: `src/pages/Index.tsx`, new asset `src/assets/raisn-logo.png**`
-
-Replace the current plain text header with a proper navigation bar:
-
-- Copy the uploaded Raisn logo to `src/assets/raisn-logo.png`
-- Add a full-width nav bar at the top of the page (outside the container) with:
-  - Left: Raisn logo image (height ~32px)
-  - Center or left-of-center: "Customer360" product name
-  - Right: Delete icon (if applicable) and Logout button (horizontally aligned, as currently implemented)
-- Style: white background, subtle bottom border, horizontal padding
-- Remove the old `<h1>Customer360</h1>` and subtitle from the container body
+Keep the file but it will no longer be imported. Can be deleted in a future cleanup.
 
 ---
 
 ### Technical Details
 
-**Circular PPS Component (inline in LeadsTable.tsx):**
+**LeadProfile page data flow:**
+
+- Receives lead data via `useLocation().state.lead`
+- Falls back to fetching from database if state is missing (direct URL access): query `leads`, `lead_analyses`, and `lead_enrichments` tables by `leadId` param
+
+**Ratings row card component (reuse MQL Highlights pattern):**
 
 ```text
-const PpsCircle = ({ score }: { score: number }) => {
-  const radius = 14, circumference = 2 * Math.PI * radius;
-  const offset = circumference - (score / 100) * circumference;
-  const color = score >= 85 ? 'text-status-hot' : score >= 65 ? 'text-status-warm' : 'text-status-cold';
-  return (
-    <svg width="36" height="36" className={color}>
-      <circle cx="18" cy="18" r={radius} fill="none" stroke="currentColor" 
-              strokeWidth="3" opacity="0.2" />
-      <circle cx="18" cy="18" r={radius} fill="none" stroke="currentColor" 
-              strokeWidth="3" strokeDasharray={circumference} strokeDashoffset={offset}
-              strokeLinecap="round" transform="rotate(-90 18 18)" />
-      <text x="18" y="18" textAnchor="middle" dominantBaseline="central" 
-            className="fill-current text-[10px] font-bold">{score}</text>
-    </svg>
-  );
-};
-```
-
-**Rating text color helpers:**
-
-```text
-const getRatingTextColor = (rating?: string) => {
-  switch (rating?.toLowerCase()) {
-    case 'hot': return 'text-status-hot';
-    case 'warm': return 'text-status-warm';
-    case 'cold': return 'text-status-cold';
-    default: return 'text-muted-foreground';
-  }
-};
-```
-
-**Navbar structure:**
-
-```text
-<nav className="bg-white border-b border-border sticky top-0 z-50">
-  <div className="container mx-auto px-4 flex items-center justify-between h-14">
-    <div className="flex items-center gap-3">
-      <img src={raisnLogo} alt="Raisn" className="h-8" />
-      <span className="text-lg font-semibold text-foreground">Customer360</span>
-    </div>
-    <div className="flex items-center gap-2">
-      {/* Delete + Logout */}
-    </div>
+const RatingCard = ({ label, value, colorClass }) => (
+  <div className={`rounded-lg border px-3 py-2 text-center min-w-[80px] ${colorClass}`}>
+    <p className="text-[10px] uppercase tracking-wider opacity-70 mb-0.5">{label}</p>
+    <p className="text-sm font-semibold">{value}</p>
   </div>
-</nav>
+);
+```
+
+**Rating rationale as bullets:**
+
+```text
+const rationalePoints = (analysis?.rating_rationale || '')
+  .split(/(?<=\.)\s+/)
+  .filter(s => s.trim().length > 0);
+```
+
+**PPS circle reuse:** Extract `PpsCircle` from LeadsTable into a shared component or duplicate inline in LeadProfile.
+
+**Professional Summary section in MqlRawDataTab (between Personal Info and Financial Summary):**
+
+```text
+<Section title="Professional Summary">
+  <DataRow label="Current Role" value={professional.currentRole} />
+  <DataRow label="Employment Type" value={professional.employmentType} />
+  <DataRow label="Current Tenure" value={professional.currentTenure} />
+  {professional.activeBusiness && (
+    <DataRow label="Business" value={professional.activeBusiness} />
+  )}
+</Section>
 ```
 
 ### Files Changed
 
-- `src/assets/raisn-logo.png` -- Copy uploaded logo
-- `src/pages/Index.tsx` -- Replace header with branded navbar, move delete+logout into navbar
-- `src/components/LeadsTable.tsx` -- Remove Badge capsules from Manager/MQL, compress search bar to right, reorder columns, add PPS circle
+- `src/pages/LeadProfile.tsx` -- New standalone lead page
+- `src/components/MqlRawDataTab.tsx` -- Add Professional Summary section back
+- `src/App.tsx` -- Add `/lead/:leadId` route
+- `src/pages/Index.tsx` -- Remove modal, navigate to lead page on click
+- `src/components/LeadsTable.tsx` -- Navigate instead of callback
