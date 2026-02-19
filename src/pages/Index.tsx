@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import raisnLogo from '@/assets/raisn-logo.png';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { UploadWizard } from '@/components/UploadWizard';
 import { SummaryCards } from '@/components/SummaryCards';
@@ -938,11 +939,12 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-12">
-        <div className="flex justify-between items-start mb-8">
-          <div>
-            <h1 className="text-3xl font-bold">Customer360</h1>
-            <p className="text-sm text-muted-foreground">Powered by Raisn.ai</p>
+      {/* Branded Raisn navbar */}
+      <nav className="bg-white border-b border-border sticky top-0 z-50">
+        <div className="container mx-auto px-4 flex items-center justify-between h-14">
+          <div className="flex items-center gap-3">
+            <img src={raisnLogo} alt="Raisn" className="h-8" />
+            <span className="text-lg font-semibold text-foreground">Customer360</span>
           </div>
           <div className="flex flex-row items-center gap-2">
             {user?.email?.endsWith('@raisn.ai') && leads.length > 0 && (
@@ -962,6 +964,8 @@ const Index = () => {
             </button>
           </div>
         </div>
+      </nav>
+      <div className="container mx-auto px-4 py-8">
 
         {leads.length === 0 && !isLoading ? (
           <UploadWizard onFileSelect={handleFileSelect} isLoading={isLoading} />
