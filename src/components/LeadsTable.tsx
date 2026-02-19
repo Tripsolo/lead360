@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import { Search, ArrowUpDown, ArrowUp, ArrowDown, Download, Filter } from 'lucide-react';
+import { Search, ArrowUpDown, ArrowUp, ArrowDown, Filter, Database, Sparkles, Upload, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface LeadsTableProps {
@@ -22,6 +22,14 @@ interface LeadsTableProps {
   onLeadClick: (lead: Lead) => void;
   ratingFilter: string | null;
   onExport: () => void;
+  onEnrich?: () => void;
+  onAnalyze?: () => void;
+  onNew?: () => void;
+  onReanalyze?: () => void;
+  isEnriching?: boolean;
+  isAnalyzing?: boolean;
+  isReanalyzing?: boolean;
+  failedAnalysisCount?: number;
 }
 
 type SortField = 'name' | 'date' | 'rating' | 'phone' | 'mqlRating' | 'ppsScore';
@@ -64,7 +72,7 @@ const formatRating = (rating?: string) => {
 
 // PpsCircle imported from shared component
 
-export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: LeadsTableProps) => {
+export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport, onEnrich, onAnalyze, onNew, onReanalyze, isEnriching, isAnalyzing, isReanalyzing, failedAnalysisCount }: LeadsTableProps) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [ownerFilter, setOwnerFilter] = useState<string>('all');
   const [projectFilter, setProjectFilter] = useState<string>('all');
@@ -179,107 +187,151 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: Leads
 
   return (
     <div className="space-y-4">
-      {/* Filters - search compressed and right-aligned */}
-      <div className="flex flex-col md:flex-row gap-4 items-stretch w-full">
-        <div className="flex-1" />
-        <div className="relative w-full md:max-w-xs">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by Lead ID, Phone, or Name..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-        <Sheet>
-          <SheetTrigger asChild>
-            <Button variant="outline" size="sm" className="md:w-auto relative">
-              <Filter className="h-4 w-4" />
-              {activeFilterCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-xs rounded-full h-4 w-4 flex items-center justify-center">
-                  {activeFilterCount}
-                </span>
-              )}
+      {/* Toolbar: action buttons left, search + filter right */}
+      <div className="flex flex-col md:flex-row gap-2 items-stretch w-full">
+        {/* Left: action buttons */}
+        <div className="flex flex-wrap gap-2 items-center">
+          {(failedAnalysisCount ?? 0) > 0 && onReanalyze && (
+            <Button 
+              onClick={onReanalyze} 
+              disabled={isReanalyzing || isAnalyzing || isEnriching} 
+              variant="outline"
+              size="sm"
+              className="border-amber-500 text-amber-600 hover:bg-amber-50"
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${isReanalyzing ? 'animate-spin' : ''}`} />
+              {isReanalyzing ? 'Re-analyzing...' : `Re-analyze Failed (${failedAnalysisCount})`}
             </Button>
-          </SheetTrigger>
-          <SheetContent>
-            <SheetHeader>
-              <SheetTitle>Filters</SheetTitle>
-            </SheetHeader>
-            <div className="space-y-4 mt-6">
-              <div>
-                <label className="text-sm font-medium mb-1 block">Project</label>
-                <Select value={projectFilter} onValueChange={setProjectFilter}>
-                  <SelectTrigger><SelectValue placeholder="All Projects" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Projects</SelectItem>
-                    {projects.map(p => <SelectItem key={p} value={p!}>{p}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-1 block">Owner</label>
-                <Select value={ownerFilter} onValueChange={setOwnerFilter}>
-                  <SelectTrigger><SelectValue placeholder="All Owners" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Owners</SelectItem>
-                    {leadOwners.map(o => <SelectItem key={o} value={o!}>{o}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-1 block">Manager Rating</label>
-                <Select value={managerRatingFilter} onValueChange={setManagerRatingFilter}>
-                  <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                    <SelectItem value="Hot">Hot</SelectItem>
-                    <SelectItem value="Warm">Warm</SelectItem>
-                    <SelectItem value="Cold">Cold</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-1 block">AI Rating</label>
-                <Select value={aiRatingFilter} onValueChange={setAiRatingFilter}>
-                  <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                    <SelectItem value="Hot">Hot</SelectItem>
-                    <SelectItem value="Warm">Warm</SelectItem>
-                    <SelectItem value="Cold">Cold</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-1 block">MQL Rating</label>
-                <Select value={mqlRatingFilter} onValueChange={setMqlRatingFilter}>
-                  <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                    {['P0','P1','P2','P3','P4','P5'].map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-1 block">Key Concern</label>
-                <Select value={concernFilter} onValueChange={setConcernFilter}>
-                  <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                    {concerns.map(c => <SelectItem key={c} value={c!}>{c}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button variant="outline" onClick={resetFilters} className="w-full mt-4">
-                Reset Filters
+          )}
+          {onEnrich && (
+            <Button 
+              onClick={onEnrich} 
+              disabled={isEnriching || isAnalyzing} 
+              variant="outline"
+              size="sm"
+              className="border-primary text-primary hover:bg-primary/10"
+            >
+              <Database className="mr-2 h-4 w-4" />
+              {isEnriching ? 'Enriching...' : 'Enrich'}
+            </Button>
+          )}
+          {onAnalyze && (
+            <Button 
+              onClick={onAnalyze} 
+              disabled={isAnalyzing || isEnriching || isReanalyzing} 
+              size="sm"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+            >
+              <Sparkles className="mr-2 h-4 w-4" />
+              {isAnalyzing ? 'Analyzing...' : 'Ask AI'}
+            </Button>
+          )}
+          {onNew && (
+            <Button variant="outline" size="sm" onClick={onNew}>
+              <Upload className="mr-2 h-4 w-4" />
+              New
+            </Button>
+          )}
+        </div>
+        <div className="flex-1" />
+        {/* Right: search + filter */}
+        <div className="flex gap-2 items-center">
+          <div className="relative w-full md:max-w-xs">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by Lead ID, Phone, or Name..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="outline" size="sm" className="relative">
+                <Filter className="h-4 w-4" />
+                {activeFilterCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-xs rounded-full h-4 w-4 flex items-center justify-center">
+                    {activeFilterCount}
+                  </span>
+                )}
               </Button>
-            </div>
-          </SheetContent>
-        </Sheet>
-        <Button variant="outline" onClick={onExport} size="sm" className="md:w-auto" title="Export Raw Data">
-          <Download className="h-4 w-4" />
-        </Button>
+            </SheetTrigger>
+            <SheetContent>
+              <SheetHeader>
+                <SheetTitle>Filters</SheetTitle>
+              </SheetHeader>
+              <div className="space-y-4 mt-6">
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Project</label>
+                  <Select value={projectFilter} onValueChange={setProjectFilter}>
+                    <SelectTrigger><SelectValue placeholder="All Projects" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Projects</SelectItem>
+                      {projects.map(p => <SelectItem key={p} value={p!}>{p}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Owner</label>
+                  <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+                    <SelectTrigger><SelectValue placeholder="All Owners" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Owners</SelectItem>
+                      {leadOwners.map(o => <SelectItem key={o} value={o!}>{o}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Manager Rating</label>
+                  <Select value={managerRatingFilter} onValueChange={setManagerRatingFilter}>
+                    <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      <SelectItem value="Hot">Hot</SelectItem>
+                      <SelectItem value="Warm">Warm</SelectItem>
+                      <SelectItem value="Cold">Cold</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-1 block">AI Rating</label>
+                  <Select value={aiRatingFilter} onValueChange={setAiRatingFilter}>
+                    <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      <SelectItem value="Hot">Hot</SelectItem>
+                      <SelectItem value="Warm">Warm</SelectItem>
+                      <SelectItem value="Cold">Cold</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-1 block">MQL Rating</label>
+                  <Select value={mqlRatingFilter} onValueChange={setMqlRatingFilter}>
+                    <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      {['P0','P1','P2','P3','P4','P5'].map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Key Concern</label>
+                  <Select value={concernFilter} onValueChange={setConcernFilter}>
+                    <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      {concerns.map(c => <SelectItem key={c} value={c!}>{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button variant="outline" onClick={resetFilters} className="w-full mt-4">
+                  Reset Filters
+                </Button>
+              </div>
+            </SheetContent>
+          </Sheet>
+        </div>
       </div>
 
       {/* Table - reordered columns: Name, Project, Phone, Owner, Last Visit, Manager, MQL, AI, PPS, Key Concern */}
