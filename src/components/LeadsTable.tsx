@@ -29,6 +29,56 @@ type SortDirection = 'asc' | 'desc' | null;
 const ratingOrder: Record<string, number> = { 'hot': 3, 'warm': 2, 'cold': 1 };
 const getRatingValue = (rating?: string) => ratingOrder[String(rating || '').toLowerCase()] || 0;
 
+const getRatingColor = (rating?: string) => {
+  switch (rating?.toLowerCase()) {
+    case 'hot': return 'bg-status-hot text-white';
+    case 'warm': return 'bg-status-warm text-white';
+    case 'cold': return 'bg-status-cold text-white';
+    default: return 'bg-muted text-muted-foreground';
+  }
+};
+
+const getRatingTextColor = (rating?: string) => {
+  switch (rating?.toLowerCase()) {
+    case 'hot': return 'text-status-hot';
+    case 'warm': return 'text-status-warm';
+    case 'cold': return 'text-status-cold';
+    default: return 'text-muted-foreground';
+  }
+};
+
+const getMqlRatingTextColor = (rating?: string) => {
+  switch (rating) {
+    case 'P0': return 'text-status-hot';
+    case 'P1': return 'text-status-warm';
+    case 'P2': return 'text-status-cold';
+    default: return 'text-muted-foreground';
+  }
+};
+
+const formatRating = (rating?: string) => {
+  if (!rating) return '-';
+  return rating.charAt(0).toUpperCase() + rating.slice(1).toLowerCase();
+};
+
+const PpsCircle = ({ score }: { score: number }) => {
+  const radius = 14;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (score / 100) * circumference;
+  const color = score >= 85 ? 'text-status-hot' : score >= 65 ? 'text-status-warm' : 'text-status-cold';
+  return (
+    <svg width="36" height="36" className={color}>
+      <circle cx="18" cy="18" r={radius} fill="none" stroke="currentColor"
+              strokeWidth="3" opacity="0.2" />
+      <circle cx="18" cy="18" r={radius} fill="none" stroke="currentColor"
+              strokeWidth="3" strokeDasharray={circumference} strokeDashoffset={offset}
+              strokeLinecap="round" transform="rotate(-90 18 18)" />
+      <text x="18" y="18" textAnchor="middle" dominantBaseline="central"
+            className="fill-current text-[10px] font-bold">{score}</text>
+    </svg>
+  );
+};
+
 export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: LeadsTableProps) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [ownerFilter, setOwnerFilter] = useState<string>('all');
@@ -63,7 +113,6 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: Leads
       String(lead.phone || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       String(lead.name || '').toLowerCase().includes(searchTerm.toLowerCase());
     
-    // Summary card filter (Upgraded/Downgraded/Unchanged or Hot/Warm/Cold)
     let matchesRatingComparison = true;
     if (ratingFilter === 'Upgraded') {
       matchesRatingComparison = !!(lead.rating && lead.managerRating && getRatingValue(lead.rating) > getRatingValue(lead.managerRating));
@@ -143,34 +192,12 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: Leads
     return <ArrowUpDown className="ml-2 h-4 w-4" />;
   };
 
-  const getRatingColor = (rating?: string) => {
-    switch (rating?.toLowerCase()) {
-      case 'hot': return 'bg-status-hot text-white';
-      case 'warm': return 'bg-status-warm text-white';
-      case 'cold': return 'bg-status-cold text-white';
-      default: return 'bg-muted text-muted-foreground';
-    }
-  };
-
-  const formatRating = (rating?: string) => {
-    if (!rating) return '-';
-    return rating.charAt(0).toUpperCase() + rating.slice(1).toLowerCase();
-  };
-
-  const getMqlRatingColor = (rating?: string) => {
-    switch (rating) {
-      case 'P0': return 'bg-status-hot text-white';
-      case 'P1': return 'bg-status-warm text-white';
-      case 'P2': return 'bg-status-cold text-white';
-      default: return 'bg-muted text-muted-foreground';
-    }
-  };
-
   return (
     <div className="space-y-4">
-      {/* Filters */}
+      {/* Filters - search compressed and right-aligned */}
       <div className="flex flex-col md:flex-row gap-4 items-stretch w-full">
-        <div className="relative flex-1">
+        <div className="flex-1" />
+        <div className="relative w-full md:max-w-xs">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search by Lead ID, Phone, or Name..."
@@ -270,7 +297,7 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: Leads
         </Button>
       </div>
 
-      {/* Table */}
+      {/* Table - reordered columns: Name, Project, Phone, Owner, Last Visit, Manager, MQL, AI, PPS, Key Concern */}
       <div className="border rounded-lg overflow-x-auto">
         <Table>
           <TableHeader>
@@ -295,17 +322,17 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: Leads
                   <SortIcon field="date" />
                 </Button>
               </TableHead>
-              <TableHead>
-                <Button variant="ghost" onClick={() => handleSort('rating')} className="h-8 px-2">
-                  AI Rating
-                  <SortIcon field="rating" />
-                </Button>
-              </TableHead>
-              <TableHead>Manager Rating</TableHead>
+              <TableHead>Manager</TableHead>
               <TableHead>
                 <Button variant="ghost" onClick={() => handleSort('mqlRating')} className="h-8 px-2">
-                  MQL Rating
+                  MQL
                   <SortIcon field="mqlRating" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button variant="ghost" onClick={() => handleSort('rating')} className="h-8 px-2">
+                  AI
+                  <SortIcon field="rating" />
                 </Button>
               </TableHead>
               <TableHead>
@@ -338,6 +365,19 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: Leads
                   <TableCell>
                     {lead.date ? format(new Date(lead.date), 'dd MMM') : '-'}
                   </TableCell>
+                  {/* Manager Rating - text only, no badge */}
+                  <TableCell>
+                    <span className={`font-semibold ${getRatingTextColor(lead.managerRating)}`}>
+                      {formatRating(lead.managerRating)}
+                    </span>
+                  </TableCell>
+                  {/* MQL Rating - text only, no badge */}
+                  <TableCell>
+                    <span className={`font-semibold ${getMqlRatingTextColor(lead.mqlEnrichment?.mqlRating)}`}>
+                      {lead.mqlEnrichment?.mqlRating || '-'}
+                    </span>
+                  </TableCell>
+                  {/* AI Rating - keeps badge */}
                   <TableCell>
                     {lead.rating ? (
                       <Badge className={`${getRatingColor(lead.rating)} min-w-[60px] justify-center`}>
@@ -347,23 +387,10 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport }: Leads
                       <Badge className="bg-muted text-muted-foreground min-w-[60px] justify-center">-</Badge>
                     )}
                   </TableCell>
-                  <TableCell>
-                    {lead.managerRating ? (
-                      <Badge className={`${getRatingColor(lead.managerRating)} min-w-[60px] justify-center`}>
-                        {formatRating(lead.managerRating)}
-                      </Badge>
-                    ) : (
-                      <Badge className="bg-muted text-muted-foreground min-w-[60px] justify-center">-</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Badge className={`${getMqlRatingColor(lead.mqlEnrichment?.mqlRating)} min-w-[60px] justify-center`}>
-                      {lead.mqlEnrichment?.mqlRating || 'N/A'}
-                    </Badge>
-                  </TableCell>
+                  {/* PPS - circular progress */}
                   <TableCell>
                     {lead.fullAnalysis?.pps_score ? (
-                      <span className="font-semibold">{lead.fullAnalysis.pps_score}</span>
+                      <PpsCircle score={lead.fullAnalysis.pps_score} />
                     ) : (
                       <span className="text-muted-foreground">-</span>
                     )}
