@@ -203,7 +203,7 @@ const LeadProfile = () => {
       <nav className="bg-card border-b border-border sticky top-0 z-50">
         <div className="container mx-auto px-4 flex items-center justify-between h-14">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="mr-1">
+            <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="mr-1">
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <img src={raisnLogo} alt="Raisn" className="h-8" />
