@@ -254,7 +254,7 @@ const LeadProfile = () => {
 
           <TabsContent value="overview" className="space-y-6">
             {/* Ratings row + Rationale side by side */}
-            <div className="flex flex-col lg:flex-row gap-4 items-start">
+            <div className="flex flex-wrap gap-4 items-start">
               {/* Ratings cards row */}
               <div className="flex flex-wrap gap-3 items-center shrink-0">
                 <RatingCard label="Manager" value={lead.managerRating || '-'} colorClass={getHighlightColor(lead.managerRating)} />
@@ -270,9 +270,9 @@ const LeadProfile = () => {
                 )}
               </div>
 
-              {/* Rating Rationale - wider, shorter, bullets */}
+              {/* Rating Rationale - 30% width */}
               {rationalePoints.length > 0 && (
-                <div className="flex-1 rounded-lg border border-border bg-muted/30 px-4 py-3 min-w-0">
+                <div className="w-[30%] rounded-lg border border-border bg-muted/30 px-4 py-3">
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Rating Rationale</p>
                   <ul className="list-disc list-inside space-y-1">
                     {rationalePoints.map((point, idx) => (
@@ -281,12 +281,24 @@ const LeadProfile = () => {
                   </ul>
                 </div>
               )}
+
+              {/* Buyer Persona - 30% width */}
+              <div className="w-[30%] rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Users className="h-4 w-4 text-primary" />
+                  <h4 className="font-semibold text-sm">Buyer Persona</h4>
+                </div>
+                <p className="text-sm font-semibold mb-1">{analysis?.persona || 'N/A'}</p>
+                {analysis?.persona_description && (
+                  <p className="text-sm text-muted-foreground">{formatSnakeCase(analysis.persona_description)}</p>
+                )}
+              </div>
             </div>
 
             <Separator />
 
             {/* Lead Details, Property Preferences & Persona */}
-            <div className="grid md:grid-cols-3 gap-6">
+            <div className="grid md:grid-cols-2 gap-6">
               {/* Lead Details */}
               <div className="space-y-4">
                 <h3 className="font-semibold text-sm">Lead Details</h3>
@@ -376,24 +388,6 @@ const LeadProfile = () => {
                     <span>{lead.facing}</span>
                   </div>
                 )}
-              </div>
-
-              {/* Buyer Persona */}
-              <div className="space-y-4">
-                <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Users className="h-4 w-4 text-primary" />
-                    <h4 className="font-semibold text-sm">Buyer Persona</h4>
-                  </div>
-                  {analysis?.persona ? (
-                    <p className="text-sm font-semibold mb-2">{analysis.persona}</p>
-                  ) : (
-                    <p className="text-sm text-muted-foreground mb-2">N/A</p>
-                  )}
-                  {analysis?.persona_description && (
-                    <p className="text-sm text-muted-foreground">{formatSnakeCase(analysis.persona_description)}</p>
-                  )}
-                </div>
               </div>
             </div>
 
