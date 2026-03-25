@@ -20,7 +20,7 @@ const fmtNba = (nba: any) => {
   };
 };
 
-const fmtTalkingPoints = (tp: Lead['fullAnalysis'] extends infer A ? A extends { talking_points?: infer T } ? T : never : never): string => {
+const fmtTalkingPoints = (tp: any[] | undefined): string => {
   if (!tp || !Array.isArray(tp)) return '';
   return tp.map((p, i) => {
     const prefix = p.tp_id ? `[${p.tp_id}] ` : '';
