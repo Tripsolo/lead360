@@ -8,7 +8,7 @@ const fmt = (v: unknown): string => {
   return String(v);
 };
 
-const fmtNba = (nba: Lead['fullAnalysis']extends infer A ? A extends { next_best_action?: infer N } ? N : never : never) => {
+const fmtNba = (nba: any) => {
   if (!nba) return { id: '', type: '', action: '', escalation: '', fallback: '' };
   if (typeof nba === 'string') return { id: '', type: '', action: nba, escalation: '', fallback: '' };
   return {
