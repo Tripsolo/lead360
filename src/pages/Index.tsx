@@ -1084,7 +1084,7 @@ const Index = () => {
         <div className="container mx-auto px-4 flex items-center justify-between h-14">
           <div className="flex items-center gap-3">
             <img src={raisnLogo} alt="Raisn" className="h-8" />
-            <span className="text-lg font-semibold text-foreground">Customer360</span>
+            <span className="text-lg font-semibold text-foreground">Hunter</span>
           </div>
           <div className="flex flex-row items-center gap-2">
             {leads.length > 0 && (

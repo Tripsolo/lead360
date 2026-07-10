@@ -202,7 +202,7 @@ const ProjectAnalytics = () => {
                 <ArrowLeft className="h-5 w-5" />
               </Button>
               <img src={raisnLogo} alt="Raisn" className="h-8" />
-              <span className="text-lg font-semibold text-foreground">Customer360</span>
+              <span className="text-lg font-semibold text-foreground">Hunter</span>
             </div>
             <Button 
               onClick={handleViewLeads}

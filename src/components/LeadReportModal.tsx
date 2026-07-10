@@ -156,7 +156,7 @@ export const LeadReportModal = ({ lead, open, onOpenChange }: LeadReportModalPro
             </div>
           </div>
           <div className="text-right shrink-0">
-            <h2 className="text-2xl font-bold">Customer360</h2>
+            <h2 className="text-2xl font-bold">Hunter</h2>
             <p className="text-xs text-muted-foreground">Powered by Raisn.ai</p>
           </div>
         </DialogHeader>

@@ -419,9 +419,10 @@ serve(async (req) => {
     
     const { data: projectData, error: projectError } = await supabase
       .from("projects")
-      .select("brand_id, name")
+      .select("brand_id, name, metadata")
       .eq("id", projectId)
       .single();
+
 
     if (projectError || !projectData) {
       console.error("[enrich-leads] Failed to fetch project:", projectError);
@@ -445,8 +446,11 @@ serve(async (req) => {
 
     const brandMetadata = brandData?.metadata as Record<string, any> | null;
     const mqlSchema = brandMetadata?.mql_schema || projectData.brand_id;
-    
-    console.log(`[enrich-leads] Using MQL schema: "${mqlSchema}" (from metadata: ${!!brandMetadata?.mql_schema})`);
+    const projectMetadata = (projectData as any).metadata as Record<string, any> | null;
+    const mqlProjectName = projectMetadata?.mql_project_name || projectData.name;
+
+    console.log(`[enrich-leads] Using MQL schema: "${mqlSchema}", project name: "${mqlProjectName}" (override: ${!!projectMetadata?.mql_project_name})`);
+
 
     // Check for existing enrichments to avoid re-enriching
     const leadIds = leads.map((l: LeadToEnrich) => l.id);
@@ -491,12 +495,13 @@ serve(async (req) => {
     await processEnrichmentBatch(
       leadsToEnrich,
       projectId,
-      projectData.name,
+      mqlProjectName,
       mqlSchema,
       mqlApiKey,
       supabaseUrl,
       supabaseKey
     );
+
     
     // Fetch all enrichments after processing
     const { data: allEnrichments } = await supabase
