@@ -30,6 +30,7 @@ interface LeadsTableProps {
   isAnalyzing?: boolean;
   isReanalyzing?: boolean;
   failedAnalysisCount?: number;
+  brandId?: string | null;
 }
 
 type SortField = 'name' | 'date' | 'rating' | 'phone' | 'mqlRating' | 'ppsScore';
@@ -72,7 +73,8 @@ const formatRating = (rating?: string) => {
 
 // PpsCircle imported from shared component
 
-export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport, onEnrich, onAnalyze, onNew, onReanalyze, isEnriching, isAnalyzing, isReanalyzing, failedAnalysisCount }: LeadsTableProps) => {
+export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport, onEnrich, onAnalyze, onNew, onReanalyze, isEnriching, isAnalyzing, isReanalyzing, failedAnalysisCount, brandId }: LeadsTableProps) => {
+  const isTata = brandId === 'tata-aia';
   const [searchTerm, setSearchTerm] = useState('');
   const [ownerFilter, setOwnerFilter] = useState<string>('all');
   const [projectFilter, setProjectFilter] = useState<string>('all');
@@ -338,56 +340,108 @@ export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport, onEnric
       <div className="border rounded-lg overflow-x-auto">
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead>
-                <Button variant="ghost" onClick={() => handleSort('name')} className="h-8 px-2">
-                  Name
-                  <SortIcon field="name" />
-                </Button>
-              </TableHead>
-              <TableHead>Project</TableHead>
-              <TableHead>
-                <Button variant="ghost" onClick={() => handleSort('phone')} className="h-8 px-2">
-                  Phone
-                  <SortIcon field="phone" />
-                </Button>
-              </TableHead>
-              <TableHead>Owner</TableHead>
-              <TableHead>
-                <Button variant="ghost" onClick={() => handleSort('date')} className="h-8 px-2">
-                  Last Visit
-                  <SortIcon field="date" />
-                </Button>
-              </TableHead>
-              <TableHead>Manager</TableHead>
-              <TableHead>
-                <Button variant="ghost" onClick={() => handleSort('mqlRating')} className="h-8 px-2">
-                  MQL
-                  <SortIcon field="mqlRating" />
-                </Button>
-              </TableHead>
-              <TableHead>
-                <Button variant="ghost" onClick={() => handleSort('rating')} className="h-8 px-2">
-                  AI
-                  <SortIcon field="rating" />
-                </Button>
-              </TableHead>
-              <TableHead>
-                <Button variant="ghost" onClick={() => handleSort('ppsScore')} className="h-8 px-2">
-                  PPS
-                  <SortIcon field="ppsScore" />
-                </Button>
-              </TableHead>
-              <TableHead>Key Concern</TableHead>
-            </TableRow>
+            {isTata ? (
+              <TableRow>
+                <TableHead>
+                  <Button variant="ghost" onClick={() => handleSort('name')} className="h-8 px-2">
+                    Name
+                    <SortIcon field="name" />
+                  </Button>
+                </TableHead>
+                <TableHead>Product</TableHead>
+                <TableHead>
+                  <Button variant="ghost" onClick={() => handleSort('phone')} className="h-8 px-2">
+                    Phone
+                    <SortIcon field="phone" />
+                  </Button>
+                </TableHead>
+                <TableHead>Owner</TableHead>
+                <TableHead>
+                  <Button variant="ghost" onClick={() => handleSort('date')} className="h-8 px-2">
+                    Last Connect
+                    <SortIcon field="date" />
+                  </Button>
+                </TableHead>
+                <TableHead>Persona</TableHead>
+                <TableHead>Locality</TableHead>
+                <TableHead>Annual Income</TableHead>
+                <TableHead>Employment Type</TableHead>
+              </TableRow>
+            ) : (
+              <TableRow>
+                <TableHead>
+                  <Button variant="ghost" onClick={() => handleSort('name')} className="h-8 px-2">
+                    Name
+                    <SortIcon field="name" />
+                  </Button>
+                </TableHead>
+                <TableHead>Project</TableHead>
+                <TableHead>
+                  <Button variant="ghost" onClick={() => handleSort('phone')} className="h-8 px-2">
+                    Phone
+                    <SortIcon field="phone" />
+                  </Button>
+                </TableHead>
+                <TableHead>Owner</TableHead>
+                <TableHead>
+                  <Button variant="ghost" onClick={() => handleSort('date')} className="h-8 px-2">
+                    Last Visit
+                    <SortIcon field="date" />
+                  </Button>
+                </TableHead>
+                <TableHead>Manager</TableHead>
+                <TableHead>
+                  <Button variant="ghost" onClick={() => handleSort('mqlRating')} className="h-8 px-2">
+                    MQL
+                    <SortIcon field="mqlRating" />
+                  </Button>
+                </TableHead>
+                <TableHead>
+                  <Button variant="ghost" onClick={() => handleSort('rating')} className="h-8 px-2">
+                    AI
+                    <SortIcon field="rating" />
+                  </Button>
+                </TableHead>
+                <TableHead>
+                  <Button variant="ghost" onClick={() => handleSort('ppsScore')} className="h-8 px-2">
+                    PPS
+                    <SortIcon field="ppsScore" />
+                  </Button>
+                </TableHead>
+                <TableHead>Key Concern</TableHead>
+              </TableRow>
+            )}
           </TableHeader>
           <TableBody>
             {filteredLeads.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={isTata ? 9 : 10} className="text-center py-8 text-muted-foreground">
                   No leads found matching your filters
                 </TableCell>
               </TableRow>
+            ) : isTata ? (
+              filteredLeads.map((lead) => {
+                const m = lead.mqlEnrichment;
+                const income = m?.finalIncomeLacs != null ? `₹${m.finalIncomeLacs} L` : '-';
+                const employment = m?.employerName ? 'Salaried' : (lead.occupation || '-');
+                return (
+                  <TableRow
+                    key={lead.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => onLeadClick(lead)}
+                  >
+                    <TableCell className="font-medium">{lead.name}</TableCell>
+                    <TableCell>{lead.projectInterest || '-'}</TableCell>
+                    <TableCell>{lead.phone || '-'}</TableCell>
+                    <TableCell>{lead.leadOwner || '-'}</TableCell>
+                    <TableCell>{lead.date ? format(new Date(lead.date), 'dd MMM') : '-'}</TableCell>
+                    <TableCell>{lead.fullAnalysis?.persona || '-'}</TableCell>
+                    <TableCell>{m?.location || m?.localityGrade || '-'}</TableCell>
+                    <TableCell>{income}</TableCell>
+                    <TableCell>{employment}</TableCell>
+                  </TableRow>
+                );
+              })
             ) : (
               filteredLeads.map((lead) => (
                 <TableRow

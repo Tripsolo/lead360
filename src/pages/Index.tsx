@@ -207,17 +207,32 @@ const Index = () => {
     }
   };
 
+  const [currentBrandId, setCurrentBrandId] = useState<string | null>(null);
+
+  const loadUserBrand = async (userId: string) => {
+    const { data } = await supabase
+      .from('user_brand_access')
+      .select('brand_id')
+      .eq('user_id', userId);
+    if (data && data.length === 1) setCurrentBrandId(data[0].brand_id);
+    else if (data && data.length > 0) setCurrentBrandId(data[0].brand_id);
+    else setCurrentBrandId(null);
+  };
+
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
+        if (session?.user) loadUserBrand(session.user.id);
+        else setCurrentBrandId(null);
       }
     );
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
+      if (session?.user) loadUserBrand(session.user.id);
     });
 
     return () => subscription.unsubscribe();
@@ -1147,6 +1162,7 @@ const Index = () => {
               isAnalyzing={isAnalyzing}
               isReanalyzing={isReanalyzing}
               failedAnalysisCount={failedAnalysisCount}
+              brandId={currentBrandId}
             />
 
           </div>
