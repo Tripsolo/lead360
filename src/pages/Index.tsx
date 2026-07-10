@@ -1162,6 +1162,7 @@ const Index = () => {
               isAnalyzing={isAnalyzing}
               isReanalyzing={isReanalyzing}
               failedAnalysisCount={failedAnalysisCount}
+              brandId={currentBrandId}
             />
 
           </div>
