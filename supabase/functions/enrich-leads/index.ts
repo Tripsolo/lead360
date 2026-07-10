@@ -495,12 +495,13 @@ serve(async (req) => {
     await processEnrichmentBatch(
       leadsToEnrich,
       projectId,
-      projectData.name,
+      mqlProjectName,
       mqlSchema,
       mqlApiKey,
       supabaseUrl,
       supabaseKey
     );
+
     
     // Fetch all enrichments after processing
     const { data: allEnrichments } = await supabase
