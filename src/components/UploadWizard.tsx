@@ -172,11 +172,11 @@ export const UploadWizard = ({ onFileSelect, isLoading }: UploadWizardProps) => 
                 </Select>
               </div>
 
-              {/* Project Selection */}
+              {/* Project / Product Selection */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <Home className="h-4 w-4" />
-                  <span>Select Project</span>
+                  <span>{selectedBrand?.id === 'tata-aia' ? 'Select Product' : 'Select Project'}</span>
                 </div>
                 <Select 
                   value={selectedProject?.id || ''} 
@@ -189,10 +189,12 @@ export const UploadWizard = ({ onFileSelect, isLoading }: UploadWizardProps) => 
                         !selectedBrand 
                           ? "Select a brand first..." 
                           : loading 
-                            ? "Loading projects..." 
+                            ? "Loading..." 
                             : projects.length === 0 
-                              ? "No projects available" 
-                              : "Choose a project..."
+                              ? "None available" 
+                              : selectedBrand?.id === 'tata-aia'
+                                ? "Choose a product..."
+                                : "Choose a project..."
                       } 
                     />
                   </SelectTrigger>
@@ -205,6 +207,7 @@ export const UploadWizard = ({ onFileSelect, isLoading }: UploadWizardProps) => 
                   </SelectContent>
                 </Select>
               </div>
+
 
               {/* Selected Project Info */}
               {selectedProject && (
