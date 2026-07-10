@@ -30,6 +30,7 @@ interface LeadsTableProps {
   isAnalyzing?: boolean;
   isReanalyzing?: boolean;
   failedAnalysisCount?: number;
+  brandId?: string | null;
 }
 
 type SortField = 'name' | 'date' | 'rating' | 'phone' | 'mqlRating' | 'ppsScore';
