@@ -511,12 +511,42 @@ export type Database = {
           },
         ]
       }
+      user_brand_access: {
+        Row: {
+          brand_id: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_brand_access_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
       is_approved_domain_user: { Args: never; Returns: boolean }
+      user_has_brand_access: { Args: { _brand_id: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
