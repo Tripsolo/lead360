@@ -419,9 +419,10 @@ serve(async (req) => {
     
     const { data: projectData, error: projectError } = await supabase
       .from("projects")
-      .select("brand_id, name")
+      .select("brand_id, name, metadata")
       .eq("id", projectId)
       .single();
+
 
     if (projectError || !projectData) {
       console.error("[enrich-leads] Failed to fetch project:", projectError);
