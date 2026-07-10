@@ -8,3 +8,6 @@ verify_jwt = true
 
 [functions.calculate-cis]
 verify_jwt = true
+
+[functions.admin-reset-password]
+verify_jwt = false
