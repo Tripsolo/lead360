@@ -236,7 +236,7 @@ export const UploadWizard = ({ onFileSelect, isLoading }: UploadWizardProps) => 
           {step === 2 && selectedProject && (
             <div className="space-y-4">
               <div className="p-4 bg-muted rounded-lg space-y-1">
-                <p className="text-sm font-medium">Selected Project:</p>
+                <p className="text-sm font-medium">Selected {selectedBrand?.id === 'tata-aia' ? 'Product' : 'Project'}:</p>
                 <p className="text-lg font-semibold">{selectedBrand?.name} - {selectedProject.name}</p>
                 {selectedProject.metadata?.location && (
                   <p className="text-sm text-muted-foreground">
