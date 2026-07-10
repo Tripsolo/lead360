@@ -73,7 +73,8 @@ const formatRating = (rating?: string) => {
 
 // PpsCircle imported from shared component
 
-export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport, onEnrich, onAnalyze, onNew, onReanalyze, isEnriching, isAnalyzing, isReanalyzing, failedAnalysisCount }: LeadsTableProps) => {
+export const LeadsTable = ({ leads, onLeadClick, ratingFilter, onExport, onEnrich, onAnalyze, onNew, onReanalyze, isEnriching, isAnalyzing, isReanalyzing, failedAnalysisCount, brandId }: LeadsTableProps) => {
+  const isTata = brandId === 'tata-aia';
   const [searchTerm, setSearchTerm] = useState('');
   const [ownerFilter, setOwnerFilter] = useState<string>('all');
   const [projectFilter, setProjectFilter] = useState<string>('all');
