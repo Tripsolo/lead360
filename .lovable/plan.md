@@ -1,28 +1,30 @@
-## Test MQL Enrichment with New Phone Number
+## Test MQL Enrichment with Chanderjit / 8901040455
 
 ### Goal
-Trigger a fresh MQL API call using an existing lead's name but with phone `9892049247`, then extract and summarize the raw MQL response.
+Trigger a fresh MQL enrichment call using the new test identity (name: `Chanderjit`, phone: `8901040455`) and report back the full raw MQL response, including any new raw JSON fields the updated API now returns.
 
 ### Steps
 
-1. **Pick a source lead** from the last batch (e.g. Parama Ghosh from project *Kalpataru Parkcity Eternia*) to reuse the name + project context.
+1. **Pick project context** — reuse `Kalpataru Parkcity Eternia` (schema `kalpataru`) since it's the active MQL-configured project used in prior tests.
 
-2. **Invoke the `enrich-leads` edge function directly via curl** with a synthetic payload:
-   - `leads: [{ id: <new-uuid>, name: "Parama Ghosh", phone: "9892049247" }]`
-   - `projectId: <Kalpataru Parkcity Eternia project UUID>`
+2. **Invoke `enrich-leads` edge function** via `supabase--curl_edge_functions` with a synthetic payload:
+   - `leads: [{ id: "test-8901040455-chanderjit", name: "Chanderjit", phone: "8901040455" }]`
+   - `projectId: <Kalpataru Parkcity Eternia UUID>`
    
-   Note: the edge function upserts into `lead_enrichments` keyed on `(lead_id, project_id)`. Using a fresh UUID as `lead_id` avoids polluting a real lead's cached record and bypasses the "already enriched" skip logic. Since there's no FK from `lead_enrichments.lead_id` to `leads.id` (to be verified), this insert will succeed standalone; if a FK exists, insert a temp row into `leads` first and clean it up after.
+   A fresh synthetic `lead_id` avoids polluting real lead records and bypasses the "already enriched" cache skip.
 
-3. **Read the resulting row** from `lead_enrichments` via SQL to pull the full `raw_response` JSON for the synthetic lead.
+3. **Read `lead_enrichments`** for that synthetic `lead_id` via `supabase--read_query` to pull the full `raw_response` JSON.
 
-4. **Report to you**:
-   - The exact request sent (headers + body)
-   - The full raw MQL response
-   - A structured summary (rating, capability, demography, income, credit, loans, cards, RTO, employment, business, LinkedIn)
+4. **Also inspect edge function logs** (`supabase--edge_function_logs` on `enrich-leads`) to capture the raw request/response body logged inline — this surfaces any new top-level fields the updated MQL API is emitting even if the parser drops them before DB write.
 
-5. **Cleanup**: delete the synthetic `lead_enrichments` row (and temp `leads` row if created) so no test data lingers.
+5. **Report to you**:
+   - Exact request sent (headers + body)
+   - Full raw MQL response JSON (unfiltered)
+   - Highlight of any **new fields** the updated API now returns vs. the previously known schema (person_info, demography, income, banking_summary, banking_loans, banking_cards, business_details, rto_details, employment_details)
+   - Structured summary (rating, capability, demography, income, credit, loans, cards, RTO, employment, business, any new raw sections)
 
-### Technical notes
-- Uses `supabase--curl_edge_functions` to hit `enrich-leads` with the anon key.
-- Uses `supabase--read_query` + `psql` for row inspection and cleanup via migration/insert tools.
+6. **Leave the synthetic row in place** (as with prior tests — delete permission not available via psql); it's clearly namespaced by the `test-…` ID.
+
+### Notes
 - No application code changes.
+- Purely a diagnostic/testing task using existing tools.
