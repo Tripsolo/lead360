@@ -1,30 +1,33 @@
-## Test MQL Enrichment with Chanderjit / 8901040455
+## Create 4 Synthetic Leads + Fresh Enrichment + MD Report
 
 ### Goal
-Trigger a fresh MQL enrichment call using the new test identity (name: `Chanderjit`, phone: `8901040455`) and report back the full raw MQL response, including any new raw JSON fields the updated API now returns.
+Add 4 new lead rows (without touching existing ones), enrich each via MQL, and export a single Markdown file with both the **raw MQL JSON** and the **structured/parsed fields** for all four.
 
 ### Steps
 
-1. **Pick project context** — reuse `Kalpataru Parkcity Eternia` (schema `kalpataru`) since it's the active MQL-configured project used in prior tests.
+1. **Pick a template lead** — read one existing Kalpataru lead from `leads` (any recent P0/P1 row) to clone its `crm_data`, `project_id`, `brand_id`, and other non-identifying fields. This keeps the schema valid and avoids inventing CRM data.
 
-2. **Invoke `enrich-leads` edge function** via `supabase--curl_edge_functions` with a synthetic payload:
-   - `leads: [{ id: "test-8901040455-chanderjit", name: "Chanderjit", phone: "8901040455" }]`
-   - `projectId: <Kalpataru Parkcity Eternia UUID>`
-   
-   A fresh synthetic `lead_id` avoids polluting real lead records and bypasses the "already enriched" cache skip.
+2. **Insert 4 new lead rows** into `public.leads` via the insert tool, each with:
+   - Fresh `id` (uuid) — clearly namespaced (e.g. `synthetic-<phone>`) so they're easy to identify/clean later
+   - `crm_data` cloned from the template, but with:
+     - Name overridden → `Parama` / `Sudhakar` / `Anant` / `Neeraj`
+     - Phone overridden → `9986019306` / `9892049247` / `9004492954` / `9731151838`
+   - Same `project_id` as the template (Kalpataru Parkcity Eternia)
+   - Existing rows untouched.
 
-3. **Read `lead_enrichments`** for that synthetic `lead_id` via `supabase--read_query` to pull the full `raw_response` JSON.
+3. **Invoke `enrich-leads` edge function** once with all 4 leads in the payload (function loops internally, one MQL call per lead). Uses live `MQL_API_KEY` + `x-schema: kalpataru` + `project_id: "Kalpataru Parkcity Eternia"`.
 
-4. **Also inspect edge function logs** (`supabase--edge_function_logs` on `enrich-leads`) to capture the raw request/response body logged inline — this surfaces any new top-level fields the updated MQL API is emitting even if the parser drops them before DB write.
+4. **Poll `lead_enrichments`** for the 4 synthetic `lead_id`s until each row has either a rating or an `N/A`/`FAILED` marker (short wait loop; ~5–10s between polls).
 
-5. **Report to you**:
-   - Exact request sent (headers + body)
-   - Full raw MQL response JSON (unfiltered)
-   - Highlight of any **new fields** the updated API now returns vs. the previously known schema (person_info, demography, income, banking_summary, banking_loans, banking_cards, business_details, rto_details, employment_details)
-   - Structured summary (rating, capability, demography, income, credit, loans, cards, RTO, employment, business, any new raw sections)
+5. **Generate the report** at `/mnt/documents/enriched_leads_report.md` containing, per lead:
+   - **Header**: input name + phone + resulting rating/status
+   - **Structured section**: all typed columns from `lead_enrichments` (rating, capability, lifestyle, income, credit, loans summary, cards, RTO, LinkedIn-derived fields we parse, business, employment) — rendered as a readable key/value table
+   - **Raw section**: full `raw_response` JSON in a fenced ```json block (unfiltered, including new envelope fields, `linkedin_details`, `rto_details.addresses`, per-lead `error`, etc.)
+   - Cross-lead summary table at the top (name, phone, rating, income, credit score, active loans, employer)
 
-6. **Leave the synthetic row in place** (as with prior tests — delete permission not available via psql); it's clearly namespaced by the `test-…` ID.
+6. **Deliver** the file via `<presentation-artifact>` so you can preview/download it directly.
 
 ### Notes
-- No application code changes.
-- Purely a diagnostic/testing task using existing tools.
+- No application code changes; no schema changes.
+- Synthetic leads remain in DB (namespaced `synthetic-…`); I'll flag their IDs in the report so you can prune later if desired.
+- If MQL returns `DATA_NOT_FOUND` for any of the four, the report will still include that lead's raw envelope + empty structured section (as with the earlier Chanderjit test).
